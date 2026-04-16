@@ -96,6 +96,9 @@
       turnstileSiteKey: '',
       turnstileToken: '',
       turnstileWidgetId: null,
+      turnstilePendingPromise: null,
+      turnstileResolve: null,
+      turnstileReject: null,
       isSubmitting: false,
       submitLockedUntil: 0,
       lastSubmissionHash: '',
@@ -376,19 +379,39 @@
         state.turnstileWidgetId=window.turnstile.render(widgetHost,{
           sitekey:siteKey,
           theme:'dark',
-          callback:(token)=>{state.turnstileToken=token||'';hideSubmitError(errorEl);},
-          'expired-callback':()=>{state.turnstileToken='';showSubmitError(errorEl,'A verificacao expirou. Confirme novamente para continuar.');},
-          'error-callback':()=>{state.turnstileToken='';showSubmitError(errorEl,'Falha na verificacao anti-bot. Tente novamente.');}
+          callback:(token)=>{
+            state.turnstileToken=token||'';
+            hideSubmitError(errorEl);
+            settleTurnstilePending(true,state.turnstileToken);
+          },
+          'expired-callback':()=>{
+            state.turnstileToken='';
+            settleTurnstilePending(false,'expired');
+            showSubmitError(errorEl,'A verificacao expirou. Confirme novamente para continuar.');
+          },
+          'error-callback':()=>{
+            state.turnstileToken='';
+            settleTurnstilePending(false,'error');
+            showSubmitError(errorEl,'Falha na verificacao anti-bot. Tente novamente.');
+          }
         });
-      }catch{
+      }catch(err){
+        const message=String(err&&err.message||'');
+        if(message.toLowerCase().includes('site key not configured')){
+          showSubmitError(errorEl,'Turnstile ainda nao foi configurado no servidor. Avise o suporte para finalizar a chave.');
+          return;
+        }
         showSubmitError(errorEl,'Nao foi possivel validar a seguranca agora. Tente novamente em instantes.');
       }
     }
     async function getTurnstileSiteKey(){
       if(state.turnstileSiteKey) return state.turnstileSiteKey;
       const response=await fetch('/api/turnstile-config',{method:'GET',headers:{'Accept':'application/json'}});
-      if(!response.ok) throw new Error('turnstile_config_error');
-      const data=await response.json();
+      const data=await response.json().catch(()=>null);
+      if(!response.ok||!data||!data.ok){
+        const errorText=data&&data.error?String(data.error):'turnstile_config_error';
+        throw new Error(errorText);
+      }
       if(!data||!data.ok||!data.siteKey) throw new Error('turnstile_key_missing');
       state.turnstileSiteKey=String(data.siteKey);
       return state.turnstileSiteKey;
@@ -409,8 +432,8 @@
         return;
       }
       if(!state.turnstileToken){
-        showSubmitError(errorEl,'Confirme a verificacao anti-bot para continuar.');
-        return;
+        const requested=await requestTurnstileToken(errorEl);
+        if(!requested) return;
       }
       hideSubmitError(errorEl);
       const payload=buildSubmissionPayload(honeypotInput?honeypotInput.value:'');
@@ -434,6 +457,7 @@
         if(!response.ok||!data||!data.ok){
           const message=mapSubmitError(data&&data.error,response.status);
           showSubmitError(errorEl,message);
+          refreshTurnstileWidget();
           state.submitLockedUntil=Date.now()+Math.min(FINAL_COOLDOWN_MS,4000);
           return;
         }
@@ -448,6 +472,64 @@
         submitBtn.disabled=false;
         submitBtn.textContent=originalText;
       }
+    }
+    async function requestTurnstileToken(errorEl){
+      if(state.turnstileToken) return true;
+      if(!window.turnstile||state.turnstileWidgetId===null){
+        showSubmitError(errorEl,'Protecao anti-bot ainda carregando. Aguarde alguns segundos e tente novamente.');
+        return false;
+      }
+      if(state.turnstilePendingPromise){
+        try{
+          await state.turnstilePendingPromise;
+          return !!state.turnstileToken;
+        }catch{
+          showSubmitError(errorEl,'Nao foi possivel validar a verificacao anti-bot. Tente novamente.');
+          return false;
+        }
+      }
+      showSubmitError(errorEl,'Validando verificacao anti-bot...');
+      state.turnstilePendingPromise=new Promise((resolve,reject)=>{
+        state.turnstileResolve=resolve;
+        state.turnstileReject=reject;
+        const timeout=window.setTimeout(()=>{
+          settleTurnstilePending(false,'timeout');
+          showSubmitError(errorEl,'A verificacao demorou para responder. Tente novamente.');
+        },9000);
+        state.turnstileResolve=((value)=>{window.clearTimeout(timeout);resolve(value);});
+        state.turnstileReject=((reason)=>{window.clearTimeout(timeout);reject(reason);});
+      }).finally(()=>{
+        state.turnstilePendingPromise=null;
+      });
+      try{
+        window.turnstile.execute(state.turnstileWidgetId);
+        await state.turnstilePendingPromise;
+        hideSubmitError(errorEl);
+        return !!state.turnstileToken;
+      }catch{
+        return false;
+      }
+    }
+    function settleTurnstilePending(ok,value){
+      if(ok&&state.turnstileResolve){
+        const resolve=state.turnstileResolve;
+        state.turnstileResolve=null;
+        state.turnstileReject=null;
+        resolve(value||'');
+        return;
+      }
+      if(!ok&&state.turnstileReject){
+        const reject=state.turnstileReject;
+        state.turnstileResolve=null;
+        state.turnstileReject=null;
+        reject(value||'turnstile_error');
+      }
+    }
+    function refreshTurnstileWidget(){
+      if(!window.turnstile||state.turnstileWidgetId===null) return;
+      state.turnstileToken='';
+      settleTurnstilePending(false,'reset');
+      try{window.turnstile.reset(state.turnstileWidgetId);}catch{}
     }
     function buildSubmissionPayload(honeypotValue){
       const answers=buildSanitizedAnswers();

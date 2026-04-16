@@ -1,5 +1,4 @@
-const WA_NUMBER = '5573982284382';
-    const DDD_VALIDOS = new Set(['11','12','13','14','15','16','17','18','19','21','22','24','27','28','31','32','33','34','35','37','38','41','42','43','44','45','46','47','48','49','51','53','54','55','61','62','63','64','65','66','67','68','69','71','73','74','75','77','79','81','82','83','84','85','86','87','88','89','91','92','93','94','95','96','97','98','99']);
+const DDD_VALIDOS = new Set(['11','12','13','14','15','16','17','18','19','21','22','24','27','28','31','32','33','34','35','37','38','41','42','43','44','45','46','47','48','49','51','53','54','55','61','62','63','64','65','66','67','68','69','71','73','74','75','77','79','81','82','83','84','85','86','87','88','89','91','92','93','94','95','96','97','98','99']);
     const FIELD_LIMITS = { nome: 80, instagram: 80, empresa: 100, extras: 1000, referencia: 700, outro: 180, duration: 32, service: 80 };
     const FINAL_COOLDOWN_MS = 10000;
     const MIN_ELAPSED_MS = 3500;
@@ -7,6 +6,7 @@ const WA_NUMBER = '5573982284382';
       tipo: getInitialTipo(),
       currentIndex: 0,
       readyToSubmit: false,
+      submittedSuccess: false,
       answers: {},
       startedAt: Date.now(),
       isSubmitting: false,
@@ -67,6 +67,10 @@ const WA_NUMBER = '5573982284382';
       if(!state.tipo){renderTypePicker();updateProgress(0,0);return}
       const steps=getSteps();
       if(steps.length===0){renderTypePicker();updateProgress(0,0);return}
+      if(state.submittedSuccess){
+        renderSuccessView(steps.length);
+        return;
+      }
       if(state.readyToSubmit){
         stepsEl.innerHTML='';
         steps.forEach((step)=>{
@@ -79,10 +83,10 @@ const WA_NUMBER = '5573982284382';
         submitCard.className='step-active';
         submitCard.innerHTML='<button class=\"step-back\" type=\"button\" id=\"go-back-final\">Voltar</button>'+
           '<h2 class=\"step-title\">'+(state.tipo==='unica'?'Tudo certo para enviar seu orçamento':'Tudo certo para enviar sua proposta')+'</h2>'+
-          '<p class=\"step-hint\">Revise rapidamente e clique para abrir o WhatsApp com todas as respostas organizadas.</p>'+
+          '<p class=\"step-hint\">Revise rapidamente e clique para concluir o envio.</p>'+
           '<div class=\"bot-trap\" aria-hidden=\"true\"><input type=\"text\" id=\"spam-trap\" tabindex=\"-1\" autocomplete=\"off\" inputmode=\"text\" /></div>'+
           '<div class=\"error\" id=\"submit-error\"></div>'+
-          '<button class=\"btn-submit\" type=\"button\" id=\"final-submit\">'+(state.tipo==='unica'?'Solicitar orçamento no WhatsApp':'Solicitar proposta no WhatsApp')+'</button>';
+          '<button class=\"btn-submit\" type=\"button\" id=\"final-submit\">'+(state.tipo==='unica'?'Concluir pedido de orçamento':'Concluir pedido de proposta')+'</button>';
         stepsEl.appendChild(submitCard);
         submitCard.querySelector('#go-back-final').addEventListener('click',()=>{state.readyToSubmit=false;state.currentIndex=Math.max(0,steps.length-1);state.finalError='';render();});
         submitCard.querySelector('#final-submit').addEventListener('click',()=>{ handleFinalSubmit(submitCard); });
@@ -110,6 +114,20 @@ const WA_NUMBER = '5573982284382';
       stepsEl.appendChild(activeCard);
       attachStepEvents(active,activeCard);
       updateProgress(state.currentIndex+1,steps.length);
+    }
+    function renderSuccessView(totalSteps){
+      stepsEl.innerHTML='';
+      const success=document.createElement('article');
+      success.className='budget-success';
+      success.innerHTML=
+        '<h2 class="budget-success-title">Recebemos seu pedido com sucesso!</h2>'+
+        '<p class="budget-success-text">Nossa equipe vai analisar suas informações e entrar em contato o mais breve possível.</p>'+
+        '<button class="budget-success-btn" type="button" id="budget-success-home">Voltar ao início</button>';
+      stepsEl.appendChild(success);
+      const btn=success.querySelector('#budget-success-home');
+      if(btn){btn.addEventListener('click',goHomeAndReset);}
+      launchConfettiBurst();
+      updateProgress(totalSteps,totalSteps);
     }
     function renderTypePicker(){
       stepsEl.innerHTML='';
@@ -292,8 +310,10 @@ const WA_NUMBER = '5573982284382';
       }
       const payloadHash=JSON.stringify(payload.answers);
       if(state.lastSubmissionHash&&state.lastSubmissionHash===payloadHash){
-          showSubmitError(errorEl,'Esse envio já foi validado. Abrindo WhatsApp...');
-        openWhatsApp(payload.answers);
+        state.readyToSubmit=false;
+        state.submittedSuccess=true;
+        state.finalError='';
+        render();
         return;
       }
       state.isSubmitting=true;
@@ -301,11 +321,17 @@ const WA_NUMBER = '5573982284382';
       const originalText=submitBtn.textContent;
       submitBtn.textContent='Enviando...';
       try{
-        await persistLeadSubmission(payload);
+        const saved = await persistLeadSubmission(payload);
+        if(!saved){
+          showSubmitError(errorEl,'Não conseguimos finalizar agora. Tente novamente em alguns instantes.');
+          return;
+        }
         state.lastSubmissionHash=payloadHash;
         state.submitLockedUntil=Date.now()+FINAL_COOLDOWN_MS;
         state.finalError='';
-        openWhatsApp(payload.answers);
+        state.readyToSubmit=false;
+        state.submittedSuccess=true;
+        render();
       }finally{
         state.isSubmitting=false;
         submitBtn.disabled=false;
@@ -383,17 +409,73 @@ const WA_NUMBER = '5573982284382';
     }
     function showSubmitError(errorEl,message){if(!errorEl) return;state.finalError=message;errorEl.textContent=message;errorEl.style.display='block';}
     function hideSubmitError(errorEl){if(!errorEl) return;state.finalError='';errorEl.style.display='none';errorEl.textContent='';}
-    function openWhatsApp(safeAnswers){
-      const answers=safeAnswers||buildSanitizedAnswers();
-      const name=(answers.nome||'').trim()||'Sem nome';
-      const text=state.tipo==='unica'
-        ?('Olá, me chamo '+name+'. Acabei de preencher o formulário de Demanda Única no site da HAGAV e gostaria de solicitar meu orçamento.')
-        :('Olá, me chamo '+name+'. Acabei de preencher o formulário de Demanda Recorrente no site da HAGAV e gostaria de solicitar uma proposta.');
-      const url='https://wa.me/'+WA_NUMBER+'?text='+encodeURIComponent(text);
-      const popup=window.open(url,'_blank','noopener,noreferrer');
-      if(!popup){
-        window.location.href=url;
+    function launchConfettiBurst(){
+      const old=document.getElementById('budget-confetti-canvas');
+      if(old&&old.parentNode){old.parentNode.removeChild(old);}
+      const canvas=document.createElement('canvas');
+      canvas.id='budget-confetti-canvas';
+      canvas.className='budget-confetti';
+      document.body.appendChild(canvas);
+      const ctx=canvas.getContext('2d');
+      const w=Math.max(window.innerWidth,320);
+      const h=Math.max(window.innerHeight,320);
+      canvas.width=w;
+      canvas.height=h;
+      const colors=['#ffb800','#ff9f1c','#ffd166','#ffffff','#ff6b00','#f6ad55'];
+      const particles=Array.from({length:130},()=>({
+        x:Math.random()*w,
+        y:-20-(Math.random()*h*0.35),
+        width:5+Math.random()*6,
+        height:3+Math.random()*4,
+        color:colors[Math.floor(Math.random()*colors.length)],
+        speed:2.4+Math.random()*3.2,
+        drift:(Math.random()-0.5)*1.6,
+        rotate:Math.random()*Math.PI*2,
+        spin:(Math.random()-0.5)*0.22,
+        opacity:0.55+Math.random()*0.45
+      }));
+      const startedAt=Date.now();
+      const maxDuration=2400;
+      function draw(){
+        ctx.clearRect(0,0,w,h);
+        let hasAlive=false;
+        for(const p of particles){
+          p.y+=p.speed;
+          p.x+=p.drift;
+          p.rotate+=p.spin;
+          if(p.y<h+24){hasAlive=true;}
+          ctx.save();
+          ctx.globalAlpha=p.opacity;
+          ctx.translate(p.x,p.y);
+          ctx.rotate(p.rotate);
+          ctx.fillStyle=p.color;
+          ctx.fillRect(-p.width/2,-p.height/2,p.width,p.height);
+          ctx.restore();
+        }
+        if(hasAlive&&Date.now()-startedAt<maxDuration){
+          requestAnimationFrame(draw);
+        }else if(canvas.parentNode){
+          canvas.parentNode.removeChild(canvas);
+        }
       }
+      draw();
+    }
+    function goHomeAndReset(){
+      const paneActions=document.getElementById('pane-actions');
+      const paneModes=document.getElementById('pane-modes');
+      const paneBudget=document.getElementById('pane-budget');
+      clearWizard();
+      if(paneActions&&paneModes&&paneBudget){
+        paneModes.classList.add('hidden');
+        paneBudget.classList.add('hidden');
+        paneActions.classList.remove('hidden');
+        const hero=document.getElementById('hero-card');
+        if(hero&&typeof hero.scrollIntoView==='function'){
+          hero.scrollIntoView({behavior:'smooth',block:'start'});
+        }
+        return;
+      }
+      window.location.href='/';
     }
     function composeSingleWithOutro(baseId,source){const data=source||state.answers;const v=data[baseId]||'-';if(v!=='Outro') return v;const extra=sanitizeText(data[baseId+'_outro']||'',FIELD_LIMITS.outro);return extra?('Outro: '+extra):'Outro';}
     function getTextLimitForField(fieldId){
@@ -433,6 +515,7 @@ const WA_NUMBER = '5573982284382';
       state.tipo=(tipo==='recorrente')?'recorrente':'unica';
       state.currentIndex=0;
       state.readyToSubmit=false;
+      state.submittedSuccess=false;
       state.answers={};
       state.startedAt=Date.now();
       state.isSubmitting=false;
@@ -445,6 +528,7 @@ const WA_NUMBER = '5573982284382';
       state.tipo='';
       state.currentIndex=0;
       state.readyToSubmit=false;
+      state.submittedSuccess=false;
       state.answers={};
       state.finalError='';
       render();

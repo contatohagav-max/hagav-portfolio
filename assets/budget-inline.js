@@ -43,30 +43,30 @@ const WA_NUMBER = '5573982284382';
       const selected=getSelectedServices();
       const withYes=getRecordedYesServices();
       return [
-        {id:'unica_servicos',label:'Servico necessario',title:'Qual servico voce precisa?',type:'multi',required:true,options:['Reels','Shorts','TikTok','Corte Estrategico','Criativo para Ads','Outro'],outro:true},
-        {id:'unica_quantidades',label:'Quantidade por servico',title:'Quantidade por servico selecionado',hint:'Preencha uma quantidade para cada servico escolhido.',type:'quantityByService',required:true,services:selected},
-        {id:'unica_gravado',label:'Material gravado',title:'O material ja esta gravado?',hint:'Responda para cada servico selecionado.',type:'yesNoByService',required:true,services:selected},
-        {id:'unica_tempo_bruto',label:'Tempo de material bruto',title:'Quanto tempo de material bruto para edicao?',hint:'Somente para servicos com material gravado.',type:'durationByService',required:withYes.length>0,optionalWhenEmpty:true,services:withYes},
-        {id:'unica_referencia',label:'Referencia visual',title:'Tem referencia visual?',hint:'Envie link de referencia do Instagram, YouTube, TikTok ou Meta Ads. Ou pule.',type:'textarea',required:false,placeholder:'Cole links ou descreva referencias...'},
+        {id:'unica_servicos',label:'Serviço necessário',title:'Qual serviço você precisa?',type:'multi',required:true,options:['Reels, TikTok e Shorts','Corte estratégico','Criativo para Ads','Outro'],outro:true},
+        {id:'unica_quantidades',label:'Quantidade por serviço',title:'Quantidade por serviço selecionado',hint:'Preencha uma quantidade para cada serviço escolhido.',type:'quantityByService',required:true,services:selected},
+        {id:'unica_gravado',label:'Material gravado',title:'O material já está gravado?',hint:'Responda para cada serviço selecionado.',type:'yesNoByService',required:true,services:selected},
+        {id:'unica_tempo_bruto',label:'Tempo de material bruto',title:'Quanto tempo de material bruto para edição?',hint:'Somente para serviços com material gravado.',type:'durationByService',required:withYes.length>0,optionalWhenEmpty:true,services:withYes},
+        {id:'unica_referencia',label:'Referência visual',title:'Tem referência visual?',hint:'Envie link de referência do Instagram, YouTube, TikTok ou Meta Ads. Ou pule.',type:'textarea',required:false,placeholder:'Cole links ou descreva referências...'},
         {id:'unica_prazo',label:'Prazo ideal',title:'Qual o prazo ideal?',type:'single',required:true,options:['24h','3 dias','Essa semana','Sem pressa']},
-        {id:'nome',label:'Nome',title:'Qual e o seu nome?',type:'text',required:true,placeholder:'Digite seu nome'},
+        {id:'nome',label:'Nome',title:'Qual é o seu nome?',type:'text',required:true,placeholder:'Digite seu nome'},
         {id:'whatsapp',label:'WhatsApp',title:'Qual o seu WhatsApp?',type:'phone',required:true,placeholder:'(00) 00000-0000'},
         {id:'instagram',label:'Instagram',title:'Qual o seu Instagram?',type:'text',required:false,placeholder:'@seuperfil'},
-        {id:'extras',label:'Observacoes extras',title:'Observacoes extras',type:'textarea',required:false,placeholder:'Algo que voce queira complementar...'}
+        {id:'extras',label:'Observações extras',title:'Observações extras',type:'textarea',required:false,placeholder:'Algo que você queira complementar...'}
       ].filter((step)=>!(step.optionalWhenEmpty&&(!step.services||step.services.length===0)));
     }
     function getStepsRecorrente(){
       return [
-        {id:'rec_tipo_operacao',label:'Tipo de operacao',title:'Qual tipo de operacao voce precisa?',type:'single',required:true,options:['Conteudo para redes sociais','Criativos para anuncios','Escala de conteudo','Lancamentos','YouTube recorrente','Estrutura completa','Outro'],outro:true},
-        {id:'rec_volume',label:'Volume mensal',title:'Quantos conteudos por mes voce precisa?',type:'single',required:true,options:['5 a 10','10 a 20','20 a 40','40+','Ainda nao sei']},
-        {id:'rec_objetivo',label:'Objetivo principal',title:'Qual seu principal objetivo?',type:'single',required:true,options:['Vender mais','Crescer autoridade','Ganhar consistencia','Escalar operacao','Outro'],outro:true},
-        {id:'rec_gravado',label:'Material gravado',title:'Voce ja possui material gravado?',type:'single',required:true,options:['Sim','Nao','Parcialmente']},
-        {id:'rec_inicio',label:'Prazo para comecar',title:'Qual o prazo para comecar?',type:'single',required:true,options:['Imediato','Essa semana','Esse mes','Estou analisando']},
-        {id:'nome',label:'Nome',title:'Qual e o seu nome?',type:'text',required:true,placeholder:'Digite seu nome'},
+        {id:'rec_tipo_operacao',label:'Tipo de operação',title:'Qual tipo de operação você precisa?',type:'single',required:true,options:['Conteúdo para redes sociais','Criativos para anúncios','Escala de conteúdo','Lançamentos','YouTube recorrente','Estrutura completa','Outro'],outro:true},
+        {id:'rec_volume',label:'Volume mensal',title:'Quantos conteúdos por mês você precisa?',type:'single',required:true,options:['5 a 10','10 a 20','20 a 40','40+','Ainda não sei']},
+        {id:'rec_objetivo',label:'Objetivo principal',title:'Qual seu principal objetivo?',type:'single',required:true,options:['Vender mais','Crescer autoridade','Ganhar consistência','Escalar operação','Outro'],outro:true},
+        {id:'rec_gravado',label:'Material gravado',title:'Você já possui material gravado?',type:'single',required:true,options:['Sim','Não','Parcialmente']},
+        {id:'rec_inicio',label:'Prazo para começar',title:'Qual o prazo para começar?',type:'single',required:true,options:['Imediato','Essa semana','Esse mês','Estou analisando']},
+        {id:'nome',label:'Nome',title:'Qual é o seu nome?',type:'text',required:true,placeholder:'Digite seu nome'},
         {id:'whatsapp',label:'WhatsApp',title:'Qual o seu WhatsApp?',type:'phone',required:true,placeholder:'(00) 00000-0000'},
         {id:'instagram',label:'Instagram',title:'Qual o seu Instagram?',type:'text',required:true,placeholder:'@seuperfil'},
         {id:'empresa',label:'Empresa / Marca',title:'Qual sua empresa ou marca?',type:'text',required:false,placeholder:'Opcional'},
-        {id:'extras',label:'Observacoes extras',title:'Observacoes extras',type:'textarea',required:false,placeholder:'Algo que voce queira complementar...'}
+        {id:'extras',label:'Observações extras',title:'Observações extras',type:'textarea',required:false,placeholder:'Algo que você queira complementar...'}
       ];
     }
     function render(){
@@ -86,13 +86,13 @@ const WA_NUMBER = '5573982284382';
         state.turnstileToken='';
         state.turnstileWidgetId=null;
         submitCard.innerHTML='<button class=\"step-back\" type=\"button\" id=\"go-back-final\">Voltar</button>'+
-          '<h2 class=\"step-title\">'+(state.tipo==='unica'?'Tudo certo para enviar seu orcamento':'Tudo certo para enviar sua proposta')+'</h2>'+
+          '<h2 class=\"step-title\">'+(state.tipo==='unica'?'Tudo certo para enviar seu orçamento':'Tudo certo para enviar sua proposta')+'</h2>'+
           '<p class=\"step-hint\">Revise rapidamente e clique para abrir o WhatsApp com todas as respostas organizadas.</p>'+
           '<div class=\"bot-trap\" aria-hidden=\"true\"><input type=\"text\" id=\"spam-trap\" tabindex=\"-1\" autocomplete=\"off\" inputmode=\"text\" /></div>'+
           '<div class=\"turnstile-wrap\"><div id=\"turnstile-widget\"></div></div>'+
-          '<p class=\"submit-note\">Protecao anti-spam ativa para manter o atendimento rapido e seguro.</p>'+
+          '<p class=\"submit-note\">Proteção anti-spam ativa para manter o atendimento rápido e seguro.</p>'+
           '<div class=\"error\" id=\"submit-error\"></div>'+
-          '<button class=\"btn-submit\" type=\"button\" id=\"final-submit\">'+(state.tipo==='unica'?'Solicitar orcamento no WhatsApp':'Solicitar proposta no WhatsApp')+'</button>';
+          '<button class=\"btn-submit\" type=\"button\" id=\"final-submit\">'+(state.tipo==='unica'?'Solicitar orçamento no WhatsApp':'Solicitar proposta no WhatsApp')+'</button>';
         stepsEl.appendChild(submitCard);
         submitCard.querySelector('#go-back-final').addEventListener('click',()=>{state.readyToSubmit=false;state.currentIndex=Math.max(0,steps.length-1);state.finalError='';render();});
         submitCard.querySelector('#final-submit').addEventListener('click',()=>handleFinalSubmit(submitCard));
@@ -126,8 +126,8 @@ const WA_NUMBER = '5573982284382';
       stepsEl.innerHTML='';
       const picker=document.createElement('article');
       picker.className='type-picker';
-      picker.innerHTML='<h2>Escolha o tipo de orcamento</h2>'+
-        '<button class="opt" data-set-tipo="unica"><span class="opt-row"><span>Demanda Unica</span><span class="opt-check">→</span></span></button>'+
+      picker.innerHTML='<h2>Escolha o tipo de orçamento</h2>'+
+        '<button class="opt" data-set-tipo="unica"><span class="opt-row"><span>Demanda Única</span><span class="opt-check">→</span></span></button>'+
         '<button class="opt" data-set-tipo="recorrente"><span class="opt-row"><span>Demanda Recorrente</span><span class="opt-check">→</span></span></button>';
       picker.querySelectorAll('[data-set-tipo]').forEach((btn)=>{btn.addEventListener('click',()=>{setTipo(btn.getAttribute('data-set-tipo'));})});
       stepsEl.appendChild(picker);
@@ -164,7 +164,7 @@ const WA_NUMBER = '5573982284382';
       }
       if(step.type==='yesNoByService'){
         const map=state.answers[step.id]||{};
-        body='<div class="grid-group">'+step.services.map((service)=>{const yesActive=map[service]==='Sim'?' active':'';const noActive=map[service]==='Nao'?' active':'';return '<div class="group-row"><div class="group-label">'+escapeHtml(service)+'</div><div class="options"><button class="opt'+yesActive+'" type="button" data-yn="'+escapeAttr(service)+'|Sim">Sim</button><button class="opt'+noActive+'" type="button" data-yn="'+escapeAttr(service)+'|Nao">Nao</button></div></div>';}).join('')+'</div>';
+        body='<div class="grid-group">'+step.services.map((service)=>{const yesActive=map[service]==='Sim'?' active':'';const noActive=map[service]==='Não'?' active':'';return '<div class="group-row"><div class="group-label">'+escapeHtml(service)+'</div><div class="options"><button class="opt'+yesActive+'" type="button" data-yn="'+escapeAttr(service)+'|Sim">Sim</button><button class="opt'+noActive+'" type="button" data-yn="'+escapeAttr(service)+'|Não">Não</button></div></div>';}).join('')+'</div>';
       }
       if(step.type==='durationByService'){
         const map=state.answers[step.id]||{};
@@ -203,21 +203,21 @@ const WA_NUMBER = '5573982284382';
     function collectAndValidate(step,container){
       if(step.type==='text'){
         const raw=String(container.querySelector('#step-input').value||'');
-        if(containsHtml(raw)) return fail('Nao use HTML ou scripts neste campo.');
+        if(containsHtml(raw)) return fail('Não use HTML ou scripts neste campo.');
         const maxLen=getTextLimitForField(step.id);
         const value=sanitizeText(raw,maxLen);
         if(step.required&&!value) return fail('Preencha este campo para continuar.');
-        if(value&&hasDangerousScheme(value)) return fail('Conteudo invalido. Remova links inseguros.');
+        if(value&&hasDangerousScheme(value)) return fail('Conteúdo inválido. Remova links inseguros.');
         return ok(value);
       }
       if(step.type==='phone'){const raw=onlyDigits(container.querySelector('#step-input').value||'');const check=validateBrazilPhone(raw);if(!check.ok) return fail(check.error);return ok(raw);}
       if(step.type==='textarea'){
         const raw=String(container.querySelector('#step-input').value||'');
-        if(containsHtml(raw)) return fail('Nao use HTML ou scripts neste campo.');
+        if(containsHtml(raw)) return fail('Não use HTML ou scripts neste campo.');
         const maxLen=step.id==='unica_referencia'?FIELD_LIMITS.referencia:FIELD_LIMITS.extras;
         const value=sanitizeText(raw,maxLen);
         if(step.required&&!value) return fail('Preencha este campo para continuar.');
-        if(value&&hasDangerousScheme(value)) return fail(step.id==='unica_referencia'?'Referencia invalida. Use apenas texto ou links seguros.':'Conteudo invalido. Remova links inseguros.');
+        if(value&&hasDangerousScheme(value)) return fail(step.id==='unica_referencia'?'Referência inválida. Use apenas texto ou links seguros.':'Conteúdo inválido. Remova links inseguros.');
         return ok(value);
       }
       if(step.type==='single'){
@@ -228,7 +228,7 @@ const WA_NUMBER = '5573982284382';
         if(step.outro){
           const outroInput=container.querySelector('#single-outro');
           const outroRaw=outroInput?String(outroInput.value||''):'';
-          if(containsHtml(outroRaw)) return fail('Nao use HTML no campo "Outro".');
+          if(containsHtml(outroRaw)) return fail('Não use HTML no campo "Outro".');
           const outroValue=sanitizeText(outroRaw,FIELD_LIMITS.outro);
           if(value==='Outro'&&!outroValue) return fail('Descreva o campo "Outro" para continuar.');
           extra[step.id+'_outro']=outroValue;
@@ -240,7 +240,7 @@ const WA_NUMBER = '5573982284382';
         if(step.required&&actives.length===0) return fail('Selecione pelo menos uma opcao.');
         const outroInput=container.querySelector('#multi-outro');
         const outroRaw=outroInput?String(outroInput.value||''):'';
-        if(containsHtml(outroRaw)) return fail('Nao use HTML no campo "Outro".');
+        if(containsHtml(outroRaw)) return fail('Não use HTML no campo "Outro".');
         const outroValue=sanitizeText(outroRaw,FIELD_LIMITS.outro);
         if(actives.includes('Outro')&&!outroValue) return fail('Descreva o campo "Outro" para continuar.');
         return ok({selected:actives,outro:outroValue});
@@ -248,7 +248,7 @@ const WA_NUMBER = '5573982284382';
       if(step.type==='quantityByService'){
         if(!step.services||step.services.length===0) return ok({});
         const map={};
-        for(const service of step.services){const input=container.querySelector('[data-qty="'+cssEscape(service)+'"]');const raw=input?String(input.value||'').trim():'';const num=Number(raw);if(!raw||!Number.isInteger(num)||num<1) return fail('Informe uma quantidade valida para todos os servicos.');map[service]=num;}
+        for(const service of step.services){const input=container.querySelector('[data-qty="'+cssEscape(service)+'"]');const raw=input?String(input.value||'').trim():'';const num=Number(raw);if(!raw||!Number.isInteger(num)||num<1) return fail('Informe uma quantidade válida para todos os serviços.');map[service]=num;}
         return ok(map);
       }
       if(step.type==='yesNoByService'){
@@ -256,10 +256,10 @@ const WA_NUMBER = '5573982284382';
         const map={};
         for(const service of step.services){
           const yes=container.querySelector('[data-yn="'+cssEscape(service)+'|Sim"]');
-          const no=container.querySelector('[data-yn="'+cssEscape(service)+'|Nao"]');
+          const no=container.querySelector('[data-yn="'+cssEscape(service)+'|Não"]');
           if(yes&&yes.classList.contains('active')) map[service]='Sim';
-          if(no&&no.classList.contains('active')) map[service]='Nao';
-          if(!map[service]) return fail('Responda se o material esta gravado para todos os servicos.');
+          if(no&&no.classList.contains('active')) map[service]='Não';
+          if(!map[service]) return fail('Responda se o material está gravado para todos os serviços.');
         }
         return ok(map);
       }
@@ -271,7 +271,7 @@ const WA_NUMBER = '5573982284382';
           const raw=input?String(input.value||''):'';
           if(containsHtml(raw)) return fail('Use somente texto simples no tempo de material.');
           const value=sanitizeText(raw,FIELD_LIMITS.duration);
-          if(!value) return fail('Informe o tempo de material bruto para cada servico listado.');
+          if(!value) return fail('Informe o tempo de material bruto para cada serviço listado.');
           map[service]=value;
         }
         return ok(map);
@@ -288,13 +288,13 @@ const WA_NUMBER = '5573982284382';
       try{
         const siteKey=await getTurnstileSiteKey();
         if(!siteKey){
-          showSubmitError(errorEl,'Nao foi possivel carregar a protecao anti-bot. Atualize a pagina e tente novamente.');
+          showSubmitError(errorEl,'Não foi possível carregar a proteção anti-bot. Atualize a página e tente novamente.');
           return;
         }
         const libReady=await waitForTurnstileLib(7000);
         if(!libReady||!window.turnstile||typeof window.turnstile.render!=='function'){
           window.setTimeout(()=>{if(document.body.contains(widgetHost)&&!state.turnstileWidgetId) initTurnstile(container);},500);
-          showSubmitError(errorEl,'Nao conseguimos carregar a verificacao anti-bot. Verifique conexao, bloqueador de anuncios ou tente outro navegador.');
+          showSubmitError(errorEl,'Não conseguimos carregar a verificação anti-bot. Verifique a conexão, bloqueador de anúncios ou tente outro navegador.');
           return;
         }
         state.turnstileToken='';
@@ -309,30 +309,30 @@ const WA_NUMBER = '5573982284382';
           'expired-callback':()=>{
             state.turnstileToken='';
             settleTurnstilePending(false,'expired');
-            showSubmitError(errorEl,'A verificacao expirou. Confirme novamente para continuar.');
+            showSubmitError(errorEl,'A verificação expirou. Confirme novamente para continuar.');
           },
           'error-callback':()=>{
             state.turnstileToken='';
             settleTurnstilePending(false,'error');
-            showSubmitError(errorEl,'Falha na verificacao anti-bot. Tente novamente.');
+            showSubmitError(errorEl,'Falha na verificação anti-bot. Tente novamente.');
           }
         });
         window.setTimeout(()=>{
           if(document.body.contains(widgetHost)&&state.turnstileWidgetId!==null&&!widgetHost.querySelector('iframe')){
-            showSubmitError(errorEl,'Verificacao anti-bot nao exibiu corretamente. Atualize a pagina e tente novamente.');
+            showSubmitError(errorEl,'Verificação anti-bot não exibiu corretamente. Atualize a página e tente novamente.');
           }
         },1600);
       }catch(err){
         const message=String(err&&err.message||'');
         if(message.toLowerCase().includes('site key not configured')){
-          showSubmitError(errorEl,'Turnstile ainda nao foi configurado no servidor. Avise o suporte para finalizar a chave.');
+          showSubmitError(errorEl,'Turnstile ainda não foi configurado no servidor. Avise o suporte para finalizar a chave.');
           return;
         }
         if(message.toLowerCase().includes('invalid')){
-          showSubmitError(errorEl,'A chave do Turnstile parece invalida para este dominio. Revise a configuracao no Cloudflare.');
+          showSubmitError(errorEl,'A chave do Turnstile parece inválida para este domínio. Revise a configuração no Cloudflare.');
           return;
         }
-        showSubmitError(errorEl,'Nao foi possivel validar a seguranca agora. Tente novamente em instantes.');
+        showSubmitError(errorEl,'Não foi possível validar a segurança agora. Tente novamente em instantes.');
       }
     }
     async function waitForTurnstileLib(timeoutMs){
@@ -367,7 +367,7 @@ const WA_NUMBER = '5573982284382';
         return;
       }
       if(now-state.startedAt<MIN_ELAPSED_MS){
-        showSubmitError(errorEl,'Quase la. Aguarde um instante e tente novamente.');
+        showSubmitError(errorEl,'Quase lá. Aguarde um instante e tente novamente.');
         return;
       }
       if(!state.turnstileToken){
@@ -378,14 +378,14 @@ const WA_NUMBER = '5573982284382';
       const payload=buildSubmissionPayload(honeypotInput?honeypotInput.value:'');
       const payloadHash=JSON.stringify(payload.answers);
       if(state.lastSubmissionHash&&state.lastSubmissionHash===payloadHash){
-        showSubmitError(errorEl,'Esse envio ja foi validado. Abrindo WhatsApp...');
+          showSubmitError(errorEl,'Esse envio já foi validado. Abrindo WhatsApp...');
         openWhatsApp(payload.answers);
         return;
       }
       state.isSubmitting=true;
       submitBtn.disabled=true;
       const originalText=submitBtn.textContent;
-      submitBtn.textContent='Validando seguranca...';
+      submitBtn.textContent='Validando segurança...';
       try{
         const response=await fetch('/api/validate-submit',{
           method:'POST',
@@ -405,7 +405,7 @@ const WA_NUMBER = '5573982284382';
         state.finalError='';
         openWhatsApp(payload.answers);
       }catch{
-        showSubmitError(errorEl,'Falha de conexao. Verifique sua internet e tente novamente.');
+        showSubmitError(errorEl,'Falha de conexão. Verifique sua internet e tente novamente.');
       }finally{
         state.isSubmitting=false;
         submitBtn.disabled=false;
@@ -418,7 +418,7 @@ const WA_NUMBER = '5573982284382';
         await initTurnstile(container);
       }
       if(!window.turnstile||state.turnstileWidgetId===null){
-        showSubmitError(errorEl,'Protecao anti-bot ainda carregando. Aguarde alguns segundos e tente novamente.');
+        showSubmitError(errorEl,'Proteção anti-bot ainda carregando. Aguarde alguns segundos e tente novamente.');
         return false;
       }
       if(state.turnstilePendingPromise){
@@ -426,17 +426,17 @@ const WA_NUMBER = '5573982284382';
           await state.turnstilePendingPromise;
           return !!state.turnstileToken;
         }catch{
-          showSubmitError(errorEl,'Nao foi possivel validar a verificacao anti-bot. Tente novamente.');
+          showSubmitError(errorEl,'Não foi possível validar a verificação anti-bot. Tente novamente.');
           return false;
         }
       }
-      showSubmitError(errorEl,'Validando verificacao anti-bot...');
+      showSubmitError(errorEl,'Validando verificação anti-bot...');
       state.turnstilePendingPromise=new Promise((resolve,reject)=>{
         state.turnstileResolve=resolve;
         state.turnstileReject=reject;
         const timeout=window.setTimeout(()=>{
           settleTurnstilePending(false,'timeout');
-          showSubmitError(errorEl,'A verificacao demorou para responder. Tente novamente.');
+          showSubmitError(errorEl,'A verificação demorou para responder. Tente novamente.');
         },9000);
         state.turnstileResolve=((value)=>{window.clearTimeout(timeout);resolve(value);});
         state.turnstileReject=((reason)=>{window.clearTimeout(timeout);reject(reason);});
@@ -513,27 +513,27 @@ const WA_NUMBER = '5573982284382';
     }
     function mapSubmitError(error,status){
       if(status===429) return 'Muitas tentativas em pouco tempo. Aguarde alguns segundos e tente novamente.';
-      if(status===403) return 'Nao conseguimos confirmar a seguranca do envio. Tente novamente.';
-      if(status===503) return 'Protecao temporariamente indisponivel. Tente novamente em instantes.';
+      if(status===403) return 'Não conseguimos confirmar a segurança do envio. Tente novamente.';
+      if(status===503) return 'Proteção temporariamente indisponível. Tente novamente em instantes.';
       const key=String(error||'').toLowerCase();
-      if(key.includes('whatsapp')) return 'WhatsApp invalido. Revise o numero e tente novamente.';
-      if(key.includes('referencia')) return 'Referencia invalida. Use texto simples ou links seguros.';
-      if(key.includes('spam')) return 'Envio bloqueado por seguranca. Atualize a pagina e tente novamente.';
-      return 'Nao foi possivel validar os dados. Revise os campos e tente novamente.';
+      if(key.includes('whatsapp')) return 'WhatsApp inválido. Revise o número e tente novamente.';
+      if(key.includes('referencia')) return 'Referência inválida. Use texto simples ou links seguros.';
+      if(key.includes('spam')) return 'Envio bloqueado por segurança. Atualize a página e tente novamente.';
+      return 'Não foi possível validar os dados. Revise os campos e tente novamente.';
     }
     function showSubmitError(errorEl,message){if(!errorEl) return;state.finalError=message;errorEl.textContent=message;errorEl.style.display='block';}
     function hideSubmitError(errorEl){if(!errorEl) return;state.finalError='';errorEl.style.display='none';errorEl.textContent='';}
     function openWhatsApp(safeAnswers){
       const answers=safeAnswers||buildSanitizedAnswers();
       const name=(answers.nome||'').trim()||'Sem nome';
-      const intro=state.tipo==='unica'?'Ola, me chamo '+name+'. Acabei de preencher o formulario de Demanda Unica no site da HAGAV e gostaria de solicitar meu orcamento.':'Ola, me chamo '+name+'. Acabei de preencher o formulario de Demanda Recorrente no site da HAGAV e gostaria de solicitar uma proposta.';
+      const intro=state.tipo==='unica'?'Olá, me chamo '+name+'. Acabei de preencher o formulário de Demanda Única no site da HAGAV e gostaria de solicitar meu orçamento.':'Olá, me chamo '+name+'. Acabei de preencher o formulário de Demanda Recorrente no site da HAGAV e gostaria de solicitar uma proposta.';
       const lines=[intro,'','*Resumo das respostas*'];
       if(state.tipo==='unica'){
         const servicos=getSelectedServices();
         const qtd=answers.unica_quantidades||{};
         const gravado=answers.unica_gravado||{};
         const tempo=answers.unica_tempo_bruto||{};
-        lines.push('• Servicos: '+(servicos.length?servicos.join(', '):'-'));
+        lines.push('• Serviços: '+(servicos.length?servicos.join(', '):'-'));
         if(servicos.length){
           lines.push('• Quantidades:');
           servicos.forEach((s)=>lines.push('  - '+s+': '+(qtd[s]||'-')));
@@ -541,20 +541,20 @@ const WA_NUMBER = '5573982284382';
           servicos.forEach((s)=>lines.push('  - '+s+': '+(gravado[s]||'-')));
           if(Object.keys(tempo).length){lines.push('• Tempo bruto:');Object.keys(tempo).forEach((s)=>lines.push('  - '+s+': '+tempo[s]));}
         }
-        lines.push('• Referencia visual: '+(answers.unica_referencia||'-'));
+        lines.push('• Referência visual: '+(answers.unica_referencia||'-'));
         lines.push('• Prazo ideal: '+(answers.unica_prazo||'-'));
       }else{
-        lines.push('• Tipo de operacao: '+composeSingleWithOutro('rec_tipo_operacao',answers));
-        lines.push('• Conteudos por mes: '+(answers.rec_volume||'-'));
+        lines.push('• Tipo de operação: '+composeSingleWithOutro('rec_tipo_operacao',answers));
+        lines.push('• Conteúdos por mês: '+(answers.rec_volume||'-'));
         lines.push('• Objetivo principal: '+composeSingleWithOutro('rec_objetivo',answers));
         lines.push('• Material gravado: '+(answers.rec_gravado||'-'));
-        lines.push('• Prazo para comecar: '+(answers.rec_inicio||'-'));
+        lines.push('• Prazo para começar: '+(answers.rec_inicio||'-'));
         lines.push('• Empresa / Marca: '+(answers.empresa||'-'));
       }
       lines.push('• Nome: '+(answers.nome||'-'));
       lines.push('• WhatsApp: '+formatPhone(answers.whatsapp||''));
       lines.push('• Instagram: '+(answers.instagram||'-'));
-      lines.push('• Observacoes extras: '+(answers.extras||'-'));
+      lines.push('• Observações extras: '+(answers.extras||'-'));
       const text=lines.join('\n');
       window.open('https://wa.me/'+WA_NUMBER+'?text='+encodeURIComponent(text),'_blank');
     }
@@ -575,13 +575,13 @@ const WA_NUMBER = '5573982284382';
     function hasDangerousScheme(value){return /(javascript:|vbscript:|data:text\/html)/i.test(String(value||''));}
     function validateBrazilPhone(digits){
       if(!digits) return {ok:false,error:'Digite seu WhatsApp para continuar.'};
-      if(digits.length<10||digits.length>11) return {ok:false,error:'Use um numero brasileiro com DDD e 10 ou 11 digitos.'};
+      if(digits.length<10||digits.length>11) return {ok:false,error:'Use um número brasileiro com DDD e 10 ou 11 dígitos.'};
       const ddd=digits.slice(0,2);
-      if(!DDD_VALIDOS.has(ddd)) return {ok:false,error:'DDD invalido. Verifique o numero e tente novamente.'};
-      if(/^(\d)\1+$/.test(digits)) return {ok:false,error:'Numero invalido. Digite um WhatsApp real.'};
-      if(digits==='12345678910') return {ok:false,error:'Numero invalido. Digite um WhatsApp real.'};
-      if(isSequential(digits)) return {ok:false,error:'Numero invalido. Digite um WhatsApp real.'};
-      if(digits.length===11&&digits.charAt(2)!=='9') return {ok:false,error:'Para 11 digitos, o numero deve ser celular valido.'};
+      if(!DDD_VALIDOS.has(ddd)) return {ok:false,error:'DDD inválido. Verifique o número e tente novamente.'};
+      if(/^(\d)\1+$/.test(digits)) return {ok:false,error:'Número inválido. Digite um WhatsApp real.'};
+      if(digits==='12345678910') return {ok:false,error:'Número inválido. Digite um WhatsApp real.'};
+      if(isSequential(digits)) return {ok:false,error:'Número inválido. Digite um WhatsApp real.'};
+      if(digits.length===11&&digits.charAt(2)!=='9') return {ok:false,error:'Para 11 dígitos, o número deve ser celular válido.'};
       return {ok:true};
     }
     function isSequential(value){const arr=value.split('').map((n)=>Number(n));let up=true;let down=true;for(let i=1;i<arr.length;i++){if(arr[i]!==arr[i-1]+1) up=false;if(arr[i]!==arr[i-1]-1) down=false;}return up||down;}

@@ -77,9 +77,14 @@
       <div class="progress-label" id="progress-label">0 / 0</div>
     </section>
     <section class="steps" id="steps"></section>
-    <footer>© 2026 HAGAV Studio de Edição</footer>
+    <footer>© <span data-footer-year>2026</span> HAGAV Studio de Edição • Todos os direitos reservados</footer>
   </main>
   <script src="./assets/budget-inline.js"></script>
+  <script>
+    document.querySelectorAll('[data-footer-year]').forEach((el)=>{
+      el.textContent = String(new Date().getFullYear());
+    });
+  </script>
 </body>
 </html>
 

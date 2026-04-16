@@ -107,7 +107,7 @@ footer{border-top:1px solid rgba(255,255,255,.06);padding:20px;text-align:center
   </a>
 </div>
 
-<footer>&#169; 2025 HAGAV Studio de Edição</footer>
+<footer>&#169; <span data-footer-year>2026</span> HAGAV Studio de Edição • Todos os direitos reservados</footer>
 
 <script>
 const cats=[
@@ -213,6 +213,9 @@ document.addEventListener('keydown',function(e){if(e.key==='Escape')closeModal()
 
 renderPills();
 renderGrid();
+document.querySelectorAll('[data-footer-year]').forEach(function(el){
+  el.textContent = String(new Date().getFullYear());
+});
 </script>
 </body>
 </html>

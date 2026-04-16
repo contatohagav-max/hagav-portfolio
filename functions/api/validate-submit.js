@@ -24,6 +24,9 @@ const LIMITS = {
 const SUBMIT_COOLDOWN_MS = 8000;
 const lastSubmitByIp = new Map();
 const LEAD_SAVE_TIMEOUT_MS = 5000;
+const DEFAULT_WEBHOOK_URL_DU = "https://script.google.com/macros/s/AKfycbwQumlm5voxZrUcrw9S9nir8PcNs6lcFoIH_UGcjGYmRMryOexvqFyLpI2wnTNd9pMk/exec";
+const DEFAULT_WEBHOOK_URL_DR = "https://script.google.com/macros/s/AKfycbwmA4ikYQkYZj_4mt8001BxpC-3ihy92X3xO5FtPg-UP_wUqdLu7PfteuLT1hraAbzTsA/exec";
+const DEFAULT_WEBHOOK_SECRET = "hagav-2026-leads-secreto-8472";
 
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -168,8 +171,19 @@ function validateTipoPayload(body) {
   };
 }
 
+function getWebhookConfigByTipo(env, tipo) {
+  const isUnica = tipo === "unica";
+  const webhookUrl = String(
+    isUnica
+      ? (env.GOOGLE_SHEETS_WEBHOOK_URL_DU || DEFAULT_WEBHOOK_URL_DU)
+      : (env.GOOGLE_SHEETS_WEBHOOK_URL_DR || DEFAULT_WEBHOOK_URL_DR)
+  ).trim();
+  const secret = String(env.GOOGLE_SHEETS_WEBHOOK_SECRET || DEFAULT_WEBHOOK_SECRET).trim();
+  return { webhookUrl, secret };
+}
+
 async function saveLeadToSheets(env, lead) {
-  const webhookUrl = String(env.GOOGLE_SHEETS_WEBHOOK_URL || "").trim();
+  const { webhookUrl, secret } = getWebhookConfigByTipo(env, lead?.raw?.tipo);
   if (!webhookUrl) {
     return { ok: false, reason: "not_configured" };
   }
@@ -180,7 +194,6 @@ async function saveLeadToSheets(env, lead) {
     : null;
 
   try {
-    const secret = String(env.GOOGLE_SHEETS_WEBHOOK_SECRET || "").trim();
     const headers = { "content-type": "application/json; charset=utf-8" };
     if (secret) headers["x-webhook-secret"] = secret;
 

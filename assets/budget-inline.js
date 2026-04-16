@@ -58,9 +58,9 @@ const DDD_VALIDOS = new Set(['11','12','13','14','15','16','17','18','19','21','
         {id:'unica_tempo_bruto',label:'Tempo de material bruto',title:'Quanto tempo de material bruto para edição?',hint:'Somente para serviços com material gravado.',type:'durationByService',required:withYes.length>0,optionalWhenEmpty:true,services:withYes},
         {id:'unica_referencia',label:'Referência visual',title:'Tem referência visual?',hint:'Envie link de referência do Instagram, YouTube, TikTok ou Meta Ads. Ou pule.',type:'textarea',required:false,placeholder:'Cole links ou descreva referências...'},
         {id:'unica_prazo',label:'Prazo ideal',title:'Qual o prazo ideal?',type:'single',required:true,options:['24h','3 dias','Essa semana','Sem pressa']},
+        {id:'extras',label:'Observações extras',title:'Observações extras',type:'textarea',required:false,placeholder:'Algo que você queira complementar...'},
         {id:'nome',label:'Nome',title:'Qual é o seu nome?',type:'text',required:true,placeholder:'Digite seu nome'},
-        {id:'whatsapp',label:'WhatsApp',title:'Qual o seu WhatsApp?',type:'phone',required:true,placeholder:'(00) 00000-0000'},
-        {id:'extras',label:'Observações extras',title:'Observações extras',type:'textarea',required:false,placeholder:'Algo que você queira complementar...'}
+        {id:'whatsapp',label:'WhatsApp',title:'Qual o seu WhatsApp?',type:'phone',required:true,placeholder:'(00) 00000-0000'}
       ].filter((step)=>!(step.optionalWhenEmpty&&(!step.services||step.services.length===0)));
     }
     function getStepsRecorrente(){
@@ -72,9 +72,9 @@ const DDD_VALIDOS = new Set(['11','12','13','14','15','16','17','18','19','21','
         {id:'rec_gravado_por_tipo',label:'Material gravado',title:'O material já está gravado?',hint:'Responda para cada tipo selecionado.',type:'yesNoByService',required:true,services:selected},
         {id:'rec_tempo_bruto_por_tipo',label:'Tempo bruto',title:'Quanto tempo de material bruto para edição?',hint:'Somente para tipos com material gravado.',type:'durationByService',required:withYes.length>0,optionalWhenEmpty:true,services:withYes},
         {id:'rec_inicio',label:'Prazo para começar',title:'Qual o prazo para começar?',type:'single',required:true,options:['Imediato','Essa semana','Esse mês','Estou analisando']},
+        {id:'extras',label:'Observações extras',title:'Observações extras',type:'textarea',required:false,placeholder:'Algo que você queira complementar...'},
         {id:'nome',label:'Nome',title:'Qual é o seu nome?',type:'text',required:true,placeholder:'Digite seu nome'},
-        {id:'whatsapp',label:'WhatsApp',title:'Qual o seu WhatsApp?',type:'phone',required:true,placeholder:'(00) 00000-0000'},
-        {id:'extras',label:'Observações extras',title:'Observações extras',type:'textarea',required:false,placeholder:'Algo que você queira complementar...'}
+        {id:'whatsapp',label:'WhatsApp',title:'Qual o seu WhatsApp?',type:'phone',required:true,placeholder:'(00) 00000-0000'}
       ].filter((step)=>!(step.optionalWhenEmpty&&(!step.services||step.services.length===0)));
     }
     function render(){

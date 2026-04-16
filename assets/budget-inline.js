@@ -269,7 +269,7 @@ const WA_NUMBER = '5573982284382';
     }
     function goToNext(){const steps=getSteps();state.finalError='';if(state.currentIndex>=steps.length-1){state.readyToSubmit=true;render();return;}state.currentIndex+=1;render();}
     function updateProgress(current,total){const pct=total>0?Math.round((current/total)*100):0;progressFill.style.width=pct+'%';progressLabel.textContent=current+' / '+total;}
-    async function handleFinalSubmit(container){
+    function handleFinalSubmit(container){
       const submitBtn=container.querySelector('#final-submit');
       const errorEl=container.querySelector('#submit-error');
       const honeypotInput=container.querySelector('#spam-trap');
@@ -383,7 +383,11 @@ const WA_NUMBER = '5573982284382';
       lines.push('• Instagram: '+(answers.instagram||'-'));
       lines.push('• Observações extras: '+(answers.extras||'-'));
       const text=lines.join('\n');
-      window.open('https://wa.me/'+WA_NUMBER+'?text='+encodeURIComponent(text),'_blank');
+      const url='https://wa.me/'+WA_NUMBER+'?text='+encodeURIComponent(text);
+      const popup=window.open(url,'_blank','noopener,noreferrer');
+      if(!popup){
+        window.location.href=url;
+      }
     }
     function composeSingleWithOutro(baseId,source){const data=source||state.answers;const v=data[baseId]||'-';if(v!=='Outro') return v;const extra=sanitizeText(data[baseId+'_outro']||'',FIELD_LIMITS.outro);return extra?('Outro: '+extra):'Outro';}
     function getTextLimitForField(fieldId){

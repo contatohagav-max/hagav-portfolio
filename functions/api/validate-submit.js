@@ -23,10 +23,12 @@ const LIMITS = {
 
 const SUBMIT_COOLDOWN_MS = 8000;
 const lastSubmitByIp = new Map();
-const LEAD_SAVE_TIMEOUT_MS = 5000;
+const recentSubmissionIds = new Map();
+const LEAD_SAVE_TIMEOUT_MS = 15000;
 const DEFAULT_WEBHOOK_URL_DU = "https://script.google.com/macros/s/AKfycbwQumlm5voxZrUcrw9S9nir8PcNs6lcFoIH_UGcjGYmRMryOexvqFyLpI2wnTNd9pMk/exec";
 const DEFAULT_WEBHOOK_URL_DR = "https://script.google.com/macros/s/AKfycbwmA4ikYQkYZj_4mt8001BxpC-3ihy92X3xO5FtPg-UP_wUqdLu7PfteuLT1hraAbzTsA/exec";
 const DEFAULT_WEBHOOK_SECRET = "hagav-2026-leads-secreto-8472";
+const SUBMISSION_ID_TTL_MS = 1000 * 60 * 30;
 
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -188,18 +190,35 @@ async function saveLeadToSheets(env, lead) {
     return { ok: false, reason: "not_configured" };
   }
 
-  const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
-  const timeoutId = controller
-    ? setTimeout(() => controller.abort("timeout"), LEAD_SAVE_TIMEOUT_MS)
-    : null;
-
-  try {
+  async function runWebhookPost() {
+    const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+    const timeoutId = controller
+      ? setTimeout(() => controller.abort("timeout"), LEAD_SAVE_TIMEOUT_MS)
+      : null;
     const headers = { "content-type": "application/json; charset=utf-8" };
     if (secret) headers["x-webhook-secret"] = secret;
     const row = lead?.row || {};
+    const valuesByHeader = {
+      DataHora: row.DataHora || "",
+      TipoFluxo: row.TipoFluxo || "",
+      Nome: row.Nome || "",
+      WhatsApp: row.WhatsApp || "",
+      Instagram: row.Instagram || "",
+      Empresa: row.Empresa || "",
+      ServicoOuOperacao: row.ServicoOuOperacao || "",
+      Quantidade: row.Quantidade || "",
+      MaterialGravado: row.MaterialGravado || "",
+      TempoBruto: row.TempoBruto || "",
+      Prazo: row.Prazo || "",
+      Referencia: row.Referencia || "",
+      Objetivo: row.Objetivo || "",
+      Observacoes: row.Observacoes || "",
+      Origem: row.Origem || ""
+    };
     const webhookBody = {
       ...lead,
       ...row,
+      valuesByHeader,
       // Aliases para diferentes scripts (camelCase/snake-ish/acentuados).
       dataHora: row.DataHora || "",
       tipoFluxo: row.TipoFluxo || "",
@@ -208,6 +227,7 @@ async function saveLeadToSheets(env, lead) {
       instagram: row.Instagram || "",
       empresa: row.Empresa || "",
       servicoOuOperacao: row.ServicoOuOperacao || "",
+      servico: row.ServicoOuOperacao || "",
       quantidade: row.Quantidade || "",
       materialGravado: row.MaterialGravado || "",
       tempoBruto: row.TempoBruto || "",
@@ -268,12 +288,16 @@ async function saveLeadToSheets(env, lead) {
       return { ok: true };
     } catch {
       return { ok: true };
+    } finally {
+      if (timeoutId) clearTimeout(timeoutId);
     }
-  } catch {
-    return { ok: false, reason: "request_failed" };
-  } finally {
-    if (timeoutId) clearTimeout(timeoutId);
   }
+
+  const firstTry = await runWebhookPost().catch(() => ({ ok: false, reason: "request_failed" }));
+  if (firstTry.ok) return firstTry;
+  await new Promise((resolve) => setTimeout(resolve, 400));
+  const secondTry = await runWebhookPost().catch(() => ({ ok: false, reason: "request_failed" }));
+  return secondTry.ok ? secondTry : firstTry;
 }
 
 function toFlatMap(value, keyLimit, valLimit) {
@@ -387,6 +411,14 @@ export async function onRequestPost(context) {
   if (!Number.isFinite(elapsedMs) || elapsedMs < 3500) {
     return json({ ok: false, error: "Envio muito rapido" }, 429);
   }
+  const submissionId = stripDangerousText(String(body?.meta?.submissionId || ""), 90);
+  if (submissionId) {
+    const nowCheck = Date.now();
+    const lockedSubmissionUntil = Number(recentSubmissionIds.get(submissionId) || 0);
+    if (lockedSubmissionUntil > nowCheck) {
+      return json({ ok: true, saved: true, duplicate: true, saveReason: "" });
+    }
+  }
 
   const ip = String(request.headers.get("CF-Connecting-IP") || "unknown");
   const now = Date.now();
@@ -419,6 +451,14 @@ export async function onRequestPost(context) {
     }
   };
   const saveResult = await saveLeadToSheets(context.env, leadPayload);
+  if (submissionId && saveResult.ok) {
+    recentSubmissionIds.set(submissionId, now + SUBMISSION_ID_TTL_MS);
+    if (recentSubmissionIds.size > 5000) {
+      for (const [key, value] of recentSubmissionIds.entries()) {
+        if (Number(value) <= now) recentSubmissionIds.delete(key);
+      }
+    }
+  }
 
   lastSubmitByIp.set(ip, now + SUBMIT_COOLDOWN_MS);
   if (lastSubmitByIp.size > 5000) {

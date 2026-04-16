@@ -10,6 +10,7 @@ const DDD_VALIDOS = new Set(['11','12','13','14','15','16','17','18','19','21','
       answers: {},
       startedAt: Date.now(),
       isSubmitting: false,
+      submissionId: '',
       submitLockedUntil: 0,
       lastSubmissionHash: '',
       finalError: ''
@@ -302,10 +303,17 @@ const DDD_VALIDOS = new Set(['11','12','13','14','15','16','17','18','19','21','
         showSubmitError(errorEl,'Quase lá. Aguarde um instante e tente novamente.');
         return;
       }
+      state.isSubmitting=true;
+      submitBtn.disabled=true;
+      const originalText=submitBtn.textContent;
+      submitBtn.textContent='Enviando...';
       hideSubmitError(errorEl);
       const payload=buildSubmissionPayload(honeypotInput?honeypotInput.value:'');
       if(payload.honeypot){
         state.submitLockedUntil=Date.now()+FINAL_COOLDOWN_MS;
+        state.isSubmitting=false;
+        submitBtn.disabled=false;
+        submitBtn.textContent=originalText;
         return;
       }
       const payloadHash=JSON.stringify(payload.answers);
@@ -316,10 +324,6 @@ const DDD_VALIDOS = new Set(['11','12','13','14','15','16','17','18','19','21','
         render();
         return;
       }
-      state.isSubmitting=true;
-      submitBtn.disabled=true;
-      const originalText=submitBtn.textContent;
-      submitBtn.textContent='Enviando...';
       try{
         const saved = await persistLeadSubmission(payload);
         if(!saved){
@@ -341,13 +345,17 @@ const DDD_VALIDOS = new Set(['11','12','13','14','15','16','17','18','19','21','
     function buildSubmissionPayload(honeypotValue){
       const answers=buildSanitizedAnswers();
       const safeLocation=(typeof window!=='undefined'&&window.location)?(window.location.origin+window.location.pathname):'';
+      if(!state.submissionId){
+        state.submissionId='lead_'+Date.now()+'_'+Math.random().toString(36).slice(2,10);
+      }
       return {
         tipo: state.tipo,
         answers,
         honeypot: sanitizeText(honeypotValue,120),
         meta: {
           elapsedMs: Date.now()-state.startedAt,
-          origin: sanitizeText(safeLocation,180)
+          origin: sanitizeText(safeLocation,180),
+          submissionId: state.submissionId
         }
       };
     }
@@ -519,6 +527,7 @@ const DDD_VALIDOS = new Set(['11','12','13','14','15','16','17','18','19','21','
       state.answers={};
       state.startedAt=Date.now();
       state.isSubmitting=false;
+      state.submissionId='';
       state.submitLockedUntil=0;
       state.lastSubmissionHash='';
       state.finalError='';
@@ -530,6 +539,7 @@ const DDD_VALIDOS = new Set(['11','12','13','14','15','16','17','18','19','21','
       state.readyToSubmit=false;
       state.submittedSuccess=false;
       state.answers={};
+      state.submissionId='';
       state.finalError='';
       render();
     }

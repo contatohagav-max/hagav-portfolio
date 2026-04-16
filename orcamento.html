@@ -194,6 +194,10 @@ function tryNext(){
       if(desc.split(/\s+/).filter(Boolean).length>200){showErr('Descrição acima do limite de 200 palavras.');return;}
       val=sel.map(s=>s==='Outro'?'Outro: '+desc:s);
     } else {val=sel;}
+  } else if(step.type==='radio'){
+    const r=document.querySelector('#opts input:checked');
+    if(step.req&&!r){showErr('Selecione uma opção.');return;}
+    val=r?r.value:'';
   } else {
     const inp=document.getElementById('inp');
     val=inp?inp.value.trim():'';

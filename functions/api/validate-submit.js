@@ -346,7 +346,15 @@ function buildLeadRow(body, request, ip, nowIso) {
     }).filter(Boolean);
 
     servicoOuOperacao = services.join(" | ");
-    quantidade = toFlatMap(answers?.unica_quantidades, LIMITS.service, 16);
+    const qtyMap = answers?.unica_quantidades && typeof answers.unica_quantidades === "object"
+      ? answers.unica_quantidades
+      : {};
+    const qtyByService = services.map((service) => {
+      const qtyRaw = qtyMap[service];
+      const qtyValue = stripDangerousText(String(qtyRaw ?? ""), 16);
+      return qtyValue || "-";
+    });
+    quantidade = qtyByService.join(" | ");
     materialGravado = toFlatMap(answers?.unica_gravado, LIMITS.service, 16);
     tempoBruto = toFlatMap(answers?.unica_tempo_bruto, LIMITS.service, LIMITS.duration);
     prazo = stripDangerousText(String(answers?.unica_prazo || ""), 60);

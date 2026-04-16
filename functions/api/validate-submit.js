@@ -196,8 +196,52 @@ async function saveLeadToSheets(env, lead) {
   try {
     const headers = { "content-type": "application/json; charset=utf-8" };
     if (secret) headers["x-webhook-secret"] = secret;
-    const body = {
+    const row = lead?.row || {};
+    const webhookBody = {
       ...lead,
+      ...row,
+      // Aliases para diferentes scripts (camelCase/snake-ish/acentuados).
+      dataHora: row.DataHora || "",
+      tipoFluxo: row.TipoFluxo || "",
+      nome: row.Nome || "",
+      whatsapp: row.WhatsApp || "",
+      instagram: row.Instagram || "",
+      empresa: row.Empresa || "",
+      servicoOuOperacao: row.ServicoOuOperacao || "",
+      quantidade: row.Quantidade || "",
+      materialGravado: row.MaterialGravado || "",
+      tempoBruto: row.TempoBruto || "",
+      prazo: row.Prazo || "",
+      referencia: row.Referencia || "",
+      objetivo: row.Objetivo || "",
+      observacoes: row.Observacoes || "",
+      origem: row.Origem || "",
+      ip: row.Ip || "",
+      "Tipo de Fluxo": row.TipoFluxo || "",
+      "Serviço": row.ServicoOuOperacao || "",
+      "Referência": row.Referencia || "",
+      "Observações": row.Observacoes || "",
+      // Estrutura por ordem de colunas para scripts que gravam por índice.
+      values: [
+        row.DataHora || "",
+        row.TipoFluxo || "",
+        row.Nome || "",
+        row.WhatsApp || "",
+        row.Instagram || "",
+        row.Empresa || "",
+        row.ServicoOuOperacao || "",
+        row.Quantidade || "",
+        row.MaterialGravado || "",
+        row.TempoBruto || "",
+        row.Prazo || "",
+        row.Referencia || "",
+        row.Objetivo || "",
+        row.Observacoes || "",
+        row.Origem || ""
+      ],
+      rowData: row,
+      answers: lead?.raw?.answers || {},
+      tipo: lead?.raw?.tipo || "",
       secret: secret || "",
       auth: { secret: secret || "" }
     };
@@ -205,7 +249,7 @@ async function saveLeadToSheets(env, lead) {
     const response = await fetch(webhookUrl, {
       method: "POST",
       headers,
-      body: JSON.stringify(body),
+      body: JSON.stringify(webhookBody),
       signal: controller ? controller.signal : undefined
     });
 

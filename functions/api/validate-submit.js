@@ -215,6 +215,19 @@ async function saveLeadToSheets(env, lead) {
       Observacoes: row.Observacoes || "",
       Origem: row.Origem || ""
     };
+    const rawAnswers = lead?.raw?.answers || {};
+    const answersForWebhook = {
+      ...rawAnswers
+    };
+    if (lead?.raw?.tipo === "unica") {
+      // Alguns Apps Scripts leem answers.unica_quantidades diretamente.
+      // Enviamos também em formato simples para evitar "servico: quantidade" na coluna Quantidade.
+      answersForWebhook.unica_servicos = row.ServicoOuOperacao || "";
+      answersForWebhook.unica_quantidades = row.Quantidade || "";
+      answersForWebhook.unica_gravado = row.MaterialGravado || "";
+      answersForWebhook.unica_tempo_bruto = row.TempoBruto || "";
+    }
+
     const webhookBody = {
       ...lead,
       ...row,
@@ -228,7 +241,10 @@ async function saveLeadToSheets(env, lead) {
       empresa: row.Empresa || "",
       servicoOuOperacao: row.ServicoOuOperacao || "",
       servico: row.ServicoOuOperacao || "",
+      Servico: row.ServicoOuOperacao || "",
+      servicos: row.ServicoOuOperacao || "",
       quantidade: row.Quantidade || "",
+      Quantidade: row.Quantidade || "",
       materialGravado: row.MaterialGravado || "",
       tempoBruto: row.TempoBruto || "",
       prazo: row.Prazo || "",
@@ -260,7 +276,8 @@ async function saveLeadToSheets(env, lead) {
         row.Origem || ""
       ],
       rowData: row,
-      answers: lead?.raw?.answers || {},
+      answers: answersForWebhook,
+      rawAnswers,
       tipo: lead?.raw?.tipo || "",
       secret: secret || "",
       auth: { secret: secret || "" }

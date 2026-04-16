@@ -83,6 +83,8 @@
       -webkit-backdrop-filter: blur(16px);
     }
     .content { padding: 24px 16px 16px; }
+    .content.budget-focus { padding-top: 16px; }
+    .content.budget-focus .hero-copy { display: none; }
     h1 {
       font-size: clamp(12px, 2.9vw, 13px);
       font-weight: 800;
@@ -232,16 +234,18 @@
     </div>
 
     <section class="content" id="hero-card">
-      <h1>
-        Seu conteúdo em escala profissional.
-        <em>Processo, qualidade e consistência.</em>
-      </h1>
+      <div class="hero-copy" id="hero-copy">
+        <h1>
+          Seu conteúdo em escala profissional.
+          <em>Processo, qualidade e consistência.</em>
+        </h1>
 
-      <ul class="stats">
-        <li><span class="check">✔</span> +7 anos de experiência</li>
-        <li><span class="check">✔</span> +60 clientes atendidos</li>
-        <li><span class="check">✔</span> Atendimento rápido</li>
-      </ul>
+        <ul class="stats">
+          <li><span class="check">✔</span> +7 anos de experiência</li>
+          <li><span class="check">✔</span> +60 clientes atendidos</li>
+          <li><span class="check">✔</span> Atendimento rápido</li>
+        </ul>
+      </div>
 
       <div class="pane" id="pane-actions">
         <a href="./portfolio.html" class="btn">
@@ -279,11 +283,6 @@
       </div>
       <section class="pane hidden" id="pane-budget" aria-live="polite">
         <div class="budget-shell">
-          <div class="budget-top">
-            <h2>Orçamento personalizado</h2>
-            <button class="budget-exit" id="back-to-modes" type="button">Trocar fluxo</button>
-          </div>
-          <p class="budget-desc">Leva cerca de 2 minutos e nos ajuda a responder com mais rapidez e assertividade.</p>
           <section class="progress-wrap" aria-live="polite">
             <div class="progress-track"><div class="progress-fill" id="progress-fill"></div></div>
             <div class="progress-label" id="progress-label">0 / 0</div>
@@ -300,11 +299,15 @@
     const paneModes = document.getElementById('pane-modes');
     const paneBudget = document.getElementById('pane-budget');
     const heroCard = document.getElementById('hero-card');
+    function setBudgetFocus(isBudget){
+      heroCard.classList.toggle('budget-focus', !!isBudget);
+    }
     function switchPane(target){
       paneActions.classList.add('hidden');
       paneModes.classList.add('hidden');
       paneBudget.classList.add('hidden');
       target.classList.remove('hidden');
+      setBudgetFocus(target === paneBudget);
     }
     function scrollToElement(el){
       if(!el) return;
@@ -318,17 +321,13 @@
       switchPane(paneActions);
       scrollToElement(heroCard);
     });
-    document.getElementById('back-to-modes').addEventListener('click',()=>{
-      switchPane(paneModes);
-      scrollToElement(heroCard);
-    });
     document.querySelectorAll('[data-budget-tipo]').forEach((btn)=>{
       btn.addEventListener('click',()=>{
         if(window.HagavBudget&&typeof window.HagavBudget.setTipo==='function'){
           window.HagavBudget.setTipo(btn.getAttribute('data-budget-tipo'));
         }
         switchPane(paneBudget);
-        scrollToElement(heroCard);
+        scrollToElement(paneBudget);
       });
     });
   </script>

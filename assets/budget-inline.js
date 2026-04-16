@@ -9,12 +9,6 @@ const WA_NUMBER = '5573982284382';
       readyToSubmit: false,
       answers: {},
       startedAt: Date.now(),
-      turnstileSiteKey: '',
-      turnstileToken: '',
-      turnstileWidgetId: null,
-      turnstilePendingPromise: null,
-      turnstileResolve: null,
-      turnstileReject: null,
       isSubmitting: false,
       submitLockedUntil: 0,
       lastSubmissionHash: '',
@@ -83,13 +77,10 @@ const WA_NUMBER = '5573982284382';
         });
         const submitCard=document.createElement('article');
         submitCard.className='step-active';
-        state.turnstileToken='';
-        state.turnstileWidgetId=null;
         submitCard.innerHTML='<button class=\"step-back\" type=\"button\" id=\"go-back-final\">Voltar</button>'+
           '<h2 class=\"step-title\">'+(state.tipo==='unica'?'Tudo certo para enviar seu orçamento':'Tudo certo para enviar sua proposta')+'</h2>'+
           '<p class=\"step-hint\">Revise rapidamente e clique para abrir o WhatsApp com todas as respostas organizadas.</p>'+
           '<div class=\"bot-trap\" aria-hidden=\"true\"><input type=\"text\" id=\"spam-trap\" tabindex=\"-1\" autocomplete=\"off\" inputmode=\"text\" /></div>'+
-          '<div class=\"turnstile-wrap\"><div id=\"turnstile-widget\"></div></div>'+
           '<p class=\"submit-note\">Proteção anti-spam ativa para manter o atendimento rápido e seguro.</p>'+
           '<div class=\"error\" id=\"submit-error\"></div>'+
           '<button class=\"btn-submit\" type=\"button\" id=\"final-submit\">'+(state.tipo==='unica'?'Solicitar orçamento no WhatsApp':'Solicitar proposta no WhatsApp')+'</button>';
@@ -101,7 +92,6 @@ const WA_NUMBER = '5573982284382';
           errorEl.textContent=state.finalError;
           errorEl.style.display='block';
         }
-        initTurnstile(submitCard);
         updateProgress(steps.length,steps.length);
         return;
       }
@@ -280,81 +270,6 @@ const WA_NUMBER = '5573982284382';
     }
     function goToNext(){const steps=getSteps();state.finalError='';if(state.currentIndex>=steps.length-1){state.readyToSubmit=true;render();return;}state.currentIndex+=1;render();}
     function updateProgress(current,total){const pct=total>0?Math.round((current/total)*100):0;progressFill.style.width=pct+'%';progressLabel.textContent=current+' / '+total;}
-    async function initTurnstile(container){
-      const errorEl=container.querySelector('#submit-error');
-      const widgetHost=container.querySelector('#turnstile-widget');
-      if(!widgetHost) return;
-      if(state.turnstileWidgetId!==null&&widgetHost.querySelector('iframe')) return;
-      try{
-        const siteKey=await getTurnstileSiteKey();
-        if(!siteKey){
-          showSubmitError(errorEl,'Não foi possível carregar a proteção anti-bot. Atualize a página e tente novamente.');
-          return;
-        }
-        const libReady=await waitForTurnstileLib(7000);
-        if(!libReady||!window.turnstile||typeof window.turnstile.render!=='function'){
-          window.setTimeout(()=>{if(document.body.contains(widgetHost)&&!state.turnstileWidgetId) initTurnstile(container);},500);
-          showSubmitError(errorEl,'Não conseguimos carregar a verificação anti-bot. Verifique a conexão, bloqueador de anúncios ou tente outro navegador.');
-          return;
-        }
-        state.turnstileToken='';
-        state.turnstileWidgetId=window.turnstile.render(widgetHost,{
-          sitekey:siteKey,
-          theme:'dark',
-          callback:(token)=>{
-            state.turnstileToken=token||'';
-            hideSubmitError(errorEl);
-            settleTurnstilePending(true,state.turnstileToken);
-          },
-          'expired-callback':()=>{
-            state.turnstileToken='';
-            settleTurnstilePending(false,'expired');
-            showSubmitError(errorEl,'A verificação expirou. Confirme novamente para continuar.');
-          },
-          'error-callback':()=>{
-            state.turnstileToken='';
-            settleTurnstilePending(false,'error');
-            showSubmitError(errorEl,'Falha na verificação anti-bot. Tente novamente.');
-          }
-        });
-        window.setTimeout(()=>{
-          if(document.body.contains(widgetHost)&&state.turnstileWidgetId!==null&&!widgetHost.querySelector('iframe')){
-            showSubmitError(errorEl,'Verificação anti-bot não exibiu corretamente. Atualize a página e tente novamente.');
-          }
-        },1600);
-      }catch(err){
-        const message=String(err&&err.message||'');
-        if(message.toLowerCase().includes('site key not configured')){
-          showSubmitError(errorEl,'Turnstile ainda não foi configurado no servidor. Avise o suporte para finalizar a chave.');
-          return;
-        }
-        if(message.toLowerCase().includes('invalid')){
-          showSubmitError(errorEl,'A chave do Turnstile parece inválida para este domínio. Revise a configuração no Cloudflare.');
-          return;
-        }
-        showSubmitError(errorEl,'Não foi possível validar a segurança agora. Tente novamente em instantes.');
-      }
-    }
-    async function waitForTurnstileLib(timeoutMs){
-      const started=Date.now();
-      while(Date.now()-started<timeoutMs){
-        if(window.turnstile&&typeof window.turnstile.render==='function') return true;
-        await new Promise((resolve)=>window.setTimeout(resolve,140));
-      }
-      return false;
-    }
-    async function getTurnstileSiteKey(){
-      if(state.turnstileSiteKey) return state.turnstileSiteKey;
-      const response=await fetch('/api/turnstile-config',{method:'GET',headers:{'Accept':'application/json'}});
-      const data=await response.json().catch(()=>null);
-      if(!response.ok||!data||!data.ok){
-        const errorText=data&&data.error?String(data.error):'turnstile_config_error';
-        throw new Error(errorText);
-      }
-      if(!data||!data.ok||!data.siteKey) throw new Error('turnstile_key_missing');
-      state.turnstileSiteKey=String(data.siteKey);
-      return state.turnstileSiteKey;
-    }
     async function handleFinalSubmit(container){
       const submitBtn=container.querySelector('#final-submit');
       const errorEl=container.querySelector('#submit-error');
@@ -370,10 +285,6 @@ const WA_NUMBER = '5573982284382';
         showSubmitError(errorEl,'Quase lá. Aguarde um instante e tente novamente.');
         return;
       }
-      if(!state.turnstileToken){
-        const requested=await requestTurnstileToken(container,errorEl);
-        if(!requested) return;
-      }
       hideSubmitError(errorEl);
       const payload=buildSubmissionPayload(honeypotInput?honeypotInput.value:'');
       const payloadHash=JSON.stringify(payload.answers);
@@ -385,7 +296,7 @@ const WA_NUMBER = '5573982284382';
       state.isSubmitting=true;
       submitBtn.disabled=true;
       const originalText=submitBtn.textContent;
-      submitBtn.textContent='Validando segurança...';
+      submitBtn.textContent='Enviando...';
       try{
         const response=await fetch('/api/validate-submit',{
           method:'POST',
@@ -396,8 +307,7 @@ const WA_NUMBER = '5573982284382';
         if(!response.ok||!data||!data.ok){
           const message=mapSubmitError(data&&data.error,response.status);
           showSubmitError(errorEl,message);
-          refreshTurnstileWidget();
-          state.submitLockedUntil=Date.now()+Math.min(FINAL_COOLDOWN_MS,4000);
+          state.submitLockedUntil=Date.now()+Math.min(FINAL_COOLDOWN_MS,3000);
           return;
         }
         state.lastSubmissionHash=payloadHash;
@@ -412,74 +322,12 @@ const WA_NUMBER = '5573982284382';
         submitBtn.textContent=originalText;
       }
     }
-    async function requestTurnstileToken(container,errorEl){
-      if(state.turnstileToken) return true;
-      if(!window.turnstile||state.turnstileWidgetId===null){
-        await initTurnstile(container);
-      }
-      if(!window.turnstile||state.turnstileWidgetId===null){
-        showSubmitError(errorEl,'Proteção anti-bot ainda carregando. Aguarde alguns segundos e tente novamente.');
-        return false;
-      }
-      if(state.turnstilePendingPromise){
-        try{
-          await state.turnstilePendingPromise;
-          return !!state.turnstileToken;
-        }catch{
-          showSubmitError(errorEl,'Não foi possível validar a verificação anti-bot. Tente novamente.');
-          return false;
-        }
-      }
-      showSubmitError(errorEl,'Validando verificação anti-bot...');
-      state.turnstilePendingPromise=new Promise((resolve,reject)=>{
-        state.turnstileResolve=resolve;
-        state.turnstileReject=reject;
-        const timeout=window.setTimeout(()=>{
-          settleTurnstilePending(false,'timeout');
-          showSubmitError(errorEl,'A verificação demorou para responder. Tente novamente.');
-        },9000);
-        state.turnstileResolve=((value)=>{window.clearTimeout(timeout);resolve(value);});
-        state.turnstileReject=((reason)=>{window.clearTimeout(timeout);reject(reason);});
-      }).finally(()=>{
-        state.turnstilePendingPromise=null;
-      });
-      try{
-        window.turnstile.execute(state.turnstileWidgetId);
-        await state.turnstilePendingPromise;
-        hideSubmitError(errorEl);
-        return !!state.turnstileToken;
-      }catch{
-        return false;
-      }
-    }
-    function settleTurnstilePending(ok,value){
-      if(ok&&state.turnstileResolve){
-        const resolve=state.turnstileResolve;
-        state.turnstileResolve=null;
-        state.turnstileReject=null;
-        resolve(value||'');
-        return;
-      }
-      if(!ok&&state.turnstileReject){
-        const reject=state.turnstileReject;
-        state.turnstileResolve=null;
-        state.turnstileReject=null;
-        reject(value||'turnstile_error');
-      }
-    }
-    function refreshTurnstileWidget(){
-      if(!window.turnstile||state.turnstileWidgetId===null) return;
-      state.turnstileToken='';
-      settleTurnstilePending(false,'reset');
-      try{window.turnstile.reset(state.turnstileWidgetId);}catch{}
-    }
     function buildSubmissionPayload(honeypotValue){
       const answers=buildSanitizedAnswers();
       return {
         tipo: state.tipo,
         answers,
         honeypot: sanitizeText(honeypotValue,120),
-        turnstileToken: String(state.turnstileToken||''),
         meta: { elapsedMs: Date.now()-state.startedAt }
       };
     }
@@ -513,12 +361,12 @@ const WA_NUMBER = '5573982284382';
     }
     function mapSubmitError(error,status){
       if(status===429) return 'Muitas tentativas em pouco tempo. Aguarde alguns segundos e tente novamente.';
-      if(status===403) return 'Não conseguimos confirmar a segurança do envio. Tente novamente.';
-      if(status===503) return 'Proteção temporariamente indisponível. Tente novamente em instantes.';
+      if(status===403) return 'Não foi possível concluir agora. Tente novamente.';
+      if(status===503) return 'Serviço temporariamente indisponível. Tente novamente em instantes.';
       const key=String(error||'').toLowerCase();
       if(key.includes('whatsapp')) return 'WhatsApp inválido. Revise o número e tente novamente.';
       if(key.includes('referencia')) return 'Referência inválida. Use texto simples ou links seguros.';
-      if(key.includes('spam')) return 'Envio bloqueado por segurança. Atualize a página e tente novamente.';
+      if(key.includes('spam')) return 'Não foi possível concluir agora. Tente novamente.';
       return 'Não foi possível validar os dados. Revise os campos e tente novamente.';
     }
     function showSubmitError(errorEl,message){if(!errorEl) return;state.finalError=message;errorEl.textContent=message;errorEl.style.display='block';}
@@ -598,11 +446,6 @@ const WA_NUMBER = '5573982284382';
       state.readyToSubmit=false;
       state.answers={};
       state.startedAt=Date.now();
-      state.turnstileToken='';
-      state.turnstileWidgetId=null;
-      state.turnstilePendingPromise=null;
-      state.turnstileResolve=null;
-      state.turnstileReject=null;
       state.isSubmitting=false;
       state.submitLockedUntil=0;
       state.lastSubmissionHash='';
@@ -624,3 +467,4 @@ const WA_NUMBER = '5573982284382';
       getTipo: ()=>state.tipo
     };
     render();
+

@@ -21,6 +21,9 @@ const LIMITS = {
   service: 80
 };
 
+const SUBMIT_COOLDOWN_MS = 8000;
+const lastSubmitByIp = new Map();
+
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
@@ -164,32 +167,8 @@ function validateTipoPayload(body) {
   };
 }
 
-async function verifyTurnstileToken(secret, token, ip) {
-  const formData = new FormData();
-  formData.append("secret", secret);
-  formData.append("response", token);
-  if (ip) formData.append("remoteip", ip);
-
-  const response = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
-    method: "POST",
-    body: formData
-  });
-
-  if (!response.ok) {
-    return { ok: false, error: "turnstile_http_error" };
-  }
-
-  const data = await response.json();
-  return { ok: !!data.success, data };
-}
-
 export async function onRequestPost(context) {
-  const { request, env } = context;
-
-  const secret = env.TURNSTILE_SECRET_KEY;
-  if (!secret) {
-    return json({ ok: false, error: "TURNSTILE_SECRET_KEY not configured" }, 503);
-  }
+  const { request } = context;
 
   const contentType = request.headers.get("content-type") || "";
   if (!contentType.includes("application/json")) {
@@ -213,20 +192,23 @@ export async function onRequestPost(context) {
     return json({ ok: false, error: "Envio muito rapido" }, 429);
   }
 
+  const ip = String(request.headers.get("CF-Connecting-IP") || "unknown");
+  const now = Date.now();
+  const lockedUntil = Number(lastSubmitByIp.get(ip) || 0);
+  if (now < lockedUntil) {
+    return json({ ok: false, error: "Cooldown ativo" }, 429);
+  }
+
   const payloadValidation = validateTipoPayload(body);
   if (!payloadValidation.ok) {
     return json({ ok: false, error: payloadValidation.error }, 400);
   }
 
-  const token = stripDangerousText(body?.turnstileToken || "", 2048);
-  if (!token) {
-    return json({ ok: false, error: "Token Turnstile ausente" }, 400);
-  }
-
-  const ip = request.headers.get("CF-Connecting-IP") || "";
-  const turnstile = await verifyTurnstileToken(secret, token, ip);
-  if (!turnstile.ok) {
-    return json({ ok: false, error: "Falha na verificacao anti-bot" }, 403);
+  lastSubmitByIp.set(ip, now + SUBMIT_COOLDOWN_MS);
+  if (lastSubmitByIp.size > 5000) {
+    for (const [key, value] of lastSubmitByIp.entries()) {
+      if (Number(value) <= now) lastSubmitByIp.delete(key);
+    }
   }
 
   return json({ ok: true });
@@ -238,3 +220,4 @@ export async function onRequest(context) {
   }
   return json({ ok: false, error: "Method not allowed" }, 405);
 }
+

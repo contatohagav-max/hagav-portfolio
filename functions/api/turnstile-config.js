@@ -8,11 +8,7 @@ function json(data, status = 200) {
   });
 }
 
-export async function onRequestGet(context) {
-  const siteKey = context.env.TURNSTILE_SITE_KEY;
-  if (!siteKey) {
-    return json({ ok: false, error: "Turnstile site key not configured" }, 503);
-  }
-
-  return json({ ok: true, siteKey });
+export async function onRequest() {
+  return json({ ok: false, error: "Endpoint desativado" }, 410);
 }
+

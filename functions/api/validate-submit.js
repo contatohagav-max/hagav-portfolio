@@ -196,19 +196,35 @@ async function saveLeadToSheets(env, lead) {
   try {
     const headers = { "content-type": "application/json; charset=utf-8" };
     if (secret) headers["x-webhook-secret"] = secret;
+    const body = {
+      ...lead,
+      secret: secret || "",
+      auth: { secret: secret || "" }
+    };
 
     const response = await fetch(webhookUrl, {
       method: "POST",
       headers,
-      body: JSON.stringify(lead),
+      body: JSON.stringify(body),
       signal: controller ? controller.signal : undefined
     });
 
     if (!response.ok) {
       return { ok: false, reason: `http_${response.status}` };
     }
-
-    return { ok: true };
+    const rawResponse = await response.text();
+    if (!rawResponse) {
+      return { ok: true };
+    }
+    try {
+      const parsed = JSON.parse(rawResponse);
+      if (parsed?.ok === false || parsed?.success === false) {
+        return { ok: false, reason: String(parsed?.error || parsed?.message || "webhook_rejected") };
+      }
+      return { ok: true };
+    } catch {
+      return { ok: true };
+    }
   } catch {
     return { ok: false, reason: "request_failed" };
   } finally {

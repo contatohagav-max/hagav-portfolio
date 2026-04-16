@@ -85,7 +85,7 @@ const WA_NUMBER = '5573982284382';
           '<button class=\"btn-submit\" type=\"button\" id=\"final-submit\">'+(state.tipo==='unica'?'Solicitar orçamento no WhatsApp':'Solicitar proposta no WhatsApp')+'</button>';
         stepsEl.appendChild(submitCard);
         submitCard.querySelector('#go-back-final').addEventListener('click',()=>{state.readyToSubmit=false;state.currentIndex=Math.max(0,steps.length-1);state.finalError='';render();});
-        submitCard.querySelector('#final-submit').addEventListener('click',()=>handleFinalSubmit(submitCard));
+        submitCard.querySelector('#final-submit').addEventListener('click',()=>{ handleFinalSubmit(submitCard); });
         if(state.finalError){
           const errorEl=submitCard.querySelector('#submit-error');
           errorEl.textContent=state.finalError;
@@ -269,7 +269,7 @@ const WA_NUMBER = '5573982284382';
     }
     function goToNext(){const steps=getSteps();state.finalError='';if(state.currentIndex>=steps.length-1){state.readyToSubmit=true;render();return;}state.currentIndex+=1;render();}
     function updateProgress(current,total){const pct=total>0?Math.round((current/total)*100):0;progressFill.style.width=pct+'%';progressLabel.textContent=current+' / '+total;}
-    function handleFinalSubmit(container){
+    async function handleFinalSubmit(container){
       const submitBtn=container.querySelector('#final-submit');
       const errorEl=container.querySelector('#submit-error');
       const honeypotInput=container.querySelector('#spam-trap');
@@ -301,7 +301,7 @@ const WA_NUMBER = '5573982284382';
       const originalText=submitBtn.textContent;
       submitBtn.textContent='Enviando...';
       try{
-        persistLeadSubmission(payload);
+        await persistLeadSubmission(payload);
         state.lastSubmissionHash=payloadHash;
         state.submitLockedUntil=Date.now()+FINAL_COOLDOWN_MS;
         state.finalError='';
@@ -325,21 +325,33 @@ const WA_NUMBER = '5573982284382';
         }
       };
     }
-    function persistLeadSubmission(payload){
+    async function persistLeadSubmission(payload){
       try{
         const body=JSON.stringify(payload);
-        if(navigator.sendBeacon){
-          const blob=new Blob([body],{type:'application/json'});
-          const sent=navigator.sendBeacon('/api/validate-submit',blob);
-          if(sent) return;
-        }
-        fetch('/api/validate-submit',{
+        const response = await fetch('/api/validate-submit',{
           method:'POST',
           headers:{'Content-Type':'application/json','Accept':'application/json'},
           body,
           keepalive:true
-        }).catch(()=>{});
-      }catch{}
+        });
+        if(!response.ok){
+          console.error('Falha ao salvar lead', response.status);
+          return false;
+        }
+        const result = await response.json().catch(()=>({ok:true,saved:true}));
+        if(result && result.ok === false){
+          console.error('Webhook rejeitou lead', result);
+          return false;
+        }
+        if(result && result.saved === false){
+          console.error('Lead nao salvo na planilha', result);
+          return false;
+        }
+        return true;
+      }catch(error){
+        console.error('Erro ao enviar lead', error);
+        return false;
+      }
     }
     function buildSanitizedAnswers(){
       const raw=state.answers||{};

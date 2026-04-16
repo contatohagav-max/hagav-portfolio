@@ -75,8 +75,7 @@
       height: auto;
       display: block;
     }
-    .content,
-    .projects-card {
+    .content {
       background: linear-gradient(160deg, rgba(26, 14, 12, 0.68), rgba(8, 6, 7, 0.72));
       border: 1px solid rgba(255, 255, 255, 0.16);
       border-radius: 22px;
@@ -120,8 +119,7 @@
     .stats .check { color: var(--yellow); font-size: 10px; }
     .hidden { display: none !important; }
     .btn,
-    .mode-card,
-    .project-item {
+    .mode-card {
       border-radius: 16px;
       border: 1.2px solid var(--glass);
       background: linear-gradient(135deg, rgba(255, 255, 255, 0.13), rgba(255, 255, 255, 0.05));
@@ -200,40 +198,6 @@
       cursor: pointer;
     }
 
-    .projects-card {
-      padding: 16px;
-      display: flex;
-      flex-direction: column;
-      gap: 11px;
-      scroll-margin-top: 12px;
-      transition: box-shadow .3s ease, border-color .3s ease;
-    }
-    .projects-card.spotlight {
-      border-color: rgba(255, 201, 114, 0.54);
-      box-shadow: 0 16px 28px rgba(0, 0, 0, 0.36), 0 0 30px rgba(255, 184, 0, 0.2);
-    }
-    .projects-title { font-size: 18px; font-weight: 800; }
-    .projects-sub { font-size: 12px; line-height: 1.5; color: rgba(255, 255, 255, 0.63); }
-    .project-list { display: flex; flex-direction: column; gap: 8px; }
-    .project-item {
-      padding: 12px;
-    }
-    .project-item strong { display: block; font-size: 13px; margin-bottom: 3px; }
-    .project-item span { font-size: 12px; color: rgba(255, 255, 255, 0.68); }
-    .projects-cta {
-      margin-top: 2px;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      text-decoration: none;
-      border-radius: 12px;
-      border: 1px solid rgba(255, 206, 122, 0.58);
-      background: linear-gradient(135deg, rgba(255, 205, 120, 0.26), rgba(255, 255, 255, 0.09));
-      color: #fff;
-      font-size: 13px;
-      font-weight: 800;
-      padding: 11px 14px;
-    }
     footer {
       text-align: center;
       font-size: 11px;
@@ -244,9 +208,7 @@
 
     @media (hover: hover) {
       .btn:hover,
-      .mode-card:hover,
-      .project-item:hover,
-      .projects-cta:hover {
+      .mode-card:hover {
         transform: translateY(-2px);
         border-color: var(--glass-strong);
         box-shadow: 0 14px 28px rgba(0,0,0,.34), 0 0 24px rgba(255,184,0,.14);
@@ -285,11 +247,11 @@
       </ul>
 
       <div class="pane" id="pane-actions">
-        <button class="btn" id="go-projects" type="button">
+        <a href="./portfolio.html" class="btn">
           <span class="btn-icon"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></span>
           <span>Ver projetos</span>
           <span class="btn-arrow">→</span>
-        </button>
+        </a>
 
         <button class="btn btn-budget" id="open-budget-modes" type="button">
           <span class="btn-icon"><svg viewBox="0 0 24 24"><path d="M4 4h6v6H4V4zm10 0h6v6h-6V4zM4 14h6v6H4v-6zm10 0h6v6h-6v-6z"/></svg></span>
@@ -333,25 +295,6 @@
         </div>
       </section>
     </section>
-    <section class="projects-card" id="projects-section">
-      <h2 class="projects-title">Projetos em destaque</h2>
-      <p class="projects-sub">Edicao estrategica para conteudo organico e campanhas de performance.</p>
-      <div class="project-list">
-        <article class="project-item">
-          <strong>Reels para autoridade</strong>
-          <span>Cortes dinamicos com narrativa e ritmo para elevar retencao.</span>
-        </article>
-        <article class="project-item">
-          <strong>Criativos para ads</strong>
-          <span>Formato orientado a conversao com ganchos fortes e CTA claro.</span>
-        </article>
-        <article class="project-item">
-          <strong>Escala de conteudo</strong>
-          <span>Processo recorrente para publicar mais sem perder qualidade.</span>
-        </article>
-      </div>
-      <a class="projects-cta" href="./portfolio.html" target="_blank" rel="noopener">Abrir portfolio completo</a>
-    </section>
     <footer>© 2026 HAGAV Studio de Edicao</footer>
   </div>
   <script src="./assets/budget-inline.js"></script>
@@ -360,7 +303,6 @@
     const paneModes = document.getElementById('pane-modes');
     const paneBudget = document.getElementById('pane-budget');
     const heroCard = document.getElementById('hero-card');
-    const projectsSection = document.getElementById('projects-section');
     function switchPane(target){
       paneActions.classList.add('hidden');
       paneModes.classList.add('hidden');
@@ -371,11 +313,6 @@
       if(!el) return;
       el.scrollIntoView({behavior:'smooth', block:'start'});
     }
-    document.getElementById('go-projects').addEventListener('click',()=>{
-      projectsSection.classList.add('spotlight');
-      scrollToElement(projectsSection);
-      window.setTimeout(()=>projectsSection.classList.remove('spotlight'),1400);
-    });
     document.getElementById('open-budget-modes').addEventListener('click',()=>{
       switchPane(paneModes);
       scrollToElement(heroCard);

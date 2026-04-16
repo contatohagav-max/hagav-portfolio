@@ -34,6 +34,20 @@ const DDD_VALIDOS = new Set(['11','12','13','14','15','16','17','18','19','21','
       });
     }
     function getRecordedYesServices(){const selected=getSelectedServices();const map=state.answers.unica_gravado||{};return selected.filter((service)=>map[service]==='Sim')}
+    function getSelectedRecurringOperations(){
+      const raw=state.answers.rec_operacoes;
+      if(!raw||!Array.isArray(raw.selected)) return [];
+      return raw.selected.map((item)=>{
+        if(item!=='Outro') return sanitizeText(item,FIELD_LIMITS.service||80);
+        const extra=sanitizeText(raw.outro||'',FIELD_LIMITS.outro);
+        return extra?('Outro: '+extra):'Outro';
+      });
+    }
+    function getRecordedYesRecurringOperations(){
+      const selected=getSelectedRecurringOperations();
+      const map=state.answers.rec_gravado_por_tipo||{};
+      return selected.filter((service)=>map[service]==='Sim');
+    }
     function getStepsUnica(){
       const selected=getSelectedServices();
       const withYes=getRecordedYesServices();
@@ -46,23 +60,22 @@ const DDD_VALIDOS = new Set(['11','12','13','14','15','16','17','18','19','21','
         {id:'unica_prazo',label:'Prazo ideal',title:'Qual o prazo ideal?',type:'single',required:true,options:['24h','3 dias','Essa semana','Sem pressa']},
         {id:'nome',label:'Nome',title:'Qual é o seu nome?',type:'text',required:true,placeholder:'Digite seu nome'},
         {id:'whatsapp',label:'WhatsApp',title:'Qual o seu WhatsApp?',type:'phone',required:true,placeholder:'(00) 00000-0000'},
-        {id:'instagram',label:'Instagram',title:'Qual o seu Instagram?',type:'text',required:false,placeholder:'@seuperfil'},
         {id:'extras',label:'Observações extras',title:'Observações extras',type:'textarea',required:false,placeholder:'Algo que você queira complementar...'}
       ].filter((step)=>!(step.optionalWhenEmpty&&(!step.services||step.services.length===0)));
     }
     function getStepsRecorrente(){
+      const selected=getSelectedRecurringOperations();
+      const withYes=getRecordedYesRecurringOperations();
       return [
-        {id:'rec_tipo_operacao',label:'Tipo de operação',title:'Qual tipo de operação você precisa?',type:'single',required:true,options:['Conteúdo para redes sociais','Criativos para anúncios','Escala de conteúdo','Lançamentos','YouTube recorrente','Estrutura completa','Outro'],outro:true},
-        {id:'rec_volume',label:'Volume mensal',title:'Quantos conteúdos por mês você precisa?',type:'single',required:true,options:['5 a 10','10 a 20','20 a 40','40+','Ainda não sei']},
-        {id:'rec_objetivo',label:'Objetivo principal',title:'Qual seu principal objetivo?',type:'single',required:true,options:['Vender mais','Crescer autoridade','Ganhar consistência','Escalar operação','Outro'],outro:true},
-        {id:'rec_gravado',label:'Material gravado',title:'Você já possui material gravado?',type:'single',required:true,options:['Sim','Não','Parcialmente']},
+        {id:'rec_operacoes',label:'Tipo de operação',title:'Qual tipo de operação você precisa?',type:'multi',required:true,options:['Conteúdo para redes sociais','Criativos para anúncios','Lançamentos','YouTube recorrente','Outro'],outro:true},
+        {id:'rec_quantidades',label:'Quantidade por tipo',title:'Quantidade por tipo selecionado',hint:'Preencha uma quantidade para cada tipo escolhido.',type:'quantityByService',required:true,services:selected},
+        {id:'rec_gravado_por_tipo',label:'Material gravado',title:'O material já está gravado?',hint:'Responda para cada tipo selecionado.',type:'yesNoByService',required:true,services:selected},
+        {id:'rec_tempo_bruto_por_tipo',label:'Tempo bruto',title:'Quanto tempo de material bruto para edição?',hint:'Somente para tipos com material gravado.',type:'durationByService',required:withYes.length>0,optionalWhenEmpty:true,services:withYes},
         {id:'rec_inicio',label:'Prazo para começar',title:'Qual o prazo para começar?',type:'single',required:true,options:['Imediato','Essa semana','Esse mês','Estou analisando']},
         {id:'nome',label:'Nome',title:'Qual é o seu nome?',type:'text',required:true,placeholder:'Digite seu nome'},
         {id:'whatsapp',label:'WhatsApp',title:'Qual o seu WhatsApp?',type:'phone',required:true,placeholder:'(00) 00000-0000'},
-        {id:'instagram',label:'Instagram',title:'Qual o seu Instagram?',type:'text',required:true,placeholder:'@seuperfil'},
-        {id:'empresa',label:'Empresa / Marca',title:'Qual sua empresa ou marca?',type:'text',required:false,placeholder:'Opcional'},
         {id:'extras',label:'Observações extras',title:'Observações extras',type:'textarea',required:false,placeholder:'Algo que você queira complementar...'}
-      ];
+      ].filter((step)=>!(step.optionalWhenEmpty&&(!step.services||step.services.length===0)));
     }
     function render(){
       if(!state.tipo){renderTypePicker();updateProgress(0,0);return}
@@ -74,12 +87,6 @@ const DDD_VALIDOS = new Set(['11','12','13','14','15','16','17','18','19','21','
       }
       if(state.readyToSubmit){
         stepsEl.innerHTML='';
-        steps.forEach((step)=>{
-          const done=document.createElement('article');
-          done.className='step-done';
-          done.innerHTML='<span class=\"label\">'+escapeHtml(step.label)+'</span><span class=\"ok\">✓</span>';
-          stepsEl.appendChild(done);
-        });
         const submitCard=document.createElement('article');
         submitCard.className='step-active';
         submitCard.innerHTML='<button class=\"step-back\" type=\"button\" id=\"go-back-final\">Voltar</button>'+
@@ -103,12 +110,6 @@ const DDD_VALIDOS = new Set(['11','12','13','14','15','16','17','18','19','21','
       if(state.currentIndex>steps.length-1) state.currentIndex=steps.length-1;
       stepsEl.innerHTML='';
       const active=steps[state.currentIndex];
-      for(let i=0;i<state.currentIndex;i++){
-        const done=document.createElement('article');
-        done.className='step-done';
-        done.innerHTML='<span class="label">'+escapeHtml(steps[i].label)+'</span><span class="ok">✓</span>';
-        stepsEl.appendChild(done);
-      }
       const activeCard=document.createElement('article');
       activeCard.className='step-active';
       activeCard.innerHTML=buildActiveStepMarkup(active,state.currentIndex>0);
@@ -121,8 +122,8 @@ const DDD_VALIDOS = new Set(['11','12','13','14','15','16','17','18','19','21','
       const success=document.createElement('article');
       success.className='budget-success';
       success.innerHTML=
-        '<h2 class="budget-success-title">Recebemos seu pedido com sucesso!</h2>'+
-        '<p class="budget-success-text">Nossa equipe vai analisar suas informações e entrar em contato o mais breve possível.</p>'+
+        '<h2 class="budget-success-title">Recebemos sua solicitação com sucesso!</h2>'+
+        '<p class="budget-success-text">Nossa equipe vai analisar suas informações e entrar em contato o mais breve possível no seu WhatsApp.</p>'+
         '<button class="budget-success-btn" type="button" id="budget-success-home">Voltar ao início</button>';
       stepsEl.appendChild(success);
       const btn=success.querySelector('#budget-success-home');
@@ -404,14 +405,21 @@ const DDD_VALIDOS = new Set(['11','12','13','14','15','16','17','18','19','21','
         result.unica_referencia=sanitizeText(raw.unica_referencia||'',FIELD_LIMITS.referencia);
         result.unica_prazo=sanitizeText(raw.unica_prazo||'',40);
       }else{
+        const operacoes=raw.rec_operacoes&&Array.isArray(raw.rec_operacoes.selected)?raw.rec_operacoes.selected:[];
+        result.rec_operacoes={selected:operacoes,outro:sanitizeText((raw.rec_operacoes&&raw.rec_operacoes.outro)||'',FIELD_LIMITS.outro)};
+        result.rec_quantidades=raw.rec_quantidades&&typeof raw.rec_quantidades==='object'?raw.rec_quantidades:{};
+        result.rec_gravado_por_tipo=raw.rec_gravado_por_tipo&&typeof raw.rec_gravado_por_tipo==='object'?raw.rec_gravado_por_tipo:{};
+        result.rec_tempo_bruto_por_tipo=raw.rec_tempo_bruto_por_tipo&&typeof raw.rec_tempo_bruto_por_tipo==='object'?raw.rec_tempo_bruto_por_tipo:{};
+        result.rec_inicio=sanitizeText(raw.rec_inicio||'',50);
+        // Compatibilidade com integrações legadas que ainda leem estes campos.
         result.rec_tipo_operacao=sanitizeText(raw.rec_tipo_operacao||'',120);
         result.rec_tipo_operacao_outro=sanitizeText(raw.rec_tipo_operacao_outro||'',FIELD_LIMITS.outro);
         result.rec_volume=sanitizeText(raw.rec_volume||'',60);
+        result.rec_gravado=sanitizeText(raw.rec_gravado||'',40);
+        result.rec_tempo_bruto=sanitizeText(raw.rec_tempo_bruto||'',FIELD_LIMITS.duration);
+        result.rec_referencia=sanitizeText(raw.rec_referencia||'',FIELD_LIMITS.referencia);
         result.rec_objetivo=sanitizeText(raw.rec_objetivo||'',120);
         result.rec_objetivo_outro=sanitizeText(raw.rec_objetivo_outro||'',FIELD_LIMITS.outro);
-        result.rec_gravado=sanitizeText(raw.rec_gravado||'',40);
-        result.rec_inicio=sanitizeText(raw.rec_inicio||'',50);
-        result.empresa=sanitizeText(raw.empresa||'',FIELD_LIMITS.empresa);
       }
       return result;
     }
@@ -430,20 +438,19 @@ const DDD_VALIDOS = new Set(['11','12','13','14','15','16','17','18','19','21','
       canvas.width=w;
       canvas.height=h;
       const colors=['#ffb800','#ff9f1c','#ffd166','#ffffff','#ff6b00','#f6ad55'];
-      const particles=Array.from({length:130},()=>({
+      const isSmallScreen=w<768;
+      const particles=Array.from({length:isSmallScreen?70:120},()=>({
         x:Math.random()*w,
-        y:-20-(Math.random()*h*0.35),
+        y:-20-(Math.random()*h*0.2),
         width:5+Math.random()*6,
         height:3+Math.random()*4,
         color:colors[Math.floor(Math.random()*colors.length)],
-        speed:2.4+Math.random()*3.2,
+        speed:(isSmallScreen?1.9:2.2)+Math.random()*(isSmallScreen?2.3:2.8),
         drift:(Math.random()-0.5)*1.6,
         rotate:Math.random()*Math.PI*2,
         spin:(Math.random()-0.5)*0.22,
         opacity:0.55+Math.random()*0.45
       }));
-      const startedAt=Date.now();
-      const maxDuration=2400;
       function draw(){
         ctx.clearRect(0,0,w,h);
         let hasAlive=false;
@@ -460,7 +467,7 @@ const DDD_VALIDOS = new Set(['11','12','13','14','15','16','17','18','19','21','
           ctx.fillRect(-p.width/2,-p.height/2,p.width,p.height);
           ctx.restore();
         }
-        if(hasAlive&&Date.now()-startedAt<maxDuration){
+        if(hasAlive){
           requestAnimationFrame(draw);
         }else if(canvas.parentNode){
           canvas.parentNode.removeChild(canvas);

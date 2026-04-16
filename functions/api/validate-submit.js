@@ -152,16 +152,60 @@ function validateTipoPayload(body) {
   }
 
   if (tipo === "recorrente") {
-    const required = ["rec_tipo_operacao", "rec_volume", "rec_objetivo", "rec_gravado", "rec_inicio"];
-    for (const field of required) {
-      const v = stripDangerousText(answers[field] || "", 120);
-      if (!v) return { ok: false, error: "Campo recorrente invalido" };
-      if (hasDangerousScheme(v)) return { ok: false, error: "Campo recorrente invalido" };
-    }
-    const recTempoBruto = stripDangerousText(answers.rec_tempo_bruto || "", LIMITS.duration);
-    const recReferencia = stripDangerousText(answers.rec_referencia || "", LIMITS.referencia);
-    if (hasDangerousScheme(recTempoBruto) || hasDangerousScheme(recReferencia)) {
-      return { ok: false, error: "Campo recorrente invalido" };
+    const newFlowOps = answers?.rec_operacoes;
+    if (newFlowOps && typeof newFlowOps === "object") {
+      const selected = Array.isArray(newFlowOps.selected) ? newFlowOps.selected : [];
+      if (selected.length === 0) return { ok: false, error: "Campo recorrente invalido" };
+      const outroValue = stripDangerousText(newFlowOps.outro || "", LIMITS.outro);
+      if (selected.includes("Outro")) {
+        if (!outroValue) return { ok: false, error: "Campo recorrente invalido" };
+      }
+      const normalizedOps = selected.map((operation) => {
+        const safeOp = stripDangerousText(String(operation || ""), LIMITS.service);
+        if (safeOp !== "Outro") return safeOp;
+        return outroValue ? `Outro: ${outroValue}` : "Outro";
+      }).filter(Boolean);
+      const quantidades = answers?.rec_quantidades;
+      if (!quantidades || typeof quantidades !== "object") {
+        return { ok: false, error: "Campo recorrente invalido" };
+      }
+      for (const operation of normalizedOps) {
+        const qty = Number(getMapValueByKey(quantidades, operation));
+        if (!Number.isInteger(qty) || qty < 1 || qty > 10000) {
+          return { ok: false, error: "Campo recorrente invalido" };
+        }
+      }
+      const gravado = answers?.rec_gravado_por_tipo;
+      if (!gravado || typeof gravado !== "object") {
+        return { ok: false, error: "Campo recorrente invalido" };
+      }
+      const tempoBruto = answers?.rec_tempo_bruto_por_tipo || {};
+      for (const operation of normalizedOps) {
+        const stateValue = stripDangerousText(String(getMapValueByKey(gravado, operation) || ""), 8);
+        if (stateValue !== "Sim" && stateValue !== "Não") {
+          return { ok: false, error: "Campo recorrente invalido" };
+        }
+        if (stateValue === "Sim") {
+          const tempo = stripDangerousText(String(getMapValueByKey(tempoBruto, operation) || ""), LIMITS.duration);
+          if (!tempo) return { ok: false, error: "Campo recorrente invalido" };
+        }
+      }
+      const prazo = stripDangerousText(answers.rec_inicio || "", 120);
+      if (!prazo || hasDangerousScheme(prazo)) {
+        return { ok: false, error: "Campo recorrente invalido" };
+      }
+    } else {
+      const required = ["rec_tipo_operacao", "rec_volume", "rec_objetivo", "rec_gravado", "rec_inicio"];
+      for (const field of required) {
+        const v = stripDangerousText(answers[field] || "", 120);
+        if (!v) return { ok: false, error: "Campo recorrente invalido" };
+        if (hasDangerousScheme(v)) return { ok: false, error: "Campo recorrente invalido" };
+      }
+      const recTempoBruto = stripDangerousText(answers.rec_tempo_bruto || "", LIMITS.duration);
+      const recReferencia = stripDangerousText(answers.rec_referencia || "", LIMITS.referencia);
+      if (hasDangerousScheme(recTempoBruto) || hasDangerousScheme(recReferencia)) {
+        return { ok: false, error: "Campo recorrente invalido" };
+      }
     }
   }
 
@@ -231,6 +275,15 @@ async function saveLeadToSheets(env, lead) {
       answersForWebhook.unica_quantidades = row.Quantidade || "";
       answersForWebhook.unica_gravado = row.MaterialGravado || "";
       answersForWebhook.unica_tempo_bruto = row.TempoBruto || "";
+    } else if (lead?.raw?.tipo === "recorrente") {
+      // Mantem compatibilidade com scripts DR antigos.
+      answersForWebhook.rec_tipo_operacao = row.ServicoOuOperacao || "";
+      answersForWebhook.rec_volume = row.Quantidade || "";
+      answersForWebhook.rec_gravado = row.MaterialGravado || "";
+      answersForWebhook.rec_tempo_bruto = row.TempoBruto || "";
+      answersForWebhook.rec_inicio = row.Prazo || "";
+      answersForWebhook.rec_referencia = row.Referencia || "";
+      answersForWebhook.rec_objetivo = row.Objetivo || "";
     }
 
     const webhookBody = {
@@ -334,6 +387,17 @@ function toFlatMap(value, keyLimit, valLimit) {
   return entries.join(" | ");
 }
 
+function getMapValueByKey(value, targetKey, keyLimit = LIMITS.service) {
+  if (!value || typeof value !== "object") return undefined;
+  const safeTarget = stripDangerousText(String(targetKey || ""), keyLimit);
+  if (!safeTarget) return undefined;
+  for (const [rawKey, rawVal] of Object.entries(value)) {
+    const safeKey = stripDangerousText(String(rawKey || ""), keyLimit);
+    if (safeKey === safeTarget) return rawVal;
+  }
+  return undefined;
+}
+
 function composeWithOutro(baseValue, outroValue, limit = 180) {
   const base = stripDangerousText(String(baseValue || ""), limit);
   const outro = stripDangerousText(String(outroValue || ""), LIMITS.outro);
@@ -372,7 +436,7 @@ function buildLeadRow(body, request, ip, nowIso) {
       ? answers.unica_quantidades
       : {};
     const qtyByService = services.map((service) => {
-      const qtyRaw = qtyMap[service];
+      const qtyRaw = getMapValueByKey(qtyMap, service);
       const qtyValue = stripDangerousText(String(qtyRaw ?? ""), 16);
       return qtyValue || "-";
     });
@@ -382,21 +446,47 @@ function buildLeadRow(body, request, ip, nowIso) {
     prazo = stripDangerousText(String(answers?.unica_prazo || ""), 60);
     referencia = stripDangerousText(String(answers?.unica_referencia || ""), LIMITS.referencia);
   } else {
-    servicoOuOperacao = composeWithOutro(
-      answers?.rec_tipo_operacao,
-      answers?.rec_tipo_operacao_outro,
-      120
-    );
-    quantidade = stripDangerousText(String(answers?.rec_volume || ""), 60);
-    materialGravado = stripDangerousText(String(answers?.rec_gravado || ""), 40);
-    tempoBruto = stripDangerousText(String(answers?.rec_tempo_bruto || ""), LIMITS.duration);
-    prazo = stripDangerousText(String(answers?.rec_inicio || ""), 60);
-    referencia = stripDangerousText(String(answers?.rec_referencia || ""), LIMITS.referencia);
-    objetivo = composeWithOutro(
-      answers?.rec_objetivo,
-      answers?.rec_objetivo_outro,
-      120
-    );
+    const recOpsRaw = answers?.rec_operacoes;
+    if (recOpsRaw && typeof recOpsRaw === "object") {
+      const selected = Array.isArray(recOpsRaw.selected) ? recOpsRaw.selected : [];
+      const outro = stripDangerousText(String(recOpsRaw.outro || ""), LIMITS.outro);
+      const operations = selected.map((item) => {
+        const safe = stripDangerousText(String(item || ""), LIMITS.service);
+        if (safe !== "Outro") return safe;
+        return outro ? `Outro: ${outro}` : "Outro";
+      }).filter(Boolean);
+      servicoOuOperacao = operations.join(" | ");
+      const qtyMap = answers?.rec_quantidades && typeof answers.rec_quantidades === "object"
+        ? answers.rec_quantidades
+        : {};
+      const qtyByOperation = operations.map((operation) => {
+        const qtyRaw = getMapValueByKey(qtyMap, operation);
+        const qtyValue = stripDangerousText(String(qtyRaw ?? ""), 16);
+        return qtyValue || "-";
+      });
+      quantidade = qtyByOperation.join(" | ");
+      materialGravado = toFlatMap(answers?.rec_gravado_por_tipo, LIMITS.service, 16);
+      tempoBruto = toFlatMap(answers?.rec_tempo_bruto_por_tipo, LIMITS.service, LIMITS.duration);
+      prazo = stripDangerousText(String(answers?.rec_inicio || ""), 60);
+      referencia = stripDangerousText(String(answers?.rec_referencia || ""), LIMITS.referencia);
+      objetivo = stripDangerousText(String(answers?.rec_objetivo || ""), 120);
+    } else {
+      servicoOuOperacao = composeWithOutro(
+        answers?.rec_tipo_operacao,
+        answers?.rec_tipo_operacao_outro,
+        120
+      );
+      quantidade = stripDangerousText(String(answers?.rec_volume || ""), 60);
+      materialGravado = stripDangerousText(String(answers?.rec_gravado || ""), 40);
+      tempoBruto = stripDangerousText(String(answers?.rec_tempo_bruto || ""), LIMITS.duration);
+      prazo = stripDangerousText(String(answers?.rec_inicio || ""), 60);
+      referencia = stripDangerousText(String(answers?.rec_referencia || ""), LIMITS.referencia);
+      objetivo = composeWithOutro(
+        answers?.rec_objetivo,
+        answers?.rec_objetivo_outro,
+        120
+      );
+    }
   }
 
   return {

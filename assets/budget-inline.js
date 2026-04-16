@@ -81,7 +81,6 @@ const WA_NUMBER = '5573982284382';
           '<h2 class=\"step-title\">'+(state.tipo==='unica'?'Tudo certo para enviar seu orçamento':'Tudo certo para enviar sua proposta')+'</h2>'+
           '<p class=\"step-hint\">Revise rapidamente e clique para abrir o WhatsApp com todas as respostas organizadas.</p>'+
           '<div class=\"bot-trap\" aria-hidden=\"true\"><input type=\"text\" id=\"spam-trap\" tabindex=\"-1\" autocomplete=\"off\" inputmode=\"text\" /></div>'+
-          '<p class=\"submit-note\">Proteção anti-spam ativa para manter o atendimento rápido e seguro.</p>'+
           '<div class=\"error\" id=\"submit-error\"></div>'+
           '<button class=\"btn-submit\" type=\"button\" id=\"final-submit\">'+(state.tipo==='unica'?'Solicitar orçamento no WhatsApp':'Solicitar proposta no WhatsApp')+'</button>';
         stepsEl.appendChild(submitCard);
@@ -287,6 +286,10 @@ const WA_NUMBER = '5573982284382';
       }
       hideSubmitError(errorEl);
       const payload=buildSubmissionPayload(honeypotInput?honeypotInput.value:'');
+      if(payload.honeypot){
+        state.submitLockedUntil=Date.now()+FINAL_COOLDOWN_MS;
+        return;
+      }
       const payloadHash=JSON.stringify(payload.answers);
       if(state.lastSubmissionHash&&state.lastSubmissionHash===payloadHash){
           showSubmitError(errorEl,'Esse envio já foi validado. Abrindo WhatsApp...');
@@ -298,24 +301,10 @@ const WA_NUMBER = '5573982284382';
       const originalText=submitBtn.textContent;
       submitBtn.textContent='Enviando...';
       try{
-        const response=await fetch('/api/validate-submit',{
-          method:'POST',
-          headers:{'Content-Type':'application/json','Accept':'application/json'},
-          body:JSON.stringify(payload)
-        });
-        const data=await response.json().catch(()=>null);
-        if(!response.ok||!data||!data.ok){
-          const message=mapSubmitError(data&&data.error,response.status);
-          showSubmitError(errorEl,message);
-          state.submitLockedUntil=Date.now()+Math.min(FINAL_COOLDOWN_MS,3000);
-          return;
-        }
         state.lastSubmissionHash=payloadHash;
         state.submitLockedUntil=Date.now()+FINAL_COOLDOWN_MS;
         state.finalError='';
         openWhatsApp(payload.answers);
-      }catch{
-        showSubmitError(errorEl,'Falha de conexão. Verifique sua internet e tente novamente.');
       }finally{
         state.isSubmitting=false;
         submitBtn.disabled=false;
@@ -358,16 +347,6 @@ const WA_NUMBER = '5573982284382';
         result.empresa=sanitizeText(raw.empresa||'',FIELD_LIMITS.empresa);
       }
       return result;
-    }
-    function mapSubmitError(error,status){
-      if(status===429) return 'Muitas tentativas em pouco tempo. Aguarde alguns segundos e tente novamente.';
-      if(status===403) return 'Não foi possível concluir agora. Tente novamente.';
-      if(status===503) return 'Serviço temporariamente indisponível. Tente novamente em instantes.';
-      const key=String(error||'').toLowerCase();
-      if(key.includes('whatsapp')) return 'WhatsApp inválido. Revise o número e tente novamente.';
-      if(key.includes('referencia')) return 'Referência inválida. Use texto simples ou links seguros.';
-      if(key.includes('spam')) return 'Não foi possível concluir agora. Tente novamente.';
-      return 'Não foi possível validar os dados. Revise os campos e tente novamente.';
     }
     function showSubmitError(errorEl,message){if(!errorEl) return;state.finalError=message;errorEl.textContent=message;errorEl.style.display='block';}
     function hideSubmitError(errorEl){if(!errorEl) return;state.finalError='';errorEl.style.display='none';errorEl.textContent='';}

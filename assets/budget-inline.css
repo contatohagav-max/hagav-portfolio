@@ -167,18 +167,5 @@
 }
 .btn-main[disabled], .btn-submit[disabled] { opacity: .6; cursor: not-allowed; transform: none !important; box-shadow: none !important; }
 .error { display: none; margin-top: 7px; font-size: 12px; color: #ff7373; }
-.submit-note { font-size: 11px; line-height: 1.5; color: rgba(255, 255, 255, 0.56); margin: 10px 0 2px; }
-.turnstile-wrap {
-  margin-top: 10px;
-  padding: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.03);
-  overflow: hidden;
-  min-height: 72px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
 .bot-trap { position: absolute; left: -10000px; top: auto; width: 1px; height: 1px; overflow: hidden; opacity: 0; visibility: hidden; pointer-events: none; }
 @keyframes slideIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }

@@ -57,8 +57,8 @@
     .btn-main[disabled],.btn-submit[disabled]{opacity:.6;cursor:not-allowed;transform:none!important;box-shadow:none!important}
     .error{display:none;margin-top:7px;font-size:12px;color:var(--danger)}
     .submit-note{font-size:11px;line-height:1.5;color:rgba(255,255,255,.56);margin:10px 0 2px}
-    .turnstile-wrap{margin-top:10px;padding:10px;border:1px solid rgba(255,255,255,.14);border-radius:12px;background:rgba(255,255,255,.03);overflow:hidden}
-    .bot-trap{position:absolute;left:-10000px;top:auto;width:1px;height:1px;overflow:hidden;opacity:0;pointer-events:none}
+    .turnstile-wrap{margin-top:10px;padding:10px;border:1px solid rgba(255,255,255,.14);border-radius:12px;background:rgba(255,255,255,.03);overflow:hidden;min-height:72px;display:flex;align-items:center;justify-content:center}
+    .bot-trap{position:absolute;left:-10000px;top:auto;width:1px;height:1px;overflow:hidden;opacity:0;visibility:hidden;pointer-events:none}
     .type-picker{border-radius:18px;border:1.2px solid var(--glass-strong);background:linear-gradient(145deg,rgba(255,255,255,.12),rgba(255,255,255,.05));box-shadow:0 14px 30px rgba(0,0,0,.34),inset 0 1px 0 rgba(255,255,255,.14);padding:16px;display:flex;flex-direction:column;gap:10px;animation:slideIn .28s ease}
     .type-picker h2{font-size:18px;font-weight:800;line-height:1.3}
     footer{text-align:center;font-size:11px;color:rgba(255,255,255,.22);letter-spacing:.04em;padding:20px 0 14px}
@@ -168,7 +168,7 @@
         submitCard.innerHTML='<button class=\"step-back\" type=\"button\" id=\"go-back-final\">Voltar</button>'+
           '<h2 class=\"step-title\">'+(state.tipo==='unica'?'Tudo certo para enviar seu orcamento':'Tudo certo para enviar sua proposta')+'</h2>'+
           '<p class=\"step-hint\">Revise rapidamente e clique para abrir o WhatsApp com todas as respostas organizadas.</p>'+
-          '<label class=\"bot-trap\" aria-hidden=\"true\">Nao preencher<input type=\"text\" id=\"spam-trap\" tabindex=\"-1\" autocomplete=\"off\" /></label>'+
+          '<div class=\"bot-trap\" aria-hidden=\"true\"><input type=\"text\" id=\"spam-trap\" tabindex=\"-1\" autocomplete=\"off\" inputmode=\"text\" /></div>'+
           '<div class=\"turnstile-wrap\"><div id=\"turnstile-widget\"></div></div>'+
           '<p class=\"submit-note\">Protecao anti-spam ativa para manter o atendimento rapido e seguro.</p>'+
           '<div class=\"error\" id=\"submit-error\"></div>'+
@@ -364,15 +364,17 @@
       const errorEl=container.querySelector('#submit-error');
       const widgetHost=container.querySelector('#turnstile-widget');
       if(!widgetHost) return;
+      if(state.turnstileWidgetId!==null&&widgetHost.querySelector('iframe')) return;
       try{
         const siteKey=await getTurnstileSiteKey();
         if(!siteKey){
           showSubmitError(errorEl,'Nao foi possivel carregar a protecao anti-bot. Atualize a pagina e tente novamente.');
           return;
         }
-        if(!window.turnstile||typeof window.turnstile.render!=='function'){
-          window.setTimeout(()=>{if(document.body.contains(widgetHost)&&!state.turnstileWidgetId) initTurnstile(container);},350);
-          showSubmitError(errorEl,'Nao foi possivel carregar a protecao anti-bot. Atualize a pagina e tente novamente.');
+        const libReady=await waitForTurnstileLib(7000);
+        if(!libReady||!window.turnstile||typeof window.turnstile.render!=='function'){
+          window.setTimeout(()=>{if(document.body.contains(widgetHost)&&!state.turnstileWidgetId) initTurnstile(container);},500);
+          showSubmitError(errorEl,'Nao conseguimos carregar a verificacao anti-bot. Verifique conexao, bloqueador de anuncios ou tente outro navegador.');
           return;
         }
         state.turnstileToken='';
@@ -395,14 +397,31 @@
             showSubmitError(errorEl,'Falha na verificacao anti-bot. Tente novamente.');
           }
         });
+        window.setTimeout(()=>{
+          if(document.body.contains(widgetHost)&&state.turnstileWidgetId!==null&&!widgetHost.querySelector('iframe')){
+            showSubmitError(errorEl,'Verificacao anti-bot nao exibiu corretamente. Atualize a pagina e tente novamente.');
+          }
+        },1600);
       }catch(err){
         const message=String(err&&err.message||'');
         if(message.toLowerCase().includes('site key not configured')){
           showSubmitError(errorEl,'Turnstile ainda nao foi configurado no servidor. Avise o suporte para finalizar a chave.');
           return;
         }
+        if(message.toLowerCase().includes('invalid')){
+          showSubmitError(errorEl,'A chave do Turnstile parece invalida para este dominio. Revise a configuracao no Cloudflare.');
+          return;
+        }
         showSubmitError(errorEl,'Nao foi possivel validar a seguranca agora. Tente novamente em instantes.');
       }
+    }
+    async function waitForTurnstileLib(timeoutMs){
+      const started=Date.now();
+      while(Date.now()-started<timeoutMs){
+        if(window.turnstile&&typeof window.turnstile.render==='function') return true;
+        await new Promise((resolve)=>window.setTimeout(resolve,140));
+      }
+      return false;
     }
     async function getTurnstileSiteKey(){
       if(state.turnstileSiteKey) return state.turnstileSiteKey;
@@ -432,7 +451,7 @@
         return;
       }
       if(!state.turnstileToken){
-        const requested=await requestTurnstileToken(errorEl);
+        const requested=await requestTurnstileToken(container,errorEl);
         if(!requested) return;
       }
       hideSubmitError(errorEl);
@@ -473,8 +492,11 @@
         submitBtn.textContent=originalText;
       }
     }
-    async function requestTurnstileToken(errorEl){
+    async function requestTurnstileToken(container,errorEl){
       if(state.turnstileToken) return true;
+      if(!window.turnstile||state.turnstileWidgetId===null){
+        await initTurnstile(container);
+      }
       if(!window.turnstile||state.turnstileWidgetId===null){
         showSubmitError(errorEl,'Protecao anti-bot ainda carregando. Aguarde alguns segundos e tente novamente.');
         return false;

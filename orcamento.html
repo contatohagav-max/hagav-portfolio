@@ -6,17 +6,18 @@
   <title>Orçamento · HAGAV Studio</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet" />
   <style>
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-    :root{--yellow:#FFB800;--bg:#0C0200;--border:rgba(255,255,255,.12)}
-    html,body{font-family:'Inter',system-ui,sans-serif;-webkit-font-smoothing:antialiased;background:var(--bg);color:#fff;min-height:100svh;overflow-x:hidden}
+    :root{--yellow:#ffb800;--bg:#090304;--border:rgba(255,255,255,.12)}
+    html,body{font-family:'Manrope',sans-serif;-webkit-font-smoothing:antialiased;background:var(--bg);color:#fff;min-height:100svh;overflow-x:hidden}
     body::before{content:'';position:fixed;inset:0;background:
-      radial-gradient(ellipse 75% 90% at -8% 50%,rgba(210,85,0,.65) 0%,rgba(170,55,0,.38) 30%,transparent 58%),
-      radial-gradient(ellipse 55% 45% at 108% 5%,rgba(190,70,0,.52) 0%,rgba(140,45,0,.2) 30%,transparent 55%),
-      radial-gradient(ellipse 45% 40% at 105% 95%,rgba(160,55,0,.42) 0%,transparent 50%),
-      radial-gradient(ellipse 35% 30% at 50% 50%,rgba(0,0,0,.88) 0%,transparent 100%);
+      radial-gradient(ellipse 78% 96% at -8% 50%,rgba(255,122,37,.58) 0%,rgba(110,32,8,.3) 42%,transparent 70%),
+      radial-gradient(ellipse 65% 50% at 108% 0%,rgba(252,168,64,.32) 0%,rgba(120,40,11,.18) 34%,transparent 65%),
+      radial-gradient(ellipse 45% 34% at 88% 90%,rgba(255,141,0,.12) 0%,transparent 65%),
+      linear-gradient(135deg,#090304 0%,#0e0607 54%,#120807 100%);
       pointer-events:none;z-index:0}
+    body::after{content:'';position:fixed;inset:0;background:radial-gradient(ellipse 92% 56% at 50% 120%,rgba(255,172,72,.2) 0%,transparent 62%),radial-gradient(ellipse 160% 66% at -26% 28%,transparent 64%,rgba(255,165,58,.15) 65%,transparent 67%),radial-gradient(ellipse 140% 70% at 124% 14%,transparent 66%,rgba(255,145,32,.1) 67%,transparent 69%);pointer-events:none;z-index:0;mix-blend-mode:screen}
     .page{position:relative;z-index:1;max-width:520px;margin:0 auto;padding:0 20px 80px;min-height:100svh;display:flex;flex-direction:column}
     .header{display:flex;justify-content:center;padding:16px 0 0;margin-bottom:-24px;flex-shrink:0}
     .header img{height:110px;object-fit:contain}
@@ -33,16 +34,16 @@
     .step-done{display:flex;align-items:baseline;gap:10px;padding:10px 14px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:12px;animation:slideIn .3s ease forwards}
     .step-done .lbl{font-size:11px;color:rgba(255,255,255,.4);font-weight:600;text-transform:uppercase;letter-spacing:.06em;white-space:nowrap;flex-shrink:0}
     .step-done .val{font-size:13px;color:#fff;font-weight:500;word-break:break-word}
-    .step-active{background:rgba(255,255,255,.04);border:1.5px solid rgba(255,255,255,.12);border-radius:16px;padding:20px;animation:slideIn .35s ease forwards}
+    .step-active{background:linear-gradient(145deg,rgba(255,255,255,.11),rgba(255,255,255,.05));border:1.2px solid rgba(255,255,255,.2);border-radius:16px;padding:20px;animation:slideIn .35s ease forwards;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);box-shadow:0 14px 30px rgba(0,0,0,.34),inset 0 1px 0 rgba(255,255,255,.14)}
     .step-active .step-q{font-size:18px;font-weight:700;color:#fff;margin-bottom:6px;line-height:1.3}
     .step-active .step-hint{font-size:12px;color:rgba(255,255,255,.5);margin-bottom:14px;line-height:1.5}
-    .step-active input[type=text],.step-active input[type=email],.step-active input[type=tel],.step-active textarea{width:100%;background:rgba(255,255,255,.06);border:1.5px solid rgba(255,255,255,.12);border-radius:10px;color:#fff;font-family:'Inter',sans-serif;font-size:15px;padding:12px 14px;outline:none;transition:border-color .18s,background .18s;-webkit-appearance:none}
+    .step-active input[type=text],.step-active input[type=email],.step-active input[type=tel],.step-active textarea{width:100%;background:rgba(255,255,255,.08);border:1.2px solid rgba(255,255,255,.18);border-radius:10px;color:#fff;font-family:'Manrope',sans-serif;font-size:15px;padding:12px 14px;outline:none;transition:border-color .18s,background .18s;-webkit-appearance:none}
     .step-active input::placeholder,.step-active textarea::placeholder{color:rgba(255,255,255,.3)}
     .step-active input:focus,.step-active textarea:focus{border-color:rgba(255,184,0,.5);background:rgba(255,184,0,.05)}
     .step-active textarea{resize:none;min-height:80px;line-height:1.5}
     .opts-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
     .opts-list{display:flex;flex-direction:column;gap:8px}
-    .opt{display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.04);border:1.5px solid rgba(255,255,255,.1);border-radius:11px;padding:11px 13px;cursor:pointer;transition:all .15s;user-select:none}
+    .opt{display:flex;align-items:center;gap:10px;background:linear-gradient(135deg,rgba(255,255,255,.13),rgba(255,255,255,.05));border:1.2px solid rgba(255,255,255,.16);border-radius:11px;padding:11px 13px;cursor:pointer;transition:all .15s;user-select:none;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);box-shadow:0 10px 20px rgba(0,0,0,.2)}
     .opt input{display:none}
     .opt-box{width:17px;height:17px;border-radius:5px;border:1.5px solid rgba(255,255,255,.3);flex-shrink:0;display:flex;align-items:center;justify-content:center;transition:all .15s;font-size:10px;font-weight:900;color:#000}
     .opt-radio .opt-box{border-radius:50%}
@@ -57,14 +58,14 @@
     .outro-box textarea::placeholder{color:rgba(255,255,255,.3)}
     .outro-warn{font-size:12px;color:#ff7070;margin-top:5px;display:none}
     .step-actions{display:flex;gap:8px;margin-top:14px;align-items:center}
-    .btn-next{background:var(--yellow);color:#000;font-family:'Inter',sans-serif;font-size:13px;font-weight:800;border:none;border-radius:10px;padding:11px 22px;cursor:pointer;letter-spacing:.02em;transition:opacity .15s}
+    .btn-next{background:linear-gradient(135deg,rgba(255,210,130,.24),rgba(255,255,255,.09));color:#fff;font-family:'Manrope',sans-serif;font-size:13px;font-weight:800;border:1.2px solid rgba(255,201,114,.42);border-radius:10px;padding:11px 22px;cursor:pointer;letter-spacing:.02em;transition:all .15s;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
     .btn-next:active{opacity:.8}
     @media(hover:hover){.btn-next:hover{opacity:.88}}
-    .btn-skip{background:none;border:1.5px solid rgba(255,255,255,.12);color:rgba(255,255,255,.5);font-family:'Inter',sans-serif;font-size:12px;font-weight:600;border-radius:10px;padding:11px 16px;cursor:pointer;transition:all .15s}
+    .btn-skip{background:linear-gradient(135deg,rgba(255,255,255,.13),rgba(255,255,255,.05));border:1.2px solid rgba(255,255,255,.2);color:rgba(255,255,255,.72);font-family:'Manrope',sans-serif;font-size:12px;font-weight:600;border-radius:10px;padding:11px 16px;cursor:pointer;transition:all .15s;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
     .btn-skip:hover{border-color:rgba(255,255,255,.25);color:#fff}
     .key-hint{font-size:11px;color:rgba(255,255,255,.22);margin-left:2px}
     .err-msg{font-size:12px;color:#ff7070;margin-top:6px;display:none}
-    .btn-submit{width:100%;background:var(--yellow);color:#000;font-family:'Inter',sans-serif;font-size:16px;font-weight:800;border:none;border-radius:14px;padding:17px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;transition:opacity .15s;letter-spacing:.02em;margin-top:8px;animation:slideIn .4s ease forwards}
+    .btn-submit{width:100%;background:linear-gradient(135deg,rgba(255,210,130,.24),rgba(255,255,255,.09));color:#fff;font-family:'Manrope',sans-serif;font-size:16px;font-weight:800;border:1.2px solid rgba(255,201,114,.42);border-radius:14px;padding:17px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;transition:all .15s;letter-spacing:.02em;margin-top:8px;animation:slideIn .4s ease forwards;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
     .btn-submit svg{width:22px;height:22px;flex-shrink:0}
     .btn-submit:active{opacity:.85}
     @media(hover:hover){.btn-submit:hover{opacity:.9}}
@@ -80,7 +81,7 @@
     .popup-title{font-size:19px;font-weight:800;color:#fff;line-height:1.35;margin-bottom:12px;text-transform:uppercase;letter-spacing:.02em}
     .popup-title span{color:var(--yellow)}
     .popup-msg{font-size:13px;color:rgba(255,255,255,.72);line-height:1.7;margin-bottom:28px}
-    .btn-voltar{display:inline-block;background:var(--yellow);color:#000;font-family:'Inter',sans-serif;font-size:14px;font-weight:800;border-radius:12px;padding:13px 28px;text-decoration:none;letter-spacing:.02em;transition:opacity .18s;animation:fadeUp .4s ease forwards}
+    .btn-voltar{display:inline-block;background:linear-gradient(135deg,rgba(255,210,130,.24),rgba(255,255,255,.09));color:#fff;font-family:'Manrope',sans-serif;font-size:14px;font-weight:800;border:1.2px solid rgba(255,201,114,.42);border-radius:12px;padding:13px 28px;text-decoration:none;letter-spacing:.02em;transition:opacity .18s;animation:fadeUp .4s ease forwards;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
     @media(hover:hover){.btn-voltar:hover{opacity:.88}}
     @keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
     #confetti-canvas{position:fixed;inset:0;z-index:901;pointer-events:none}

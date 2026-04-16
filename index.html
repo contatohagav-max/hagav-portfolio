@@ -7,17 +7,17 @@
   <meta name="description" content="Vídeos para empresas que levam conteúdo a sério." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet" />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    :root { --yellow: #FFB800; }
-    html, body { height: 100%; font-family: 'Inter', system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+    :root { --yellow: #ffb800; --glass: rgba(255,255,255,.1); --glass-strong: rgba(255,255,255,.16); }
+    html, body { height: 100%; font-family: 'Manrope', sans-serif; -webkit-font-smoothing: antialiased; }
     body {
       min-height: 100svh;
       display: flex;
       align-items: center;
       justify-content: center;
-      background: #0C0200;
+      background: #090304;
       overflow-x: hidden;
     }
     body::before {
@@ -25,10 +25,10 @@
       position: fixed;
       inset: 0;
       background:
-        radial-gradient(ellipse 75% 90% at -8% 50%, rgba(210,85,0,.95) 0%, rgba(170,55,0,.55) 30%, transparent 58%),
-        radial-gradient(ellipse 55% 45% at 108% 5%, rgba(190,70,0,.75) 0%, rgba(140,45,0,.3) 30%, transparent 55%),
-        radial-gradient(ellipse 45% 40% at 105% 95%, rgba(160,55,0,.6) 0%, transparent 50%),
-        radial-gradient(ellipse 35% 30% at 50% 50%, rgba(0,0,0,.85) 0%, transparent 100%);
+        radial-gradient(ellipse 70% 95% at -10% 50%, rgba(255, 122, 37, .55) 0%, rgba(110, 32, 8, .3) 42%, transparent 70%),
+        radial-gradient(ellipse 65% 50% at 110% -2%, rgba(252, 168, 64, .28) 0%, rgba(120, 40, 11, .18) 34%, transparent 65%),
+        radial-gradient(ellipse 45% 34% at 88% 90%, rgba(255, 141, 0, .14) 0%, transparent 65%),
+        linear-gradient(120deg, #090304 0%, #0f0506 42%, #110806 100%);
       pointer-events: none;
       z-index: 0;
     }
@@ -38,10 +38,10 @@
       position: fixed;
       inset: 0;
       background:
-        radial-gradient(ellipse 120% 50% at -20% 30%, transparent 58%, rgba(200,80,0,.12) 59%, transparent 60%),
-        radial-gradient(ellipse 140% 65% at -20% 30%, transparent 68%, rgba(200,80,0,.08) 69%, transparent 70%),
-        radial-gradient(ellipse 100% 40% at -10% 75%, transparent 55%, rgba(200,80,0,.1) 56%, transparent 57%),
-        radial-gradient(ellipse 90% 60% at 110% 10%, transparent 60%, rgba(200,80,0,.1) 61%, transparent 62%);
+        radial-gradient(ellipse 90% 55% at 50% 120%, rgba(255,172,72,.2) 0%, transparent 62%),
+        radial-gradient(ellipse 160% 66% at -26% 28%, transparent 64%, rgba(255,165,58,.15) 65%, transparent 67%),
+        radial-gradient(ellipse 140% 70% at 124% 14%, transparent 66%, rgba(255,145,32,.1) 67%, transparent 69%);
+      mix-blend-mode: screen;
       pointer-events: none;
       z-index: 0;
     }
@@ -49,14 +49,22 @@
       position: relative;
       z-index: 1;
       width: 100%;
-      max-width: 400px;
+      max-width: 430px;
       min-height: 100svh;
       padding: 20px 20px 120px;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      gap: 8px;
+      gap: 10px;
+    }
+    .page::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(circle at 50% 30%, rgba(255,255,255,.09) 0%, rgba(255,255,255,0) 55%);
+      pointer-events: none;
+      z-index: -1;
     }
     .logo { flex-shrink: 0; }
     .logo img { height: 210px; width: auto; display: block; }
@@ -66,16 +74,17 @@
       align-items: center;
       justify-content: flex-start;
       width: 100%;
-      background: rgba(0,0,0,.5);
-      border: 1px solid rgba(255,255,255,.1);
-      border-radius: 20px;
+      background: linear-gradient(160deg, rgba(26,14,12,.68), rgba(8,6,7,.72));
+      border: 1px solid rgba(255,255,255,.16);
+      border-radius: 22px;
       padding: 28px 20px 24px;
-      backdrop-filter: blur(6px);
-      -webkit-backdrop-filter: blur(6px);
+      box-shadow: 0 18px 54px rgba(0,0,0,.42), inset 0 1px 0 rgba(255,255,255,.12);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
       margin-top: -48px;
     }
     h1 {
-      font-size: clamp(10px, 2.6vw, 11.5px);
+      font-size: clamp(11px, 2.8vw, 12.5px);
       font-weight: 800;
       line-height: 1.45;
       letter-spacing: .02em;
@@ -123,9 +132,13 @@
       font-size: 15px;
       font-weight: 700;
       text-decoration: none;
-      border: 1.5px solid transparent;
+      border: 1.2px solid var(--glass);
       cursor: pointer;
-      transition: transform .18s cubic-bezier(.34,1.56,.64,1), box-shadow .2s, background .2s;
+      transition: transform .18s cubic-bezier(.34,1.56,.64,1), box-shadow .2s, background .2s, border-color .2s;
+      background: linear-gradient(135deg, rgba(255,255,255,.12), rgba(255,255,255,.05));
+      box-shadow: 0 10px 24px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.15);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
       -webkit-tap-highlight-color: transparent;
     }
     .btn:focus { outline: none; }
@@ -140,27 +153,22 @@
     .btn-icon svg { width: 17px; height: 17px; }
     .btn-label { flex: 1; }
     .btn-arrow { font-size: 15px; margin-left: auto; transition: transform .2s; }
-    .btn-primary {
-      background: var(--yellow);
-      color: #000;
-      box-shadow: 0 6px 32px rgba(255,184,0,.38);
-    }
-    .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 12px 40px rgba(255,184,0,.55); }
-    .btn-primary .btn-icon { background: rgba(0,0,0,.15); }
-    .btn-primary .btn-icon svg { fill: #000; }
-    .btn-primary .btn-arrow { opacity: .55; }
+    .btn-primary { color: #fff; border-color: rgba(255,184,0,.4); }
+    .btn-primary .btn-icon { background: rgba(255,184,0,.2); }
+    .btn-primary .btn-icon svg { fill: rgba(255,224,170,.95); }
+    .btn-primary .btn-arrow { opacity: .7; color: var(--yellow); }
     .btn-secondary {
-      background: rgba(255,255,255,.055);
+      background: linear-gradient(135deg, rgba(255,255,255,.12), rgba(255,255,255,.05));
       color: #fff;
-      border-color: rgba(255,255,255,.1);
+      border-color: var(--glass);
     }
     @media (hover: hover) {
-      .btn-secondary:hover { transform: translateY(-2px); background: rgba(255,184,0,.07); border-color: rgba(255,184,0,.25); box-shadow: 0 0 18px rgba(255,184,0,.12); }
+      .btn-secondary:hover { transform: translateY(-2px); background: linear-gradient(135deg, rgba(255,193,102,.18), rgba(255,255,255,.07)); border-color: rgba(255,199,113,.36); box-shadow: 0 14px 28px rgba(0,0,0,.34), 0 0 24px rgba(255,184,0,.14); }
       .btn:hover .btn-arrow { transform: translateX(3px); }
     }
-    .btn-secondary .btn-icon { background: rgba(255,255,255,.09); }
-    .btn-secondary .btn-icon svg { fill: rgba(255,255,255,.7); }
-    .btn-secondary .btn-arrow { opacity: .35; }
+    .btn-secondary .btn-icon { background: rgba(255,255,255,.13); }
+    .btn-secondary .btn-icon svg { fill: rgba(255,255,255,.92); }
+    .btn-secondary .btn-arrow { opacity: .6; color: rgba(255,205,126,.95); }
 
   </style>
 </head>

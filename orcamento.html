@@ -94,7 +94,7 @@ const STEPS=[
   {id:'arroba',    type:'text',     q:'Qual o @ da sua rede principal?',             ph:'@seuperfil',                         req:false},
   {id:'servico',   type:'checkbox', q:'Que tipo de serviço você precisa?',           hint:'Pode marcar mais de um.',           req:true,
     opts:['Reels, Shorts e TikTok','Vídeo para YouTube','VSL (Video Sales Letter)','Criativos / Ads','Corte de Podcast','Institucional / Corporativo','Aula / Infoproduto','Outro']},
-  {id:'gravado',   type:'radio',    q:'O material já está gravado?',                                                           req:true, opts:['Sim, já está gravado','Não, ainda vou gravar']},
+  {id:'gravado',   type:'radio',    q:'O material já está gravado?',                                                           req:true, btn:true, opts:['Sim, já está gravado','Não, ainda vou gravar']},
   {id:'tempo',     type:'text',     q:'Quanto tempo de material bruto para edição?', ph:'Ex: 2 horas, 45 minutos...',         req:false},
   {id:'referencia',type:'textarea', q:'Tem alguma referência visual?',               ph:'Link de vídeo, perfil ou canal...',  req:false,hint:'YouTube, Instagram, TikTok — qualquer estilo que você goste.'},
   {id:'prazo',     type:'text',     q:'Tem prazo definido para entrega?',            ph:'Ex: 10 dias, urgente, sem prazo...', req:true},
@@ -155,8 +155,9 @@ function makeActive(step){
   const isCheck=step.type==='checkbox';
   const skip=!step.req?'<button class="btn-skip" onclick="advance(null)">Pular →</button>':'';
   const hint=(!isRadio&&!isCheck&&step.type!=='textarea')?'<span class="key-hint">ou Enter ↵</span>':'';
-  const nextHidden=isCheck?' style="display:none"':'';
-  const next=isRadio?'':'<button class="btn-next" id="btn-next"'+nextHidden+' onclick="tryNext()">Continuar →</button>';
+  const radioBtns=isRadio&&step.btn;
+  const nextHidden=(isCheck||radioBtns)?' style="display:none"':'';
+  const next=(isRadio&&!step.btn)?'':'<button class="btn-next" id="btn-next"'+nextHidden+' onclick="tryNext()">Continuar →</button>';
 
   d.innerHTML=
     '<div class="step-q">'+step.q+'</div>'+
@@ -242,16 +243,17 @@ document.addEventListener('click',e=>{
   } else {
     document.querySelectorAll('[name="'+inp.name+'"]').forEach(r=>r.closest('.opt').classList.remove('checked'));
     inp.checked=true;opt.classList.add('checked');
-    setTimeout(()=>tryNext(),320);
+    if(STEPS[cur]&&STEPS[cur].btn){const bN=document.getElementById('btn-next');if(bN)bN.style.display='inline-block';}else{setTimeout(()=>tryNext(),320);}
   }
 });
 
 /* Word limit */
 document.addEventListener('input',e=>{
   if(e.target.id!=='outro-desc')return;
-  const words=e.target.value.trim().split(/\s+/).filter(Boolean).length;
   const warn=document.getElementById('outro-warn');
-  if(warn)warn.style.display=words>=200?'block':'none';
+  const words=e.target.value.trim().split(/\s+/).filter(Boolean);
+  if(words.length>200){e.target.value=words.slice(0,200).join(' ');if(warn)warn.style.display='block';}
+  else{if(warn)warn.style.display=words.length===200?'block':'none';}
 });
 
 /* Enter */

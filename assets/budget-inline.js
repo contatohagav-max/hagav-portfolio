@@ -301,6 +301,7 @@ const WA_NUMBER = '5573982284382';
       const originalText=submitBtn.textContent;
       submitBtn.textContent='Enviando...';
       try{
+        persistLeadSubmission(payload);
         state.lastSubmissionHash=payloadHash;
         state.submitLockedUntil=Date.now()+FINAL_COOLDOWN_MS;
         state.finalError='';
@@ -319,6 +320,22 @@ const WA_NUMBER = '5573982284382';
         honeypot: sanitizeText(honeypotValue,120),
         meta: { elapsedMs: Date.now()-state.startedAt }
       };
+    }
+    function persistLeadSubmission(payload){
+      try{
+        const body=JSON.stringify(payload);
+        if(navigator.sendBeacon){
+          const blob=new Blob([body],{type:'application/json'});
+          const sent=navigator.sendBeacon('/api/validate-submit',blob);
+          if(sent) return;
+        }
+        fetch('/api/validate-submit',{
+          method:'POST',
+          headers:{'Content-Type':'application/json','Accept':'application/json'},
+          body,
+          keepalive:true
+        }).catch(()=>{});
+      }catch{}
     }
     function buildSanitizedAnswers(){
       const raw=state.answers||{};
@@ -353,36 +370,9 @@ const WA_NUMBER = '5573982284382';
     function openWhatsApp(safeAnswers){
       const answers=safeAnswers||buildSanitizedAnswers();
       const name=(answers.nome||'').trim()||'Sem nome';
-      const intro=state.tipo==='unica'?'Olá, me chamo '+name+'. Acabei de preencher o formulário de Demanda Única no site da HAGAV e gostaria de solicitar meu orçamento.':'Olá, me chamo '+name+'. Acabei de preencher o formulário de Demanda Recorrente no site da HAGAV e gostaria de solicitar uma proposta.';
-      const lines=[intro,'','*Resumo das respostas*'];
-      if(state.tipo==='unica'){
-        const servicos=getSelectedServices();
-        const qtd=answers.unica_quantidades||{};
-        const gravado=answers.unica_gravado||{};
-        const tempo=answers.unica_tempo_bruto||{};
-        lines.push('• Serviços: '+(servicos.length?servicos.join(', '):'-'));
-        if(servicos.length){
-          lines.push('• Quantidades:');
-          servicos.forEach((s)=>lines.push('  - '+s+': '+(qtd[s]||'-')));
-          lines.push('• Material gravado:');
-          servicos.forEach((s)=>lines.push('  - '+s+': '+(gravado[s]||'-')));
-          if(Object.keys(tempo).length){lines.push('• Tempo bruto:');Object.keys(tempo).forEach((s)=>lines.push('  - '+s+': '+tempo[s]));}
-        }
-        lines.push('• Referência visual: '+(answers.unica_referencia||'-'));
-        lines.push('• Prazo ideal: '+(answers.unica_prazo||'-'));
-      }else{
-        lines.push('• Tipo de operação: '+composeSingleWithOutro('rec_tipo_operacao',answers));
-        lines.push('• Conteúdos por mês: '+(answers.rec_volume||'-'));
-        lines.push('• Objetivo principal: '+composeSingleWithOutro('rec_objetivo',answers));
-        lines.push('• Material gravado: '+(answers.rec_gravado||'-'));
-        lines.push('• Prazo para começar: '+(answers.rec_inicio||'-'));
-        lines.push('• Empresa / Marca: '+(answers.empresa||'-'));
-      }
-      lines.push('• Nome: '+(answers.nome||'-'));
-      lines.push('• WhatsApp: '+formatPhone(answers.whatsapp||''));
-      lines.push('• Instagram: '+(answers.instagram||'-'));
-      lines.push('• Observações extras: '+(answers.extras||'-'));
-      const text=lines.join('\n');
+      const text=state.tipo==='unica'
+        ?('Olá, me chamo '+name+'. Acabei de preencher o formulário de Demanda Única no site da HAGAV e gostaria de solicitar meu orçamento.')
+        :('Olá, me chamo '+name+'. Acabei de preencher o formulário de Demanda Recorrente no site da HAGAV e gostaria de solicitar uma proposta.');
       const url='https://wa.me/'+WA_NUMBER+'?text='+encodeURIComponent(text);
       const popup=window.open(url,'_blank','noopener,noreferrer');
       if(!popup){

@@ -23,6 +23,7 @@ const LIMITS = {
 
 const SUBMIT_COOLDOWN_MS = 8000;
 const lastSubmitByIp = new Map();
+const LEAD_SAVE_TIMEOUT_MS = 5000;
 
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -167,6 +168,41 @@ function validateTipoPayload(body) {
   };
 }
 
+async function saveLeadToSheets(env, lead) {
+  const webhookUrl = String(env.GOOGLE_SHEETS_WEBHOOK_URL || "").trim();
+  if (!webhookUrl) {
+    return { ok: false, reason: "not_configured" };
+  }
+
+  const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+  const timeoutId = controller
+    ? setTimeout(() => controller.abort("timeout"), LEAD_SAVE_TIMEOUT_MS)
+    : null;
+
+  try {
+    const secret = String(env.GOOGLE_SHEETS_WEBHOOK_SECRET || "").trim();
+    const headers = { "content-type": "application/json; charset=utf-8" };
+    if (secret) headers["x-webhook-secret"] = secret;
+
+    const response = await fetch(webhookUrl, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(lead),
+      signal: controller ? controller.signal : undefined
+    });
+
+    if (!response.ok) {
+      return { ok: false, reason: `http_${response.status}` };
+    }
+
+    return { ok: true };
+  } catch {
+    return { ok: false, reason: "request_failed" };
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
+}
+
 export async function onRequestPost(context) {
   const { request } = context;
 
@@ -204,6 +240,20 @@ export async function onRequestPost(context) {
     return json({ ok: false, error: payloadValidation.error }, 400);
   }
 
+  const nowIso = new Date(now).toISOString();
+  const leadPayload = {
+    createdAt: nowIso,
+    tipo: body.tipo,
+    answers: body.answers || {},
+    meta: {
+      elapsedMs,
+      ip,
+      userAgent: String(request.headers.get("user-agent") || ""),
+      host: String(request.headers.get("host") || "")
+    }
+  };
+  const saveResult = await saveLeadToSheets(context.env, leadPayload);
+
   lastSubmitByIp.set(ip, now + SUBMIT_COOLDOWN_MS);
   if (lastSubmitByIp.size > 5000) {
     for (const [key, value] of lastSubmitByIp.entries()) {
@@ -211,7 +261,7 @@ export async function onRequestPost(context) {
     }
   }
 
-  return json({ ok: true });
+  return json({ ok: true, saved: saveResult.ok, saveReason: saveResult.reason || "" });
 }
 
 export async function onRequest(context) {

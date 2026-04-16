@@ -203,6 +203,93 @@ async function saveLeadToSheets(env, lead) {
   }
 }
 
+function toFlatMap(value, keyLimit, valLimit) {
+  if (!value || typeof value !== "object") return "";
+  const entries = [];
+  for (const [rawKey, rawVal] of Object.entries(value)) {
+    const key = stripDangerousText(String(rawKey || ""), keyLimit);
+    const val = stripDangerousText(String(rawVal || ""), valLimit);
+    if (!key) continue;
+    entries.push(`${key}: ${val || "-"}`);
+  }
+  return entries.join(" | ");
+}
+
+function composeWithOutro(baseValue, outroValue, limit = 180) {
+  const base = stripDangerousText(String(baseValue || ""), limit);
+  const outro = stripDangerousText(String(outroValue || ""), LIMITS.outro);
+  if (base !== "Outro") return base;
+  return outro ? `Outro: ${outro}` : "Outro";
+}
+
+function buildLeadRow(body, request, ip, nowIso) {
+  const answers = body?.answers || {};
+  const tipo = body?.tipo === "unica" ? "Demanda Única" : "Demanda Recorrente";
+  const origemMeta = stripDangerousText(String(body?.meta?.origin || ""), 180);
+  const origemHost = stripDangerousText(String(request.headers.get("host") || ""), 120);
+  const origem = origemMeta || origemHost || "hagav.com.br";
+
+  let servicoOuOperacao = "";
+  let quantidade = "";
+  let materialGravado = "";
+  let tempoBruto = "";
+  let prazo = "";
+  let referencia = "";
+  let objetivo = "";
+
+  if (body?.tipo === "unica") {
+    const selected = Array.isArray(answers?.unica_servicos?.selected)
+      ? answers.unica_servicos.selected
+      : [];
+    const outro = stripDangerousText(String(answers?.unica_servicos?.outro || ""), LIMITS.outro);
+    const services = selected.map((item) => {
+      const safe = stripDangerousText(String(item || ""), LIMITS.service);
+      if (safe !== "Outro") return safe;
+      return outro ? `Outro: ${outro}` : "Outro";
+    }).filter(Boolean);
+
+    servicoOuOperacao = services.join(" | ");
+    quantidade = toFlatMap(answers?.unica_quantidades, LIMITS.service, 16);
+    materialGravado = toFlatMap(answers?.unica_gravado, LIMITS.service, 16);
+    tempoBruto = toFlatMap(answers?.unica_tempo_bruto, LIMITS.service, LIMITS.duration);
+    prazo = stripDangerousText(String(answers?.unica_prazo || ""), 60);
+    referencia = stripDangerousText(String(answers?.unica_referencia || ""), LIMITS.referencia);
+  } else {
+    servicoOuOperacao = composeWithOutro(
+      answers?.rec_tipo_operacao,
+      answers?.rec_tipo_operacao_outro,
+      120
+    );
+    quantidade = stripDangerousText(String(answers?.rec_volume || ""), 60);
+    materialGravado = stripDangerousText(String(answers?.rec_gravado || ""), 40);
+    prazo = stripDangerousText(String(answers?.rec_inicio || ""), 60);
+    objetivo = composeWithOutro(
+      answers?.rec_objetivo,
+      answers?.rec_objetivo_outro,
+      120
+    );
+  }
+
+  return {
+    DataHora: nowIso,
+    TipoFluxo: tipo,
+    Nome: stripDangerousText(String(answers?.nome || ""), LIMITS.nome),
+    WhatsApp: stripDangerousText(String(answers?.whatsapp || ""), 16),
+    Instagram: stripDangerousText(String(answers?.instagram || ""), LIMITS.instagram),
+    Empresa: stripDangerousText(String(answers?.empresa || ""), LIMITS.empresa),
+    ServicoOuOperacao: stripDangerousText(servicoOuOperacao, 600),
+    Quantidade: stripDangerousText(quantidade, 600),
+    MaterialGravado: stripDangerousText(materialGravado, 600),
+    TempoBruto: stripDangerousText(tempoBruto, 600),
+    Prazo: stripDangerousText(prazo, 120),
+    Referencia: stripDangerousText(referencia, LIMITS.referencia),
+    Objetivo: stripDangerousText(objetivo, 300),
+    Observacoes: stripDangerousText(String(answers?.extras || ""), LIMITS.extras),
+    Origem: stripDangerousText(origem, 180),
+    Ip: stripDangerousText(ip, 64)
+  };
+}
+
 export async function onRequestPost(context) {
   const { request } = context;
 
@@ -242,14 +329,20 @@ export async function onRequestPost(context) {
 
   const nowIso = new Date(now).toISOString();
   const leadPayload = {
-    createdAt: nowIso,
-    tipo: body.tipo,
-    answers: body.answers || {},
-    meta: {
-      elapsedMs,
-      ip,
-      userAgent: String(request.headers.get("user-agent") || ""),
-      host: String(request.headers.get("host") || "")
+    row: buildLeadRow(body, request, ip, nowIso),
+    raw: {
+      tipo: body.tipo,
+      answers: body.answers || {},
+      meta: {
+        elapsedMs,
+        ip,
+        userAgent: String(request.headers.get("user-agent") || ""),
+        host: String(request.headers.get("host") || "")
+      }
+    },
+    destination: {
+      spreadsheetName: String(context.env.GOOGLE_SHEETS_SPREADSHEET_NAME || "").trim(),
+      sheetName: String(context.env.GOOGLE_SHEETS_SHEET_NAME || "").trim()
     }
   };
   const saveResult = await saveLeadToSheets(context.env, leadPayload);

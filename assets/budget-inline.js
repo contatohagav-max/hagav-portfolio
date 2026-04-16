@@ -314,11 +314,15 @@ const WA_NUMBER = '5573982284382';
     }
     function buildSubmissionPayload(honeypotValue){
       const answers=buildSanitizedAnswers();
+      const safeLocation=(typeof window!=='undefined'&&window.location)?(window.location.origin+window.location.pathname):'';
       return {
         tipo: state.tipo,
         answers,
         honeypot: sanitizeText(honeypotValue,120),
-        meta: { elapsedMs: Date.now()-state.startedAt }
+        meta: {
+          elapsedMs: Date.now()-state.startedAt,
+          origin: sanitizeText(safeLocation,180)
+        }
       };
     }
     function persistLeadSubmission(payload){

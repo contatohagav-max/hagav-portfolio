@@ -158,6 +158,11 @@ function validateTipoPayload(body) {
       if (!v) return { ok: false, error: "Campo recorrente invalido" };
       if (hasDangerousScheme(v)) return { ok: false, error: "Campo recorrente invalido" };
     }
+    const recTempoBruto = stripDangerousText(answers.rec_tempo_bruto || "", LIMITS.duration);
+    const recReferencia = stripDangerousText(answers.rec_referencia || "", LIMITS.referencia);
+    if (hasDangerousScheme(recTempoBruto) || hasDangerousScheme(recReferencia)) {
+      return { ok: false, error: "Campo recorrente invalido" };
+    }
   }
 
   return {
@@ -384,7 +389,9 @@ function buildLeadRow(body, request, ip, nowIso) {
     );
     quantidade = stripDangerousText(String(answers?.rec_volume || ""), 60);
     materialGravado = stripDangerousText(String(answers?.rec_gravado || ""), 40);
+    tempoBruto = stripDangerousText(String(answers?.rec_tempo_bruto || ""), LIMITS.duration);
     prazo = stripDangerousText(String(answers?.rec_inicio || ""), 60);
+    referencia = stripDangerousText(String(answers?.rec_referencia || ""), LIMITS.referencia);
     objetivo = composeWithOutro(
       answers?.rec_objetivo,
       answers?.rec_objetivo_outro,

@@ -3,7 +3,6 @@ const PAGE_TO_ORIGIN = {
   home: "H - HOME",
   portfolio: "W - PORTFÓLIO"
 };
-const STATUS_DEFAULT = "novo";
 
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -24,12 +23,35 @@ function sanitize(value, maxLen) {
     .slice(0, maxLen);
 }
 
+function firstEnvValue(env, keys) {
+  for (const key of keys) {
+    const value = String(env?.[key] || "").trim();
+    if (value) return value;
+  }
+  return "";
+}
+
 function getSupabaseConfig(env) {
-  const url = String(env.SUPABASE_URL || "").trim().replace(/\/+$/, "");
-  const serviceRole = String(env.SERVICE_ROLE_KEY || env.SUPABASE_SERVICE_ROLE_KEY || "").trim();
-  const anon = String(env.SUPABASE_ANON_KEY || "").trim();
+  const url = firstEnvValue(env, [
+    "SUPABASE_URL",
+    "SUPABASE_PROJECT_URL"
+  ]).replace(/\/+$/, "");
+  const serviceRole = firstEnvValue(env, [
+    "SERVICE_ROLE_KEY",
+    "SUPABASE_SERVICE_ROLE_KEY",
+    "SUPABASE_SERVICE_KEY",
+    "SERVICE_ROLE"
+  ]);
+  const anon = firstEnvValue(env, [
+    "SUPABASE_ANON_KEY",
+    "SUPABASE_PUBLIC_ANON_KEY",
+    "SUPABASE_KEY"
+  ]);
   const writeKey = serviceRole || anon;
-  return { url, writeKey };
+  const missing = [];
+  if (!url) missing.push("SUPABASE_URL");
+  if (!writeKey) missing.push("SERVICE_ROLE_KEY ou SUPABASE_ANON_KEY");
+  return { url, writeKey, missing };
 }
 
 async function parseJsonSafe(response) {
@@ -44,8 +66,11 @@ async function parseJsonSafe(response) {
 
 async function saveWhatsappClick(env, payload) {
   const config = getSupabaseConfig(env);
-  if (!config.url || !config.writeKey) {
-    return { ok: false, reason: "supabase_not_configured" };
+  if (!config.url || !config.writeKey || config.missing.length > 0) {
+    return {
+      ok: false,
+      reason: `supabase_not_configured:${config.missing.join(", ")}`
+    };
   }
 
   const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
@@ -54,7 +79,7 @@ async function saveWhatsappClick(env, payload) {
     : null;
 
   try {
-    const response = await fetch(`${config.url}/rest/v1/leads`, {
+    const response = await fetch(`${config.url}/rest/v1/contatos`, {
       method: "POST",
       headers: {
         "content-type": "application/json; charset=utf-8",
@@ -108,11 +133,8 @@ export async function onRequestPost(context) {
   const result = await saveWhatsappClick(env, {
     nome: "",
     whatsapp: "",
-    fluxo: "WhatsApp",
-    pagina,
     origem,
-    status: STATUS_DEFAULT,
-    observacoes
+    mensagem: observacoes
   });
 
   return json({ ok: result.ok, saved: result.ok, reason: result.reason || "" }, result.ok ? 200 : 502);

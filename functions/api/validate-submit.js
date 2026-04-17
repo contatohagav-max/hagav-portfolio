@@ -222,12 +222,40 @@ function validateTipoPayload(body) {
   };
 }
 
+function firstEnvValue(env, keys) {
+  for (const key of keys) {
+    const value = String(env?.[key] || "").trim();
+    if (value) return value;
+  }
+  return "";
+}
+
 function getSupabaseConfig(env) {
-  const url = String(env.SUPABASE_URL || "").trim().replace(/\/+$/, "");
-  const serviceRoleKey = String(env.SERVICE_ROLE_KEY || env.SUPABASE_SERVICE_ROLE_KEY || "").trim();
-  const anonKey = String(env.SUPABASE_ANON_KEY || "").trim();
+  const url = firstEnvValue(env, [
+    "SUPABASE_URL",
+    "SUPABASE_PROJECT_URL"
+  ]).replace(/\/+$/, "");
+  const serviceRoleKey = firstEnvValue(env, [
+    "SERVICE_ROLE_KEY",
+    "SUPABASE_SERVICE_ROLE_KEY",
+    "SUPABASE_SERVICE_KEY",
+    "SERVICE_ROLE"
+  ]);
+  const anonKey = firstEnvValue(env, [
+    "SUPABASE_ANON_KEY",
+    "SUPABASE_PUBLIC_ANON_KEY",
+    "SUPABASE_KEY"
+  ]);
   const writeKey = serviceRoleKey || anonKey;
-  return { url, writeKey, keyType: serviceRoleKey ? "service" : (anonKey ? "anon" : "") };
+  const missing = [];
+  if (!url) missing.push("SUPABASE_URL");
+  if (!writeKey) missing.push("SERVICE_ROLE_KEY ou SUPABASE_ANON_KEY");
+  return {
+    url,
+    writeKey,
+    keyType: serviceRoleKey ? "service" : (anonKey ? "anon" : ""),
+    missing
+  };
 }
 
 async function parseJsonSafe(response) {
@@ -296,26 +324,20 @@ function buildOrcamentoDetalhesSerializado(lead) {
 
 async function saveLeadToSupabase(env, lead) {
   const config = getSupabaseConfig(env);
-  if (!config.url || !config.writeKey) {
-    return { ok: false, reason: "supabase_not_configured" };
+  if (!config.url || !config.writeKey || config.missing.length > 0) {
+    return {
+      ok: false,
+      reason: `supabase_not_configured:${config.missing.join(", ")}`
+    };
   }
 
   const row = lead?.row || {};
   const orcamentoInsert = {
-    fluxo: row.Fluxo || "",
-    pagina: row.Pagina || "orcamento",
-    origem: row.Origem || "hagav.com.br",
-    status: row.Status || STATUS_PADRAO,
     nome: row.Nome || "",
     whatsapp: row.WhatsApp || "",
     servico: row.ServicoOuOperacao || "",
-    quantidade: row.Quantidade || "",
-    material_gravado: row.MaterialGravado || "",
-    tempo_bruto: row.TempoBruto || "",
-    prazo: row.Prazo || "",
-    referencia: row.Referencia || "",
-    observacoes: row.Observacoes || "",
-    detalhes: buildOrcamentoDetalhesSerializado(lead)
+    detalhes: buildOrcamentoDetalhesSerializado(lead),
+    origem: row.Origem || "hagav.com.br"
   };
 
   const orcamentoResult = await postSupabaseRow(config, "orcamentos", orcamentoInsert);
@@ -455,10 +477,8 @@ async function saveLead(env, lead) {
   const legacyResult = await saveLeadToLegacyWebhook(env, lead);
   if (legacyResult.ok) return { ok: true, reason: "legacy_fallback_used" };
 
-  if (supabaseResult.reason === "supabase_not_configured") {
-    return legacyResult;
-  }
-  return supabaseResult;
+  if (supabaseResult.reason) return supabaseResult;
+  return legacyResult;
 }
 
 function toFlatMap(value, keyLimit, valLimit) {
@@ -677,7 +697,7 @@ export async function onRequestPost(context) {
     }
   }
 
-  return json({ ok: true, saved: saveResult.ok, saveReason: saveResult.reason || "" });
+  return json({ ok: saveResult.ok, saved: saveResult.ok, saveReason: saveResult.reason || "" }, saveResult.ok ? 200 : 502);
 }
 
 export async function onRequest(context) {

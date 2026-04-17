@@ -64,22 +64,14 @@ async function parseJsonSafe(response) {
   }
 }
 
-async function saveWhatsappClick(env, payload) {
-  const config = getSupabaseConfig(env);
-  if (!config.url || !config.writeKey || config.missing.length > 0) {
-    return {
-      ok: false,
-      reason: `supabase_not_configured:${config.missing.join(", ")}`
-    };
-  }
-
+async function postSupabaseRow(config, table, payload) {
   const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
   const timeoutId = controller
     ? setTimeout(() => controller.abort("timeout"), SUPABASE_TIMEOUT_MS)
     : null;
 
   try {
-    const response = await fetch(`${config.url}/rest/v1/contatos`, {
+    const response = await fetch(`${config.url}/rest/v1/${encodeURIComponent(table)}`, {
       method: "POST",
       headers: {
         "content-type": "application/json; charset=utf-8",
@@ -103,6 +95,22 @@ async function saveWhatsappClick(env, payload) {
   } finally {
     if (timeoutId) clearTimeout(timeoutId);
   }
+}
+
+async function saveWhatsappClick(env, payload) {
+  const config = getSupabaseConfig(env);
+  if (!config.url || !config.writeKey || config.missing.length > 0) {
+    return {
+      ok: false,
+      reason: `supabase_not_configured:${config.missing.join(", ")}`
+    };
+  }
+
+  const contatoResult = await postSupabaseRow(config, "contatos", payload.contato);
+  if (!contatoResult.ok) return contatoResult;
+  const leadResult = await postSupabaseRow(config, "leads", payload.lead);
+  if (!leadResult.ok) return leadResult;
+  return { ok: true };
 }
 
 export async function onRequestPost(context) {
@@ -131,10 +139,21 @@ export async function onRequestPost(context) {
   );
 
   const result = await saveWhatsappClick(env, {
-    nome: "",
-    whatsapp: "",
-    origem,
-    mensagem: observacoes
+    contato: {
+      nome: "",
+      whatsapp: "",
+      origem,
+      mensagem: observacoes
+    },
+    lead: {
+      fluxo: "WhatsApp",
+      pagina,
+      origem,
+      status: "novo",
+      nome: "",
+      whatsapp: "",
+      observacoes
+    }
   });
 
   return json({ ok: result.ok, saved: result.ok, reason: result.reason || "" }, result.ok ? 200 : 502);

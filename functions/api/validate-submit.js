@@ -342,6 +342,17 @@ async function saveLeadToSupabase(env, lead) {
 
   const orcamentoResult = await postSupabaseRow(config, "orcamentos", orcamentoInsert);
   if (!orcamentoResult.ok) return orcamentoResult;
+  const leadInsert = {
+    fluxo: row.Fluxo || "",
+    pagina: row.Pagina || "orcamento",
+    origem: row.Origem || "hagav.com.br",
+    status: row.Status || STATUS_PADRAO,
+    nome: row.Nome || "",
+    whatsapp: row.WhatsApp || "",
+    observacoes: row.Observacoes || ""
+  };
+  const leadResult = await postSupabaseRow(config, "leads", leadInsert);
+  if (!leadResult.ok) return leadResult;
   return { ok: true };
 }
 

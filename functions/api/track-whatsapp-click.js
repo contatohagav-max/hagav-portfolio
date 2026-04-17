@@ -64,6 +64,14 @@ async function parseJsonSafe(response) {
   }
 }
 
+function isMissingLeadsTable(reason) {
+  const text = String(reason || "");
+  return text.includes("public.leads") && (
+    text.includes("Could not find the table") ||
+    text.includes("does not exist")
+  );
+}
+
 async function postSupabaseRow(config, table, payload) {
   const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
   const timeoutId = controller
@@ -109,7 +117,12 @@ async function saveWhatsappClick(env, payload) {
   const contatoResult = await postSupabaseRow(config, "contatos", payload.contato);
   if (!contatoResult.ok) return contatoResult;
   const leadResult = await postSupabaseRow(config, "leads", payload.lead);
-  if (!leadResult.ok) return leadResult;
+  if (!leadResult.ok) {
+    if (isMissingLeadsTable(leadResult.reason)) {
+      return { ok: true, reason: "leads_table_missing" };
+    }
+    return leadResult;
+  }
   return { ok: true };
 }
 

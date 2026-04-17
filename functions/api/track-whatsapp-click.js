@@ -72,6 +72,27 @@ function isMissingLeadsTable(reason) {
   );
 }
 
+function extractMissingColumn(reason, table) {
+  const text = String(reason || "");
+  const normalizedTable = String(table || "").toLowerCase();
+  const patterns = [
+    /Could not find the '([^']+)' column of '([^']+)'/i,
+    /column ["']?([a-zA-Z0-9_]+)["']? of relation ["']?([a-zA-Z0-9_.]+)["']? does not exist/i
+  ];
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (!match) continue;
+    const column = String(match[1] || "").trim();
+    const tableFromError = String(match[2] || "").trim().toLowerCase();
+    const tableShort = tableFromError.split(".").pop();
+    if (!column) continue;
+    if (!normalizedTable || tableShort === normalizedTable || tableFromError === normalizedTable) {
+      return column;
+    }
+  }
+  return "";
+}
+
 async function postSupabaseRow(config, table, payload) {
   const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
   const timeoutId = controller
@@ -105,6 +126,25 @@ async function postSupabaseRow(config, table, payload) {
   }
 }
 
+async function postSupabaseRowWithColumnFallback(config, table, payload) {
+  const body = { ...(payload || {}) };
+  const adjustedColumns = [];
+  const maxAttempts = Math.max(1, Object.keys(body).length + 1);
+
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    const result = await postSupabaseRow(config, table, body);
+    if (result.ok) return { ok: true, adjustedColumns };
+    const missingColumn = extractMissingColumn(result.reason, table);
+    if (!missingColumn || !Object.prototype.hasOwnProperty.call(body, missingColumn)) {
+      return result;
+    }
+    delete body[missingColumn];
+    adjustedColumns.push(missingColumn);
+  }
+
+  return { ok: false, reason: "supabase_schema_mismatch" };
+}
+
 async function saveWhatsappClick(env, payload) {
   const config = getSupabaseConfig(env);
   if (!config.url || !config.writeKey || config.missing.length > 0) {
@@ -114,16 +154,25 @@ async function saveWhatsappClick(env, payload) {
     };
   }
 
-  const contatoResult = await postSupabaseRow(config, "contatos", payload.contato);
+  const contatoResult = await postSupabaseRowWithColumnFallback(config, "contatos", payload.contato);
   if (!contatoResult.ok) return contatoResult;
-  const leadResult = await postSupabaseRow(config, "leads", payload.lead);
+  const leadResult = await postSupabaseRowWithColumnFallback(config, "leads", payload.lead);
   if (!leadResult.ok) {
     if (isMissingLeadsTable(leadResult.reason)) {
       return { ok: true, reason: "leads_table_missing" };
     }
     return leadResult;
   }
-  return { ok: true };
+  const adjustedNotes = [];
+  if (Array.isArray(contatoResult.adjustedColumns) && contatoResult.adjustedColumns.length > 0) {
+    adjustedNotes.push(`contatos:${contatoResult.adjustedColumns.join("|")}`);
+  }
+  if (Array.isArray(leadResult.adjustedColumns) && leadResult.adjustedColumns.length > 0) {
+    adjustedNotes.push(`leads:${leadResult.adjustedColumns.join("|")}`);
+  }
+  return adjustedNotes.length > 0
+    ? { ok: true, reason: `supabase_columns_adjusted:${adjustedNotes.join(",")}` }
+    : { ok: true };
 }
 
 export async function onRequestPost(context) {

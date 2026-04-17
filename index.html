@@ -5,6 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Hagav · Studio de Edição</title>
   <meta name="description" content="Vídeos para empresas que levam conteúdo a sério." />
+  <link rel="icon" href="/favicon.ico" sizes="any" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+  <link rel="manifest" href="/site.webmanifest" />
+  <meta name="theme-color" content="#0b0b0b" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet" />
@@ -70,55 +76,6 @@
       flex-direction: column;
       gap: 14px;
     }
-    .decor-layer {
-      position: absolute;
-      inset: 0;
-      z-index: 0;
-      pointer-events: none;
-      overflow: visible;
-    }
-    .decor-asset {
-      position: absolute;
-      display: block;
-      user-select: none;
-      pointer-events: none;
-      will-change: transform, opacity;
-      filter: drop-shadow(0 20px 44px rgba(0, 0, 0, 0.36));
-    }
-    .decor-planilha {
-      width: clamp(220px, 46vw, 360px);
-      right: -168px;
-      top: 72px;
-      opacity: 0.64;
-      transform: rotate(-8deg);
-      animation: floatPlanilha var(--float-time-a) ease-in-out infinite alternate;
-    }
-    .decor-timeline {
-      width: clamp(170px, 34vw, 270px);
-      left: -146px;
-      top: 174px;
-      opacity: 0.62;
-      transform: rotate(11deg);
-      animation: floatTimeline var(--float-time-b) ease-in-out infinite alternate;
-    }
-    .decor-icon {
-      width: clamp(86px, 13vw, 126px);
-      opacity: 0.17;
-      filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.28));
-      animation: floatIcon var(--float-time-c) ease-in-out infinite alternate;
-    }
-    .decor-icon.a {
-      left: -34px;
-      top: 18px;
-      transform: rotate(-14deg);
-      animation-delay: .6s;
-    }
-    .decor-icon.b {
-      right: -28px;
-      bottom: 46px;
-      transform: rotate(16deg);
-      animation-delay: 1.4s;
-    }
     .logo,
     .content,
     footer {
@@ -130,12 +87,30 @@
       justify-content: center;
       margin-bottom: -4px;
     }
+    .logo-link {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 4px;
+      margin: 0;
+      border: none;
+      background: none;
+      border-radius: 14px;
+      text-decoration: none;
+      cursor: pointer;
+      transition: transform .18s ease, filter .2s ease, opacity .2s ease;
+      -webkit-tap-highlight-color: transparent;
+    }
     .logo img {
       width: min(92vw, 334px);
       height: auto;
       display: block;
       filter: drop-shadow(0 12px 26px rgba(0, 0, 0, 0.36));
       animation: logoFloat 12s ease-in-out infinite alternate;
+    }
+    .logo-link:focus-visible {
+      outline: 1px solid rgba(255, 196, 108, 0.58);
+      outline-offset: 3px;
     }
     .content {
       background: linear-gradient(158deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.045));
@@ -279,6 +254,10 @@
     }
 
     @media (hover: hover) {
+      .logo-link:hover {
+        transform: translateY(-1px);
+        filter: brightness(1.03);
+      }
       .btn:hover,
       .mode-card:hover {
         transform: translateY(-2px);
@@ -294,41 +273,13 @@
     .mode-card:active,
     .mode-go:active { transform: scale(.985); }
 
-    @media (max-width: 760px) {
-      .decor-planilha {
-        width: clamp(170px, 58vw, 280px);
-        right: -124px;
-        top: 90px;
-        opacity: 0.48;
-      }
-      .decor-timeline {
-        width: clamp(134px, 44vw, 210px);
-        left: -108px;
-        top: 212px;
-        opacity: 0.45;
-      }
-      .decor-icon.b { opacity: 0.13; bottom: 22px; }
-    }
     @media (max-width: 560px) {
       .page { padding: 20px 16px 78px; }
       .logo img { width: min(91vw, 296px); }
-      .decor-planilha {
-        right: -118px;
-        top: 98px;
-        opacity: 0.36;
-      }
-      .decor-timeline {
-        display: none;
-      }
-      .decor-icon {
-        width: clamp(72px, 21vw, 98px);
-      }
-      .decor-icon.a { left: -28px; top: 34px; opacity: 0.12; }
-      .decor-icon.b { right: -24px; bottom: 44px; opacity: 0.08; }
     }
     @media (prefers-reduced-motion: reduce) {
       .logo img,
-      .decor-asset { animation: none !important; }
+      .logo-link { animation: none !important; }
     }
 
     @keyframes fadeIn {
@@ -339,30 +290,14 @@
       from { transform: translate3d(0, 0, 0); }
       to { transform: translate3d(0, -4px, 0); }
     }
-    @keyframes floatPlanilha {
-      from { transform: translate3d(0, 0, 0) rotate(-8deg); }
-      to { transform: translate3d(-4px, -10px, 0) rotate(-6deg); }
-    }
-    @keyframes floatTimeline {
-      from { transform: translate3d(0, 0, 0) rotate(11deg); }
-      to { transform: translate3d(6px, -12px, 0) rotate(8deg); }
-    }
-    @keyframes floatIcon {
-      from { transform: translate3d(0, 0, 0) scale(1); }
-      to { transform: translate3d(0, -8px, 0) scale(1.02); }
-    }
   </style>
 </head>
 <body>
   <div class="page">
-    <div class="decor-layer" aria-hidden="true">
-      <img class="decor-asset decor-planilha" src="./assets/planilha-hagav-3d.png" alt="" decoding="async" />
-      <img class="decor-asset decor-timeline" src="./assets/timeline-3d.png" alt="" decoding="async" />
-      <img class="decor-asset decor-icon a" src="./assets/logo-icon.png" alt="" decoding="async" />
-      <img class="decor-asset decor-icon b" src="./assets/logo-icon.png" alt="" decoding="async" />
-    </div>
     <div class="logo">
-      <img src="./assets/logo-3d-hagav.png" alt="HAGAV Studio" />
+      <button class="logo-link" id="logo-home-link" type="button" aria-label="Voltar ao início">
+        <img src="./assets/logo-3d-hagav.png" alt="HAGAV Studio" decoding="async" />
+      </button>
     </div>
 
     <section class="content" id="hero-card">
@@ -392,7 +327,7 @@
           <span class="btn-arrow">→</span>
         </button>
 
-        <a href="https://wa.me/5573982284382" class="btn" target="_blank" rel="noopener">
+        <a href="https://wa.me/5573982284382" class="btn" target="_blank" rel="noopener" data-whatsapp-track data-track-page="home" data-track-origin="H - HOME">
           <span class="btn-icon"><svg viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347"/></svg></span>
           <span>Falar no WhatsApp</span>
           <span class="btn-arrow">→</span>
@@ -426,6 +361,7 @@
     <footer>© <span data-footer-year>2026</span> HAGAV Studio de Edição • Todos os direitos reservados</footer>
   </div>
   <script src="./assets/budget-inline.js"></script>
+  <script src="./assets/whatsapp-tracking.js"></script>
   <script>
     const paneActions = document.getElementById('pane-actions');
     const paneModes = document.getElementById('pane-modes');
@@ -445,6 +381,13 @@
       if(!el) return;
       el.scrollIntoView({behavior:'smooth', block:'start'});
     }
+    document.getElementById('logo-home-link').addEventListener('click',()=>{
+      if(window.HagavBudget&&typeof window.HagavBudget.clearWizard==='function'){
+        window.HagavBudget.clearWizard();
+      }
+      switchPane(paneActions);
+      window.scrollTo({top:0,behavior:'smooth'});
+    });
     document.getElementById('open-budget-modes').addEventListener('click',()=>{
       switchPane(paneModes);
       scrollToElement(heroCard);

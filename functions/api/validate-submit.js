@@ -24,11 +24,11 @@ const LIMITS = {
 const SUBMIT_COOLDOWN_MS = 8000;
 const lastSubmitByIp = new Map();
 const recentSubmissionIds = new Map();
-const LEAD_SAVE_TIMEOUT_MS = 15000;
-const DEFAULT_WEBHOOK_URL_DU = "https://script.google.com/macros/s/AKfycbwQumlm5voxZrUcrw9S9nir8PcNs6lcFoIH_UGcjGYmRMryOexvqFyLpI2wnTNd9pMk/exec";
-const DEFAULT_WEBHOOK_URL_DR = "https://script.google.com/macros/s/AKfycbwmA4ikYQkYZj_4mt8001BxpC-3ihy92X3xO5FtPg-UP_wUqdLu7PfteuLT1hraAbzTsA/exec";
-const DEFAULT_WEBHOOK_SECRET = "hagav-2026-leads-secreto-8472";
+const SUPABASE_TIMEOUT_MS = 12000;
+const LEGACY_WEBHOOK_TIMEOUT_MS = 15000;
+const LEGACY_WEBHOOK_RETRY_DELAY_MS = 400;
 const SUBMISSION_ID_TTL_MS = 1000 * 60 * 30;
+const STATUS_PADRAO = "novo";
 
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -222,157 +222,243 @@ function validateTipoPayload(body) {
   };
 }
 
-function getWebhookConfigByTipo(env, tipo) {
+function getSupabaseConfig(env) {
+  const url = String(env.SUPABASE_URL || "").trim().replace(/\/+$/, "");
+  const serviceRoleKey = String(env.SERVICE_ROLE_KEY || env.SUPABASE_SERVICE_ROLE_KEY || "").trim();
+  const anonKey = String(env.SUPABASE_ANON_KEY || "").trim();
+  const writeKey = serviceRoleKey || anonKey;
+  return { url, writeKey, keyType: serviceRoleKey ? "service" : (anonKey ? "anon" : "") };
+}
+
+async function parseJsonSafe(response) {
+  const text = await response.text();
+  if (!text) return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
+
+async function postSupabaseRow(config, table, payload) {
+  const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+  const timeoutId = controller
+    ? setTimeout(() => controller.abort("timeout"), SUPABASE_TIMEOUT_MS)
+    : null;
+  try {
+    const response = await fetch(`${config.url}/rest/v1/${encodeURIComponent(table)}`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json; charset=utf-8",
+        apikey: config.writeKey,
+        authorization: `Bearer ${config.writeKey}`,
+        prefer: "return=minimal"
+      },
+      body: JSON.stringify(payload),
+      signal: controller ? controller.signal : undefined
+    });
+    if (!response.ok) {
+      const parsed = await parseJsonSafe(response);
+      return {
+        ok: false,
+        reason: String(parsed?.message || parsed?.error_description || `supabase_http_${response.status}`)
+      };
+    }
+    return { ok: true };
+  } catch {
+    return { ok: false, reason: "supabase_request_failed" };
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
+}
+
+function buildOrcamentoDetalhesSerializado(lead) {
+  const row = lead?.row || {};
+  const rawAnswers = lead?.raw?.answers || {};
+  const payload = {
+    fluxo: row.Fluxo || "",
+    pagina: row.Pagina || "",
+    origem: row.Origem || "",
+    status: row.Status || STATUS_PADRAO,
+    nome: row.Nome || "",
+    whatsapp: row.WhatsApp || "",
+    servicoOuOperacao: row.ServicoOuOperacao || "",
+    quantidade: row.Quantidade || "",
+    materialGravado: row.MaterialGravado || "",
+    tempoBruto: row.TempoBruto || "",
+    prazo: row.Prazo || "",
+    referencia: row.Referencia || "",
+    observacoes: row.Observacoes || "",
+    respostasCompletas: rawAnswers
+  };
+  return stripDangerousText(JSON.stringify(payload), 12000);
+}
+
+async function saveLeadToSupabase(env, lead) {
+  const config = getSupabaseConfig(env);
+  if (!config.url || !config.writeKey) {
+    return { ok: false, reason: "supabase_not_configured" };
+  }
+
+  const row = lead?.row || {};
+  const orcamentoInsert = {
+    fluxo: row.Fluxo || "",
+    pagina: row.Pagina || "orcamento",
+    origem: row.Origem || "hagav.com.br",
+    status: row.Status || STATUS_PADRAO,
+    nome: row.Nome || "",
+    whatsapp: row.WhatsApp || "",
+    servico: row.ServicoOuOperacao || "",
+    quantidade: row.Quantidade || "",
+    material_gravado: row.MaterialGravado || "",
+    tempo_bruto: row.TempoBruto || "",
+    prazo: row.Prazo || "",
+    referencia: row.Referencia || "",
+    observacoes: row.Observacoes || "",
+    detalhes: buildOrcamentoDetalhesSerializado(lead)
+  };
+
+  const orcamentoResult = await postSupabaseRow(config, "orcamentos", orcamentoInsert);
+  if (!orcamentoResult.ok) return orcamentoResult;
+  return { ok: true };
+}
+
+function getLegacyWebhookConfigByTipo(env, tipo) {
   const isUnica = tipo === "unica";
   const webhookUrl = String(
     isUnica
-      ? (env.GOOGLE_SHEETS_WEBHOOK_URL_DU || DEFAULT_WEBHOOK_URL_DU)
-      : (env.GOOGLE_SHEETS_WEBHOOK_URL_DR || DEFAULT_WEBHOOK_URL_DR)
+      ? (env.GOOGLE_SHEETS_WEBHOOK_URL_DU || "")
+      : (env.GOOGLE_SHEETS_WEBHOOK_URL_DR || "")
   ).trim();
-  const secret = String(env.GOOGLE_SHEETS_WEBHOOK_SECRET || DEFAULT_WEBHOOK_SECRET).trim();
+  const secret = String(env.GOOGLE_SHEETS_WEBHOOK_SECRET || "").trim();
   return { webhookUrl, secret };
 }
 
-async function saveLeadToSheets(env, lead) {
-  const { webhookUrl, secret } = getWebhookConfigByTipo(env, lead?.raw?.tipo);
+async function saveLeadToLegacyWebhook(env, lead) {
+  const { webhookUrl, secret } = getLegacyWebhookConfigByTipo(env, lead?.raw?.tipo);
   if (!webhookUrl) {
-    return { ok: false, reason: "not_configured" };
+    return { ok: false, reason: "legacy_not_configured" };
   }
+
+  const row = lead?.row || {};
+  const rawAnswers = lead?.raw?.answers || {};
+  const answersForWebhook = { ...rawAnswers };
+  if (lead?.raw?.tipo === "unica") {
+    answersForWebhook.unica_servicos = row.ServicoOuOperacao || "";
+    answersForWebhook.unica_quantidades = row.Quantidade || "";
+    answersForWebhook.unica_gravado = row.MaterialGravado || "";
+    answersForWebhook.unica_tempo_bruto = row.TempoBruto || "";
+  } else if (lead?.raw?.tipo === "recorrente") {
+    answersForWebhook.rec_tipo_operacao = row.ServicoOuOperacao || "";
+    answersForWebhook.rec_volume = row.Quantidade || "";
+    answersForWebhook.rec_gravado = row.MaterialGravado || "";
+    answersForWebhook.rec_tempo_bruto = row.TempoBruto || "";
+    answersForWebhook.rec_inicio = row.Prazo || "";
+    answersForWebhook.rec_referencia = row.Referencia || "";
+    answersForWebhook.rec_objetivo = row.Objetivo || "";
+  }
+  const valuesByHeader = {
+    DataHora: row.DataHora || "",
+    TipoFluxo: row.TipoFluxo || "",
+    Nome: row.Nome || "",
+    WhatsApp: row.WhatsApp || "",
+    Instagram: row.Instagram || "",
+    Empresa: row.Empresa || "",
+    ServicoOuOperacao: row.ServicoOuOperacao || "",
+    Quantidade: row.Quantidade || "",
+    MaterialGravado: row.MaterialGravado || "",
+    TempoBruto: row.TempoBruto || "",
+    Prazo: row.Prazo || "",
+    Referencia: row.Referencia || "",
+    Objetivo: row.Objetivo || "",
+    Observacoes: row.Observacoes || "",
+    Origem: row.Origem || ""
+  };
+  const webhookBody = {
+    ...row,
+    rowData: row,
+    valuesByHeader,
+    answers: answersForWebhook,
+    rawAnswers,
+    tipo: lead?.raw?.tipo || "",
+    nome: row.Nome || "",
+    whatsapp: row.WhatsApp || "",
+    instagram: row.Instagram || "",
+    empresa: row.Empresa || "",
+    servicoOuOperacao: row.ServicoOuOperacao || "",
+    servico: row.ServicoOuOperacao || "",
+    quantidade: row.Quantidade || "",
+    materialGravado: row.MaterialGravado || "",
+    tempoBruto: row.TempoBruto || "",
+    prazo: row.Prazo || "",
+    referencia: row.Referencia || "",
+    objetivo: row.Objetivo || "",
+    observacoes: row.Observacoes || "",
+    origem: row.Origem || "",
+    values: [
+      row.DataHora || "",
+      row.TipoFluxo || "",
+      row.Nome || "",
+      row.WhatsApp || "",
+      row.Instagram || "",
+      row.Empresa || "",
+      row.ServicoOuOperacao || "",
+      row.Quantidade || "",
+      row.MaterialGravado || "",
+      row.TempoBruto || "",
+      row.Prazo || "",
+      row.Referencia || "",
+      row.Objetivo || "",
+      row.Observacoes || "",
+      row.Origem || ""
+    ],
+    secret: secret || "",
+    auth: { secret: secret || "" }
+  };
 
   async function runWebhookPost() {
     const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
     const timeoutId = controller
-      ? setTimeout(() => controller.abort("timeout"), LEAD_SAVE_TIMEOUT_MS)
+      ? setTimeout(() => controller.abort("timeout"), LEGACY_WEBHOOK_TIMEOUT_MS)
       : null;
-    const headers = { "content-type": "application/json; charset=utf-8" };
-    if (secret) headers["x-webhook-secret"] = secret;
-    const row = lead?.row || {};
-    const valuesByHeader = {
-      DataHora: row.DataHora || "",
-      TipoFluxo: row.TipoFluxo || "",
-      Nome: row.Nome || "",
-      WhatsApp: row.WhatsApp || "",
-      Instagram: row.Instagram || "",
-      Empresa: row.Empresa || "",
-      ServicoOuOperacao: row.ServicoOuOperacao || "",
-      Quantidade: row.Quantidade || "",
-      MaterialGravado: row.MaterialGravado || "",
-      TempoBruto: row.TempoBruto || "",
-      Prazo: row.Prazo || "",
-      Referencia: row.Referencia || "",
-      Objetivo: row.Objetivo || "",
-      Observacoes: row.Observacoes || "",
-      Origem: row.Origem || ""
-    };
-    const rawAnswers = lead?.raw?.answers || {};
-    const answersForWebhook = {
-      ...rawAnswers
-    };
-    if (lead?.raw?.tipo === "unica") {
-      // Alguns Apps Scripts leem answers.unica_quantidades diretamente.
-      // Enviamos também em formato simples para evitar "servico: quantidade" na coluna Quantidade.
-      answersForWebhook.unica_servicos = row.ServicoOuOperacao || "";
-      answersForWebhook.unica_quantidades = row.Quantidade || "";
-      answersForWebhook.unica_gravado = row.MaterialGravado || "";
-      answersForWebhook.unica_tempo_bruto = row.TempoBruto || "";
-    } else if (lead?.raw?.tipo === "recorrente") {
-      // Mantem compatibilidade com scripts DR antigos.
-      answersForWebhook.rec_tipo_operacao = row.ServicoOuOperacao || "";
-      answersForWebhook.rec_volume = row.Quantidade || "";
-      answersForWebhook.rec_gravado = row.MaterialGravado || "";
-      answersForWebhook.rec_tempo_bruto = row.TempoBruto || "";
-      answersForWebhook.rec_inicio = row.Prazo || "";
-      answersForWebhook.rec_referencia = row.Referencia || "";
-      answersForWebhook.rec_objetivo = row.Objetivo || "";
-    }
-
-    const webhookBody = {
-      ...lead,
-      ...row,
-      valuesByHeader,
-      // Aliases para diferentes scripts (camelCase/snake-ish/acentuados).
-      dataHora: row.DataHora || "",
-      tipoFluxo: row.TipoFluxo || "",
-      nome: row.Nome || "",
-      whatsapp: row.WhatsApp || "",
-      instagram: row.Instagram || "",
-      empresa: row.Empresa || "",
-      servicoOuOperacao: row.ServicoOuOperacao || "",
-      servico: row.ServicoOuOperacao || "",
-      Servico: row.ServicoOuOperacao || "",
-      servicos: row.ServicoOuOperacao || "",
-      quantidade: row.Quantidade || "",
-      Quantidade: row.Quantidade || "",
-      materialGravado: row.MaterialGravado || "",
-      tempoBruto: row.TempoBruto || "",
-      prazo: row.Prazo || "",
-      referencia: row.Referencia || "",
-      objetivo: row.Objetivo || "",
-      observacoes: row.Observacoes || "",
-      origem: row.Origem || "",
-      ip: row.Ip || "",
-      "Tipo de Fluxo": row.TipoFluxo || "",
-      "Serviço": row.ServicoOuOperacao || "",
-      "Referência": row.Referencia || "",
-      "Observações": row.Observacoes || "",
-      // Estrutura por ordem de colunas para scripts que gravam por índice.
-      values: [
-        row.DataHora || "",
-        row.TipoFluxo || "",
-        row.Nome || "",
-        row.WhatsApp || "",
-        row.Instagram || "",
-        row.Empresa || "",
-        row.ServicoOuOperacao || "",
-        row.Quantidade || "",
-        row.MaterialGravado || "",
-        row.TempoBruto || "",
-        row.Prazo || "",
-        row.Referencia || "",
-        row.Objetivo || "",
-        row.Observacoes || "",
-        row.Origem || ""
-      ],
-      rowData: row,
-      answers: answersForWebhook,
-      rawAnswers,
-      tipo: lead?.raw?.tipo || "",
-      secret: secret || "",
-      auth: { secret: secret || "" }
-    };
-
-    const response = await fetch(webhookUrl, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(webhookBody),
-      signal: controller ? controller.signal : undefined
-    });
-
-    if (!response.ok) {
-      return { ok: false, reason: `http_${response.status}` };
-    }
-    const rawResponse = await response.text();
-    if (!rawResponse) {
-      return { ok: true };
-    }
     try {
-      const parsed = JSON.parse(rawResponse);
-      if (parsed?.ok === false || parsed?.success === false) {
-        return { ok: false, reason: String(parsed?.error || parsed?.message || "webhook_rejected") };
+      const headers = { "content-type": "application/json; charset=utf-8" };
+      if (secret) headers["x-webhook-secret"] = secret;
+      const response = await fetch(webhookUrl, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(webhookBody),
+        signal: controller ? controller.signal : undefined
+      });
+      if (!response.ok) {
+        return { ok: false, reason: `legacy_http_${response.status}` };
       }
       return { ok: true };
     } catch {
-      return { ok: true };
+      return { ok: false, reason: "legacy_request_failed" };
     } finally {
       if (timeoutId) clearTimeout(timeoutId);
     }
   }
 
-  const firstTry = await runWebhookPost().catch(() => ({ ok: false, reason: "request_failed" }));
+  const firstTry = await runWebhookPost();
   if (firstTry.ok) return firstTry;
-  await new Promise((resolve) => setTimeout(resolve, 400));
-  const secondTry = await runWebhookPost().catch(() => ({ ok: false, reason: "request_failed" }));
+  await new Promise((resolve) => setTimeout(resolve, LEGACY_WEBHOOK_RETRY_DELAY_MS));
+  const secondTry = await runWebhookPost();
   return secondTry.ok ? secondTry : firstTry;
+}
+
+async function saveLead(env, lead) {
+  const supabaseResult = await saveLeadToSupabase(env, lead);
+  if (supabaseResult.ok) return supabaseResult;
+
+  const legacyResult = await saveLeadToLegacyWebhook(env, lead);
+  if (legacyResult.ok) return { ok: true, reason: "legacy_fallback_used" };
+
+  if (supabaseResult.reason === "supabase_not_configured") {
+    return legacyResult;
+  }
+  return supabaseResult;
 }
 
 function toFlatMap(value, keyLimit, valLimit) {
@@ -407,10 +493,9 @@ function composeWithOutro(baseValue, outroValue, limit = 180) {
 
 function buildLeadRow(body, request, ip, nowIso) {
   const answers = body?.answers || {};
+  const fluxo = body?.tipo === "unica" ? "DU" : "DR";
   const tipo = body?.tipo === "unica" ? "Demanda Única" : "Demanda Recorrente";
-  const origemMeta = stripDangerousText(String(body?.meta?.origin || ""), 180);
-  const origemHost = stripDangerousText(String(request.headers.get("host") || ""), 120);
-  const origem = origemMeta || origemHost || "hagav.com.br";
+  const origem = "hagav.com.br";
 
   let servicoOuOperacao = "";
   let quantidade = "";
@@ -491,7 +576,9 @@ function buildLeadRow(body, request, ip, nowIso) {
 
   return {
     DataHora: nowIso,
+    Fluxo: fluxo,
     TipoFluxo: tipo,
+    Pagina: "orcamento",
     Nome: stripDangerousText(String(answers?.nome || ""), LIMITS.nome),
     WhatsApp: stripDangerousText(String(answers?.whatsapp || ""), 16),
     Instagram: stripDangerousText(String(answers?.instagram || ""), LIMITS.instagram),
@@ -505,6 +592,7 @@ function buildLeadRow(body, request, ip, nowIso) {
     Objetivo: stripDangerousText(objetivo, 300),
     Observacoes: stripDangerousText(String(answers?.extras || ""), LIMITS.extras),
     Origem: stripDangerousText(origem, 180),
+    Status: STATUS_PADRAO,
     Ip: stripDangerousText(ip, 64)
   };
 }
@@ -572,7 +660,7 @@ export async function onRequestPost(context) {
       sheetName: String(context.env.GOOGLE_SHEETS_SHEET_NAME || "").trim()
     }
   };
-  const saveResult = await saveLeadToSheets(context.env, leadPayload);
+  const saveResult = await saveLead(context.env, leadPayload);
   if (submissionId && saveResult.ok) {
     recentSubmissionIds.set(submissionId, now + SUBMISSION_ID_TTL_MS);
     if (recentSubmissionIds.size > 5000) {

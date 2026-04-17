@@ -5,6 +5,12 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Orçamento · HAGAV Studio</title>
+  <link rel="icon" href="/favicon.ico" sizes="any" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+  <link rel="manifest" href="/site.webmanifest" />
+  <meta name="theme-color" content="#0b0b0b" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet" />
@@ -22,6 +28,9 @@
     .decor-icon{width:clamp(78px,12vw,112px);left:-26px;top:168px;opacity:.12;filter:drop-shadow(0 10px 22px rgba(0,0,0,.26));animation:floatIcon 18s ease-in-out infinite alternate}
     .page > *{position:relative;z-index:1}
     .header{display:flex;justify-content:center;padding:16px 0 0;margin-bottom:-10px}
+    .logo-link{display:inline-flex;align-items:center;justify-content:center;border:none;background:none;border-radius:14px;padding:4px;text-decoration:none;cursor:pointer;transition:transform .18s ease,filter .2s ease;-webkit-tap-highlight-color:transparent}
+    .logo-link:focus-visible{outline:1px solid rgba(255,196,108,.58);outline-offset:3px}
+    @media(hover:hover){.logo-link:hover{transform:translateY(-1px);filter:brightness(1.03)}}
     .header img{height:112px;width:auto;display:block;filter:drop-shadow(0 12px 24px rgba(0,0,0,.34))}
     .intro{text-align:center;padding:10px 4px 18px}
     .intro h1{font-size:clamp(17px,4.8vw,22px);font-weight:800;letter-spacing:.03em;text-transform:uppercase;color:#fff;margin-bottom:8px}
@@ -82,7 +91,7 @@
       <img class="decor-asset decor-planilha" src="./assets/planilha-hagav-3d.png" alt="" decoding="async" />
       <img class="decor-asset decor-icon" src="./assets/logo-icon.png" alt="" decoding="async" />
     </div>
-    <div class="header"><img src="./assets/logo-3d-hagav.png" alt="HAGAV" /></div>
+    <div class="header"><a class="logo-link" href="./index.html" aria-label="Voltar para Home"><img src="./assets/logo-3d-hagav.png" alt="HAGAV" decoding="async" /></a></div>
     <section class="intro">
       <h1>Orçamento personalizado</h1>
       <p>Leva cerca de 2 minutos e nos ajuda a responder com mais rapidez e assertividade.</p>

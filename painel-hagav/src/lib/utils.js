@@ -44,7 +44,6 @@ export const LEAD_STATUS_LABELS = {
   novo:              'Novo',
   chamado:           'Contatado',
   'proposta enviada':'Proposta',
-  negociacao:        'Negociação',
   fechado:           'Fechado',
   perdido:           'Perdido',
 };
@@ -53,7 +52,6 @@ export const LEAD_STATUS_COLORS = {
   novo:              'bg-blue-500/15 text-blue-400 border-blue-500/30',
   chamado:           'bg-violet-500/15 text-violet-400 border-violet-500/30',
   'proposta enviada':'bg-yellow-500/15 text-yellow-400 border-yellow-500/30',
-  negociacao:        'bg-orange-500/15 text-orange-400 border-orange-500/30',
   fechado:           'bg-green-500/15 text-green-400 border-green-500/30',
   perdido:           'bg-red-500/15 text-red-400 border-red-500/30',
 };
@@ -99,9 +97,7 @@ export function whatsappLink(phone, msg = '') {
 export const KANBAN_COLUMNS = [
   { id: 'novo',              label: 'Novo',             color: 'border-blue-500' },
   { id: 'chamado',           label: 'Contatado',        color: 'border-violet-500' },
-  { id: 'qualificado',       label: 'Qualificado',      color: 'border-cyan-500' },
   { id: 'proposta enviada',  label: 'Proposta',         color: 'border-yellow-500' },
-  { id: 'negociacao',        label: 'Negociação',       color: 'border-orange-500' },
   { id: 'fechado',           label: 'Fechado',          color: 'border-green-500' },
   { id: 'perdido',           label: 'Perdido',          color: 'border-red-500' },
 ];

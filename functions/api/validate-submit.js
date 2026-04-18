@@ -29,6 +29,23 @@ const LEGACY_WEBHOOK_TIMEOUT_MS = 15000;
 const LEGACY_WEBHOOK_RETRY_DELAY_MS = 400;
 const SUBMISSION_ID_TTL_MS = 1000 * 60 * 30;
 const STATUS_PADRAO = "novo";
+const STATUS_ORCAMENTO_PADRAO = "pendente_revisao";
+
+const SERVICE_BASE_PRICES = {
+  DU: {
+    "reels tiktok e shorts": 180,
+    "corte estrategico": 150,
+    "criativo para ads": 240,
+    outro: 190
+  },
+  DR: {
+    "conteudo para redes sociais": 150,
+    "criativos para anuncios": 220,
+    lancamentos: 260,
+    "youtube recorrente": 280,
+    outro: 210
+  }
+};
 
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -348,7 +365,7 @@ async function postSupabaseRowWithColumnFallback(config, table, payload) {
   return { ok: false, reason: "supabase_schema_mismatch" };
 }
 
-function buildOrcamentoDetalhesSerializado(lead) {
+function buildOrcamentoDetalhesSerializado(lead, pricing) {
   const row = lead?.row || {};
   const rawAnswers = lead?.raw?.answers || {};
   const payload = {
@@ -365,9 +382,72 @@ function buildOrcamentoDetalhesSerializado(lead) {
     prazo: row.Prazo || "",
     referencia: row.Referencia || "",
     observacoes: row.Observacoes || "",
+    calculoAutomatico: {
+      precoBase: Number(pricing?.precoBase || 0),
+      precoFinal: Number(pricing?.precoFinal || 0),
+      pacoteSugerido: pricing?.pacoteSugerido || "",
+      statusOrcamento: pricing?.statusOrcamento || STATUS_ORCAMENTO_PADRAO
+    },
     respostasCompletas: rawAnswers
   };
   return stripDangerousText(JSON.stringify(payload), 12000);
+}
+
+function normalizeServicoCurto(value) {
+  return splitPipeValues(value).join(", ");
+}
+
+function formatQuantidadeResumo(flow, quantidadeRaw) {
+  const quantidade = stripDangerousText(String(quantidadeRaw || ""), 240);
+  if (!quantidade) return "-";
+  if (quantidade.includes("|")) return quantidade;
+  const qtdNum = parsePositiveNumber(quantidade);
+  if (!qtdNum) return quantidade;
+  return flow === "DR" ? `${qtdNum} por mes` : `${qtdNum} videos`;
+}
+
+function summarizeMaterial(raw) {
+  const text = stripDangerousText(String(raw || ""), 240);
+  if (!text) return "-";
+  const lower = text.toLowerCase();
+  const hasSim = lower.includes("sim");
+  const hasNao = lower.includes("nao") || lower.includes("não");
+  if (hasSim && !hasNao) return "sim";
+  if (!hasSim && hasNao) return "nao";
+  return text;
+}
+
+function summarizeTempo(raw) {
+  const text = stripDangerousText(String(raw || ""), 240);
+  if (!text) return "-";
+  const parts = splitPipeValues(text);
+  if (parts.length === 1 && parts[0].includes(":")) {
+    const idx = parts[0].lastIndexOf(":");
+    return stripDangerousText(parts[0].slice(idx + 1), 60) || text;
+  }
+  return text;
+}
+
+function buildResumoOrcamento(row) {
+  const fluxo = stripDangerousText(String(row?.Fluxo || ""), 12) || "-";
+  const servico = stripDangerousText(normalizeServicoCurto(row?.ServicoOuOperacao), 300) || "-";
+  const quantidade = formatQuantidadeResumo(fluxo, row?.Quantidade);
+  const materialGravado = summarizeMaterial(row?.MaterialGravado);
+  const tempoBruto = summarizeTempo(row?.TempoBruto);
+  const prazo = stripDangerousText(String(row?.Prazo || ""), 120) || "-";
+  const referencia = stripDangerousText(String(row?.Referencia || ""), LIMITS.referencia);
+  const observacoes = stripDangerousText(String(row?.Observacoes || ""), 300);
+  const parts = [
+    fluxo,
+    `Servico: ${servico}`,
+    `Quantidade: ${quantidade}`,
+    `Material gravado: ${materialGravado}`,
+    `Tempo bruto: ${tempoBruto}`,
+    `Prazo: ${prazo}`
+  ];
+  if (referencia) parts.push(`Referencia: ${referencia}`);
+  if (observacoes) parts.push(`Observacoes: ${observacoes}`);
+  return stripDangerousText(parts.join(" | "), 2000);
 }
 
 async function saveLeadToSupabase(env, lead) {
@@ -380,12 +460,29 @@ async function saveLeadToSupabase(env, lead) {
   }
 
   const row = lead?.row || {};
+  const pricing = calculateOrcamentoPricing(row);
   const orcamentoInsert = {
+    fluxo: row.Fluxo || "",
+    pagina: row.Pagina || "orcamento",
+    origem: row.Origem || "hagav.com.br",
+    status: row.Status || STATUS_PADRAO,
     nome: row.Nome || "",
     whatsapp: row.WhatsApp || "",
-    servico: row.ServicoOuOperacao || "",
-    detalhes: buildOrcamentoDetalhesSerializado(lead),
-    origem: row.Origem || "hagav.com.br"
+    servico: stripDangerousText(normalizeServicoCurto(row.ServicoOuOperacao || ""), 300),
+    quantidade: row.Quantidade || "",
+    material_gravado: row.MaterialGravado || "",
+    tempo_bruto: row.TempoBruto || "",
+    prazo: row.Prazo || "",
+    referencia: row.Referencia || "",
+    observacoes: row.Observacoes || "",
+    detalhes: buildOrcamentoDetalhesSerializado(lead, pricing),
+    resumo_orcamento: buildResumoOrcamento(row),
+    preco_base: Number(pricing.precoBase || 0),
+    preco_final: Number(pricing.precoFinal || 0),
+    pacote_sugerido: stripDangerousText(pricing.pacoteSugerido || "", 120),
+    status_orcamento: stripDangerousText(pricing.statusOrcamento || STATUS_ORCAMENTO_PADRAO, 60),
+    observacoes_internas: stripDangerousText(pricing.observacoesInternas || "", 500),
+    link_pdf: stripDangerousText(pricing.linkPdf || "", 500)
   };
 
   const orcamentoResult = await postSupabaseRowWithColumnFallback(config, "orcamentos", orcamentoInsert);
@@ -583,6 +680,160 @@ function composeWithOutro(baseValue, outroValue, limit = 180) {
   const outro = stripDangerousText(String(outroValue || ""), LIMITS.outro);
   if (base !== "Outro") return base;
   return outro ? `Outro: ${outro}` : "Outro";
+}
+
+function splitPipeValues(value) {
+  return String(value || "")
+    .split("|")
+    .map((part) => stripDangerousText(String(part || ""), 240))
+    .filter(Boolean);
+}
+
+function normalizeServiceKey(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function parsePositiveNumber(raw) {
+  const match = String(raw || "").match(/(\d+(?:[.,]\d+)?)/);
+  if (!match) return 0;
+  const num = Number(String(match[1]).replace(",", "."));
+  return Number.isFinite(num) && num > 0 ? num : 0;
+}
+
+function parseHours(raw) {
+  const text = String(raw || "").toLowerCase().trim();
+  if (!text) return 0;
+  const hhmm = text.match(/^(\d{1,2}):(\d{2})$/);
+  if (hhmm) {
+    const hours = Number(hhmm[1]);
+    const minutes = Number(hhmm[2]);
+    return hours + (minutes / 60);
+  }
+  const value = parsePositiveNumber(text);
+  if (!value) return 0;
+  if (text.includes("min")) return value / 60;
+  if (text.includes("hora") || text.includes("h")) return value;
+  if (value > 20) return value / 60;
+  return value;
+}
+
+function parseLabeledMap(value, keyLimit = 120, valLimit = 120) {
+  const map = {};
+  for (const entry of splitPipeValues(value)) {
+    const idx = entry.lastIndexOf(":");
+    if (idx === -1) continue;
+    const key = stripDangerousText(entry.slice(0, idx), keyLimit);
+    const val = stripDangerousText(entry.slice(idx + 1), valLimit);
+    if (!key) continue;
+    map[normalizeServiceKey(key)] = val || "-";
+  }
+  return map;
+}
+
+function getMaterialMultiplier(value) {
+  const text = String(value || "").toLowerCase();
+  if (!text) return 1;
+  if (text.includes("nao") || text.includes("não")) return 1.35;
+  return 1;
+}
+
+function getDeadlineMultiplier(rawPrazo) {
+  const prazo = String(rawPrazo || "").toLowerCase();
+  if (!prazo) return 1;
+  if (prazo.includes("24h") || prazo.includes("imediato")) return 1.3;
+  if (prazo.includes("3 dia")) return 1.18;
+  if (prazo.includes("essa semana")) return 1.1;
+  return 1;
+}
+
+function getUnitPrice(flow, service) {
+  const table = SERVICE_BASE_PRICES[flow] || SERVICE_BASE_PRICES.DU;
+  const normalized = normalizeServiceKey(service);
+  if (table[normalized]) return table[normalized];
+  if (normalized.startsWith("outro")) return table.outro || 190;
+  return flow === "DR" ? 170 : 190;
+}
+
+function getRecurringVolumeMultiplier(totalQty) {
+  if (!Number.isFinite(totalQty) || totalQty <= 0) return 1;
+  if (totalQty >= 40) return 0.88;
+  if (totalQty >= 20) return 0.92;
+  if (totalQty >= 10) return 0.95;
+  return 1;
+}
+
+function suggestPackage(flow, totalQty, precoBase) {
+  if (flow === "DR") {
+    if (totalQty >= 40 || precoBase >= 8000) return "Pacote Escala";
+    if (totalQty >= 20 || precoBase >= 4500) return "Pacote Crescimento";
+    return "Pacote Essencial";
+  }
+  if (totalQty >= 20 || precoBase >= 5000) return "Lote Intensivo";
+  if (totalQty >= 8 || precoBase >= 2200) return "Projeto Plus";
+  return "Projeto Pontual";
+}
+
+function roundCurrency(value) {
+  const num = Number(value || 0);
+  if (!Number.isFinite(num)) return 0;
+  return Math.round(num * 100) / 100;
+}
+
+function calculateOrcamentoPricing(row) {
+  const flow = row?.Fluxo === "DR" ? "DR" : "DU";
+  const services = splitPipeValues(row?.ServicoOuOperacao);
+  const qtyParts = splitPipeValues(row?.Quantidade);
+  const materialMap = parseLabeledMap(row?.MaterialGravado, 180, 40);
+  const tempoMap = parseLabeledMap(row?.TempoBruto, 180, 40);
+
+  let subtotal = 0;
+  let totalQty = 0;
+
+  for (let idx = 0; idx < services.length; idx += 1) {
+    const service = services[idx];
+    const qtyRaw = qtyParts[idx] || "";
+    const qty = Math.max(1, Math.round(parsePositiveNumber(qtyRaw) || 1));
+    const key = normalizeServiceKey(service);
+    const material = materialMap[key] || "";
+    const tempoRaw = tempoMap[key] || "";
+    const tempoHours = parseHours(tempoRaw);
+
+    let itemTotal = qty * getUnitPrice(flow, service);
+    itemTotal *= getMaterialMultiplier(material);
+
+    if (tempoHours > 2) {
+      const extraHours = tempoHours - 2;
+      itemTotal *= (1 + Math.min(0.35, extraHours * 0.08));
+    }
+
+    subtotal += itemTotal;
+    totalQty += qty;
+  }
+
+  if (!subtotal) {
+    const fallbackQty = Math.max(1, Math.round(parsePositiveNumber(row?.Quantidade) || 1));
+    subtotal = fallbackQty * (flow === "DR" ? 170 : 190);
+    totalQty = fallbackQty;
+  }
+
+  const prazoMultiplier = getDeadlineMultiplier(row?.Prazo);
+  const volumeMultiplier = flow === "DR" ? getRecurringVolumeMultiplier(totalQty) : 1;
+  const precoBase = Math.max(150, roundCurrency(subtotal * prazoMultiplier * volumeMultiplier));
+  const precoFinal = precoBase;
+
+  return {
+    precoBase,
+    precoFinal,
+    pacoteSugerido: suggestPackage(flow, totalQty, precoBase),
+    statusOrcamento: STATUS_ORCAMENTO_PADRAO,
+    observacoesInternas: "",
+    linkPdf: ""
+  };
 }
 
 function buildLeadRow(body, request, ip, nowIso) {

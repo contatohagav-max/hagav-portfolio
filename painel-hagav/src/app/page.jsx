@@ -2,187 +2,278 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import {
-  Users, FileText, TrendingUp, Send, CheckCircle2, Percent,
+  Users,
+  Wallet,
+  CircleDollarSign,
+  BadgeDollarSign,
+  Percent,
+  Siren,
+  Clock3,
+  Timer,
   RefreshCw,
+  TrendingUp,
+  Filter,
+  Workflow,
 } from 'lucide-react';
 import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, Legend,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+  Legend,
+  ComposedChart,
+  Line,
+  CartesianGrid,
 } from 'recharts';
 import MetricCard from '@/components/dashboard/MetricCard';
 import RecentLeads from '@/components/dashboard/RecentLeads';
-import { fetchDashboardMetrics, fetchLeads, supabase } from '@/lib/supabase';
-import { fmtDate } from '@/lib/utils';
+import { fetchDashboardMetrics } from '@/lib/supabase';
+import { fmtBRL, fmtPercent, fmtHours } from '@/lib/utils';
 
-const COLORS_PIE = ['#C9A84C', '#3B82F6', '#8B5CF6', '#22C55E', '#EF4444', '#F97316'];
+const COLORS_PIE = ['#C9A84C', '#F97316', '#22C55E', '#3B82F6', '#8B5CF6'];
 
-const EMPTY_METRICS = {
-  totalLeads: 0,
-  novosHoje: 0,
-  orcamentosPendentes: 0,
-  propostasEnviadas: 0,
-  fechadosMes: 0,
-  taxaConversao: '0.0',
+const EMPTY_INSIGHTS = {
+  metrics: {
+    leadsMes: 0,
+    orcamentosAbertos: 0,
+    receitaFechadaMes: 0,
+    ticketMedio: 0,
+    taxaConversao: 0,
+    leadsUrgentes: 0,
+    followupAtrasado: 0,
+    tempoMedioResposta: 0,
+  },
+  charts: {
+    origemConversao: [],
+    servicosMaisPedidos: [],
+    receitaPorServico: [],
+    funilPipeline: [],
+    leadsPorUrgencia: [],
+  },
+  lists: {
+    ultimasEntradas: [],
+    orcUrgentes: [],
+    orcIncompletos: [],
+    orcSemRevisao: [],
+  },
 };
 
+function ChartCard({ title, icon: Icon, children, empty, loading }) {
+  return (
+    <div className="hcard">
+      <div className="flex items-center gap-2 mb-4">
+        <div className="w-8 h-8 rounded-lg bg-hagav-muted/40 border border-hagav-border flex items-center justify-center">
+          <Icon size={14} className="text-hagav-gold" />
+        </div>
+        <h3 className="text-sm font-semibold text-hagav-white">{title}</h3>
+      </div>
+      {empty ? (
+        <div className="h-[220px] flex items-center justify-center text-sm text-hagav-gray">
+          {loading ? 'Carregando...' : 'Sem dados suficientes ainda.'}
+        </div>
+      ) : children}
+    </div>
+  );
+}
+
 export default function DashboardPage() {
-  const [metrics, setMetrics]       = useState(EMPTY_METRICS);
-  const [leads, setLeads]           = useState([]);
-  const [originChart, setOriginChart] = useState([]);
-  const [statusChart, setStatusChart] = useState([]);
-  const [loading, setLoading]       = useState(true);
+  const [insights, setInsights] = useState(EMPTY_INSIGHTS);
+  const [loading, setLoading] = useState(true);
   const [lastRefresh, setLastRefresh] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [m, allLeads] = await Promise.all([
-        fetchDashboardMetrics(),
-        fetchLeads({ limit: 100 }),
-      ]);
-      setMetrics(m);
-      setLeads(allLeads.slice(0, 8));
-
-      // Origin chart
-      const origMap = {};
-      allLeads.forEach(l => {
-        const o = l.origem || 'Desconhecida';
-        origMap[o] = (origMap[o] || 0) + 1;
-      });
-      setOriginChart(Object.entries(origMap).map(([name, value]) => ({ name, value })));
-
-      // Status chart
-      const stMap = {};
-      allLeads.forEach(l => {
-        const s = l.status || 'novo';
-        stMap[s] = (stMap[s] || 0) + 1;
-      });
-      setStatusChart(Object.entries(stMap).map(([name, value]) => ({ name, value })));
-
+      const data = await fetchDashboardMetrics();
+      setInsights(data || EMPTY_INSIGHTS);
       setLastRefresh(new Date());
     } catch (err) {
       console.error('[Dashboard]', err);
+      setInsights(EMPTY_INSIGHTS);
     } finally {
       setLoading(false);
     }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+  }, [load]);
 
-  const METRICS = [
-    { label: 'Total leads',          value: metrics.totalLeads,          icon: Users,         accent: false },
-    { label: 'Novos hoje',           value: metrics.novosHoje,           icon: TrendingUp,    accent: false },
-    { label: 'Orçamentos pendentes', value: metrics.orcamentosPendentes, icon: FileText,      accent: true  },
-    { label: 'Propostas enviadas',   value: metrics.propostasEnviadas,   icon: Send,          accent: false },
-    { label: 'Fechados no mês',      value: metrics.fechadosMes,         icon: CheckCircle2,  accent: false },
-    { label: 'Taxa de conversão',    value: `${metrics.taxaConversao}%`, icon: Percent,       accent: false },
+  const m = insights.metrics;
+  const charts = insights.charts;
+
+  const metricCards = [
+    { label: 'Leads no mes', value: m.leadsMes, icon: Users },
+    { label: 'Orcamentos em aberto', value: fmtBRL(m.orcamentosAbertos), icon: Wallet, accent: true },
+    { label: 'Receita fechada no mes', value: fmtBRL(m.receitaFechadaMes), icon: CircleDollarSign },
+    { label: 'Ticket medio', value: fmtBRL(m.ticketMedio), icon: BadgeDollarSign },
+    { label: 'Taxa de conversao', value: fmtPercent(m.taxaConversao), icon: Percent },
+    { label: 'Leads urgentes', value: m.leadsUrgentes, icon: Siren },
+    { label: 'Follow-up atrasado', value: m.followupAtrasado, icon: Clock3 },
+    { label: 'Tempo medio de resposta', value: fmtHours(m.tempoMedioResposta), icon: Timer },
   ];
 
   return (
     <div className="space-y-6 animate-fade-in">
-
-      {/* Page header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold text-hagav-white">Dashboard</h1>
+          <h1 className="text-xl font-bold text-hagav-white">Dashboard comercial</h1>
           <p className="text-xs text-hagav-gray mt-0.5">
-            {lastRefresh ? `Atualizado às ${lastRefresh.toLocaleTimeString('pt-BR')}` : 'Carregando…'}
+            {lastRefresh ? `Atualizado as ${lastRefresh.toLocaleTimeString('pt-BR')}` : 'Carregando...'}
           </p>
         </div>
-        <button
-          onClick={load}
-          disabled={loading}
-          className="btn-ghost btn-sm"
-        >
+        <button onClick={load} disabled={loading} className="btn-ghost btn-sm">
           <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
           Atualizar
         </button>
       </div>
 
-      {/* Metric cards */}
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
-        {METRICS.map(m => (
-          <MetricCard key={m.label} {...m} />
+      <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
+        {metricCards.map((card) => (
+          <MetricCard key={card.label} {...card} />
         ))}
       </div>
 
-      {/* Charts row */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        <ChartCard
+          title="Origem x conversao"
+          icon={TrendingUp}
+          empty={charts.origemConversao.length === 0}
+          loading={loading}
+        >
+          <ResponsiveContainer width="100%" height={220}>
+            <ComposedChart data={charts.origemConversao} margin={{ top: 6, right: 8, left: -18, bottom: 0 }}>
+              <CartesianGrid stroke="#202020" strokeDasharray="3 3" vertical={false} />
+              <XAxis dataKey="origem" tick={{ fill: '#909090', fontSize: 11 }} axisLine={false} tickLine={false} />
+              <YAxis yAxisId="left" tick={{ fill: '#909090', fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
+              <YAxis yAxisId="right" orientation="right" tick={{ fill: '#909090', fontSize: 11 }} axisLine={false} tickLine={false} />
+              <Tooltip
+                contentStyle={{ background: '#161616', border: '1px solid #2A2A2A', borderRadius: 10, fontSize: 12 }}
+                formatter={(value, name) => {
+                  if (name === 'conversao') return [`${Number(value).toFixed(1)}%`, 'Conversao'];
+                  return [value, 'Leads'];
+                }}
+              />
+              <Bar yAxisId="left" dataKey="leads" fill="#C9A84C" radius={[5, 5, 0, 0]} maxBarSize={34} />
+              <Line yAxisId="right" type="monotone" dataKey="conversao" stroke="#3B82F6" strokeWidth={2} dot={{ r: 3 }} />
+            </ComposedChart>
+          </ResponsiveContainer>
+        </ChartCard>
 
-        {/* Origin chart */}
-        <div className="hcard">
-          <h3 className="text-sm font-semibold text-hagav-white mb-4">Origem dos leads</h3>
-          {originChart.length > 0 ? (
-            <ResponsiveContainer width="100%" height={200}>
-              <BarChart data={originChart} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
-                <XAxis
-                  dataKey="name"
-                  tick={{ fill: '#888', fontSize: 11 }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <YAxis
-                  tick={{ fill: '#888', fontSize: 11 }}
-                  axisLine={false}
-                  tickLine={false}
-                  allowDecimals={false}
-                />
-                <Tooltip
-                  contentStyle={{ background: '#1C1C1C', border: '1px solid #2A2A2A', borderRadius: 8, fontSize: 12 }}
-                  labelStyle={{ color: '#F5F5F5' }}
-                  itemStyle={{ color: '#C9A84C' }}
-                />
-                <Bar dataKey="value" fill="#C9A84C" radius={[4, 4, 0, 0]} maxBarSize={40} />
-              </BarChart>
-            </ResponsiveContainer>
-          ) : (
-            <div className="h-[200px] flex items-center justify-center text-sm text-hagav-gray">
-              {loading ? 'Carregando…' : 'Sem dados ainda.'}
+        <ChartCard
+          title="Leads por urgencia"
+          icon={Siren}
+          empty={charts.leadsPorUrgencia.length === 0}
+          loading={loading}
+        >
+          <ResponsiveContainer width="100%" height={220}>
+            <PieChart>
+              <Pie
+                data={charts.leadsPorUrgencia}
+                dataKey="total"
+                nameKey="urgencia"
+                cx="50%"
+                cy="50%"
+                outerRadius={76}
+                innerRadius={40}
+                paddingAngle={4}
+              >
+                {charts.leadsPorUrgencia.map((_, idx) => (
+                  <Cell key={idx} fill={COLORS_PIE[idx % COLORS_PIE.length]} />
+                ))}
+              </Pie>
+              <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11, color: '#999' }} />
+              <Tooltip
+                contentStyle={{ background: '#161616', border: '1px solid #2A2A2A', borderRadius: 10, fontSize: 12 }}
+              />
+            </PieChart>
+          </ResponsiveContainer>
+        </ChartCard>
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        <ChartCard
+          title="Servicos mais pedidos"
+          icon={Filter}
+          empty={charts.servicosMaisPedidos.length === 0}
+          loading={loading}
+        >
+          <ResponsiveContainer width="100%" height={220}>
+            <BarChart data={charts.servicosMaisPedidos} margin={{ top: 8, right: 8, left: -24, bottom: 0 }}>
+              <CartesianGrid stroke="#202020" strokeDasharray="3 3" vertical={false} />
+              <XAxis dataKey="servico" tick={{ fill: '#909090', fontSize: 10 }} axisLine={false} tickLine={false} />
+              <YAxis allowDecimals={false} tick={{ fill: '#909090', fontSize: 11 }} axisLine={false} tickLine={false} />
+              <Tooltip contentStyle={{ background: '#161616', border: '1px solid #2A2A2A', borderRadius: 10, fontSize: 12 }} />
+              <Bar dataKey="total" fill="#F59E0B" radius={[5, 5, 0, 0]} maxBarSize={34} />
+            </BarChart>
+          </ResponsiveContainer>
+        </ChartCard>
+
+        <ChartCard
+          title="Receita por servico"
+          icon={CircleDollarSign}
+          empty={charts.receitaPorServico.length === 0}
+          loading={loading}
+        >
+          <ResponsiveContainer width="100%" height={220}>
+            <BarChart data={charts.receitaPorServico} margin={{ top: 8, right: 8, left: -24, bottom: 0 }}>
+              <CartesianGrid stroke="#202020" strokeDasharray="3 3" vertical={false} />
+              <XAxis dataKey="servico" tick={{ fill: '#909090', fontSize: 10 }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fill: '#909090', fontSize: 11 }} axisLine={false} tickLine={false} />
+              <Tooltip
+                contentStyle={{ background: '#161616', border: '1px solid #2A2A2A', borderRadius: 10, fontSize: 12 }}
+                formatter={(value) => [fmtBRL(value), 'Receita']}
+              />
+              <Bar dataKey="valor" fill="#22C55E" radius={[5, 5, 0, 0]} maxBarSize={34} />
+            </BarChart>
+          </ResponsiveContainer>
+        </ChartCard>
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+        <div className="hcard xl:col-span-2">
+          <div className="flex items-center gap-2 mb-4">
+            <div className="w-8 h-8 rounded-lg bg-hagav-muted/40 border border-hagav-border flex items-center justify-center">
+              <Funnel size={14} className="text-hagav-gold" />
             </div>
-          )}
+            <h3 className="text-sm font-semibold text-hagav-white">Funil real</h3>
+          </div>
+          <div className="grid grid-cols-5 gap-2">
+            {charts.funilPipeline.map((step) => (
+              <div key={step.status} className="bg-hagav-surface border border-hagav-border rounded-lg p-3 text-center">
+                <p className="text-[10px] uppercase tracking-wider text-hagav-gray">{step.label}</p>
+                <p className="text-2xl font-bold text-hagav-white mt-1">{step.total}</p>
+              </div>
+            ))}
+          </div>
         </div>
 
-        {/* Status pie chart */}
         <div className="hcard">
-          <h3 className="text-sm font-semibold text-hagav-white mb-4">Status dos leads</h3>
-          {statusChart.length > 0 ? (
-            <ResponsiveContainer width="100%" height={200}>
-              <PieChart>
-                <Pie
-                  data={statusChart}
-                  dataKey="value"
-                  nameKey="name"
-                  cx="50%"
-                  cy="50%"
-                  outerRadius={70}
-                  innerRadius={40}
-                  paddingAngle={3}
-                >
-                  {statusChart.map((_, i) => (
-                    <Cell key={i} fill={COLORS_PIE[i % COLORS_PIE.length]} />
-                  ))}
-                </Pie>
-                <Tooltip
-                  contentStyle={{ background: '#1C1C1C', border: '1px solid #2A2A2A', borderRadius: 8, fontSize: 12 }}
-                  labelStyle={{ color: '#F5F5F5' }}
-                />
-                <Legend
-                  iconType="circle"
-                  iconSize={8}
-                  wrapperStyle={{ fontSize: 11, color: '#888' }}
-                />
-              </PieChart>
-            </ResponsiveContainer>
-          ) : (
-            <div className="h-[200px] flex items-center justify-center text-sm text-hagav-gray">
-              {loading ? 'Carregando…' : 'Sem dados ainda.'}
+          <h3 className="text-sm font-semibold text-hagav-white mb-3">Alertas operacionais</h3>
+          <div className="space-y-2">
+            <div className="bg-hagav-surface border border-red-500/20 rounded-lg p-3">
+              <p className="text-[11px] text-hagav-gray uppercase tracking-wider">Orcamentos urgentes</p>
+              <p className="text-lg font-semibold text-red-300">{insights.lists.orcUrgentes.length}</p>
             </div>
-          )}
+            <div className="bg-hagav-surface border border-yellow-500/20 rounded-lg p-3">
+              <p className="text-[11px] text-hagav-gray uppercase tracking-wider">Sem revisao</p>
+              <p className="text-lg font-semibold text-yellow-300">{insights.lists.orcSemRevisao.length}</p>
+            </div>
+            <div className="bg-hagav-surface border border-hagav-border rounded-lg p-3">
+              <p className="text-[11px] text-hagav-gray uppercase tracking-wider">Campos incompletos</p>
+              <p className="text-lg font-semibold text-hagav-light">{insights.lists.orcIncompletos.length}</p>
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Recent leads */}
-      <RecentLeads leads={leads} />
+      <RecentLeads leads={insights.lists.ultimasEntradas || []} />
     </div>
   );
 }
+

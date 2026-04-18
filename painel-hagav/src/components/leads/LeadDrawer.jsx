@@ -1,18 +1,52 @@
 'use client';
 
 import { useState } from 'react';
-import { X, MessageCircle, ExternalLink, Save, Loader2 } from 'lucide-react';
-import { LeadStatusBadge } from '@/components/ui/StatusBadge';
+import { X, MessageCircle, ExternalLink, Save, Loader2, PhoneCall } from 'lucide-react';
+import {
+  LeadStatusBadge,
+  PrioridadeBadge,
+  UrgenciaBadge,
+  TemperaturaBadge,
+} from '@/components/ui/StatusBadge';
 import { updateLead } from '@/lib/supabase';
-import { fmtDateTime, whatsappLink, classNames, LEAD_STATUS_LABELS } from '@/lib/utils';
+import { fmtDateTime, whatsappLink, LEAD_STATUS_LABELS, fmtBRL } from '@/lib/utils';
 
 const LEAD_STATUSES = Object.keys(LEAD_STATUS_LABELS);
 
+function toDateTimeLocal(iso) {
+  if (!iso) return '';
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '';
+  const offset = date.getTimezoneOffset();
+  const local = new Date(date.getTime() - offset * 60000);
+  return local.toISOString().slice(0, 16);
+}
+
+function fromDateTimeLocal(value) {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toISOString();
+}
+
+function InfoCard({ label, value }) {
+  return (
+    <div className="bg-hagav-surface border border-hagav-border rounded-lg p-3">
+      <p className="text-[10px] text-hagav-gray uppercase tracking-wider mb-1">{label}</p>
+      <p className="text-sm text-hagav-light font-medium break-all">{value || '—'}</p>
+    </div>
+  );
+}
+
 export default function LeadDrawer({ lead, onClose, onUpdated }) {
-  const [status, setStatus]     = useState(lead?.status ?? 'novo');
-  const [obs, setObs]           = useState(lead?.observacoes ?? '');
-  const [saving, setSaving]     = useState(false);
-  const [error, setError]       = useState('');
+  const [status, setStatus] = useState(lead?.status ?? 'novo');
+  const [obs, setObs] = useState(lead?.observacoes ?? '');
+  const [proximaAcao, setProximaAcao] = useState(lead?.proxima_acao ?? '');
+  const [prioridade, setPrioridade] = useState(lead?.prioridade ?? 'media');
+  const [urgencia, setUrgencia] = useState(lead?.urgencia ?? 'media');
+  const [ultimoContato, setUltimoContato] = useState(toDateTimeLocal(lead?.ultimo_contato_em));
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
 
   if (!lead) return null;
 
@@ -20,7 +54,14 @@ export default function LeadDrawer({ lead, onClose, onUpdated }) {
     setSaving(true);
     setError('');
     try {
-      const updated = await updateLead(lead.id, { status, observacoes: obs });
+      const updated = await updateLead(lead.id, {
+        status,
+        observacoes: obs,
+        proxima_acao: proximaAcao,
+        prioridade,
+        urgencia,
+        ultimo_contato_em: fromDateTimeLocal(ultimoContato),
+      });
       onUpdated?.(updated);
       onClose();
     } catch (err) {
@@ -30,84 +71,115 @@ export default function LeadDrawer({ lead, onClose, onUpdated }) {
     }
   }
 
-  const waLink = whatsappLink(lead.whatsapp, `Olá ${lead.nome}, aqui é a HAGAV Studio!`);
+  function markContactNow() {
+    const now = new Date();
+    setUltimoContato(toDateTimeLocal(now.toISOString()));
+  }
+
+  const waLink = whatsappLink(lead.whatsapp, `Ola ${lead.nome || ''}, aqui e a HAGAV Studio!`);
 
   return (
     <>
-      {/* Overlay */}
       <div className="drawer-overlay" onClick={onClose} />
 
-      {/* Panel */}
       <aside className="drawer-panel flex flex-col">
-        {/* Header */}
         <div className="flex items-center justify-between px-6 py-5 border-b border-hagav-border shrink-0">
           <div>
             <p className="text-xs text-hagav-gray uppercase tracking-wider mb-1">Lead #{lead.id}</p>
             <h2 className="text-lg font-bold text-hagav-white">{lead.nome || 'Sem nome'}</h2>
+            <p className="text-xs text-hagav-gray mt-1">{lead.fluxo || '—'} · {lead.origem || '—'}</p>
           </div>
           <button onClick={onClose} className="text-hagav-gray hover:text-hagav-white p-2 rounded-lg hover:bg-hagav-muted/30 transition-colors">
             <X size={18} />
           </button>
         </div>
 
-        {/* Body */}
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
-
-          {/* Info grid */}
-          <div className="grid grid-cols-2 gap-3">
-            {[
-              { label: 'WhatsApp',      value: lead.whatsapp || '—' },
-              { label: 'Origem',        value: lead.origem || '—' },
-              { label: 'Fluxo',         value: lead.fluxo || '—' },
-              { label: 'Página',        value: lead.pagina || '—' },
-              { label: 'Criado em',     value: fmtDateTime(lead.created_at) },
-            ].map(({ label, value }) => (
-              <div key={label} className="bg-hagav-surface border border-hagav-border rounded-lg p-3">
-                <p className="text-[10px] text-hagav-gray uppercase tracking-wider mb-1">{label}</p>
-                <p className="text-sm text-hagav-light font-medium break-all">{value}</p>
-              </div>
-            ))}
-
-            <div className="bg-hagav-surface border border-hagav-border rounded-lg p-3">
-              <p className="text-[10px] text-hagav-gray uppercase tracking-wider mb-1">Status atual</p>
-              <LeadStatusBadge status={lead.status} />
-            </div>
+          <div className="grid grid-cols-2 gap-2">
+            <InfoCard label="WhatsApp" value={lead.whatsapp} />
+            <InfoCard label="Pagina" value={lead.pagina} />
+            <InfoCard label="Servico" value={lead.servico} />
+            <InfoCard label="Valor estimado" value={fmtBRL(lead.valor_estimado)} />
+            <InfoCard label="Criado em" value={fmtDateTime(lead.created_at)} />
+            <InfoCard label="Ultimo contato" value={lead.ultimo_contato_em ? fmtDateTime(lead.ultimo_contato_em) : 'Sem contato'} />
           </div>
 
-          {/* Observações do lead */}
-          {lead.observacoes && (
-            <div>
-              <p className="text-xs text-hagav-gray uppercase tracking-wider mb-2">Observações (lead)</p>
-              <div className="bg-hagav-surface border border-hagav-border rounded-lg p-3 text-sm text-hagav-light whitespace-pre-wrap">
-                {lead.observacoes}
-              </div>
-            </div>
-          )}
+          <div className="flex flex-wrap gap-2">
+            <LeadStatusBadge status={lead.status} />
+            <PrioridadeBadge prioridade={lead.prioridade} />
+            <UrgenciaBadge urgencia={lead.urgencia} />
+            <TemperaturaBadge temperatura={lead.temperatura} />
+            <span className="badge bg-hagav-gold/15 text-hagav-gold border-hagav-gold/30">Score {lead.score_lead ?? 0}</span>
+          </div>
+
+          <div className="bg-hagav-surface border border-hagav-border rounded-lg p-3">
+            <p className="text-[10px] text-hagav-gray uppercase tracking-wider mb-1">Resumo comercial</p>
+            <p className="text-sm text-hagav-light whitespace-pre-wrap">{lead.resumo_comercial || 'Sem resumo.'}</p>
+          </div>
 
           <div className="gold-line" />
 
-          {/* Editable fields */}
           <div className="space-y-3">
-            <div>
-              <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Alterar status</label>
-              <select
-                value={status}
-                onChange={e => setStatus(e.target.value)}
-                className="hselect w-full"
-              >
-                {LEAD_STATUSES.map(s => (
-                  <option key={s} value={s}>{LEAD_STATUS_LABELS[s]}</option>
-                ))}
-              </select>
+            <div className="grid grid-cols-3 gap-2">
+              <div>
+                <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Status</label>
+                <select value={status} onChange={(e) => setStatus(e.target.value)} className="hselect w-full">
+                  {LEAD_STATUSES.map((item) => (
+                    <option key={item} value={item}>{LEAD_STATUS_LABELS[item]}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Prioridade</label>
+                <select value={prioridade} onChange={(e) => setPrioridade(e.target.value)} className="hselect w-full">
+                  <option value="alta">Alta</option>
+                  <option value="media">Media</option>
+                  <option value="baixa">Baixa</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Urgencia</label>
+                <select value={urgencia} onChange={(e) => setUrgencia(e.target.value)} className="hselect w-full">
+                  <option value="alta">Alta</option>
+                  <option value="media">Media</option>
+                  <option value="baixa">Baixa</option>
+                </select>
+              </div>
             </div>
 
             <div>
-              <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Observações internas</label>
+              <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Proxima acao</label>
+              <input
+                type="text"
+                value={proximaAcao}
+                onChange={(e) => setProximaAcao(e.target.value)}
+                className="hinput w-full"
+                placeholder="Ex.: enviar proposta ate 18h"
+              />
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-xs text-hagav-gray uppercase tracking-wider block">Ultimo contato</label>
+                <button type="button" onClick={markContactNow} className="text-xs text-hagav-gold hover:text-hagav-gold-light">
+                  Marcar agora
+                </button>
+              </div>
+              <input
+                type="datetime-local"
+                value={ultimoContato}
+                onChange={(e) => setUltimoContato(e.target.value)}
+                className="hinput w-full"
+              />
+            </div>
+
+            <div>
+              <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Observacoes internas</label>
               <textarea
                 value={obs}
-                onChange={e => setObs(e.target.value)}
+                onChange={(e) => setObs(e.target.value)}
                 rows={4}
-                placeholder="Anotações internas sobre este lead…"
+                placeholder="Anotacoes internas sobre este lead..."
                 className="hinput w-full resize-none"
               />
             </div>
@@ -118,23 +190,17 @@ export default function LeadDrawer({ lead, onClose, onUpdated }) {
           )}
         </div>
 
-        {/* Footer */}
         <div className="px-6 py-4 border-t border-hagav-border shrink-0 flex items-center gap-3">
-          <a
-            href={waLink}
-            target="_blank"
-            rel="noreferrer"
-            className="btn-ghost flex-1 justify-center"
-          >
+          <a href={waLink} target="_blank" rel="noreferrer" className="btn-ghost flex-1 justify-center">
             <MessageCircle size={15} />
             WhatsApp
             <ExternalLink size={12} className="opacity-50" />
           </a>
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="btn-gold flex-1 justify-center"
-          >
+          <button type="button" onClick={markContactNow} className="btn-ghost">
+            <PhoneCall size={15} />
+            Contato
+          </button>
+          <button onClick={handleSave} disabled={saving} className="btn-gold flex-1 justify-center">
             {saving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
             Salvar
           </button>

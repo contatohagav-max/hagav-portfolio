@@ -450,6 +450,106 @@ function buildResumoOrcamento(row) {
   return stripDangerousText(parts.join(" | "), 2000);
 }
 
+function inferUrgenciaFromPrazo(prazoRaw) {
+  const prazo = String(prazoRaw || "").toLowerCase();
+  if (!prazo) return "media";
+  if (prazo.includes("24h") || prazo.includes("imediato") || prazo.includes("urgente")) return "alta";
+  if (prazo.includes("3 dia") || prazo.includes("essa semana") || prazo.includes("semana")) return "media";
+  if (prazo.includes("sem pressa") || prazo.includes("analisando")) return "baixa";
+  return "media";
+}
+
+function inferTemperaturaByScore(score) {
+  if (score >= 75) return "Quente";
+  if (score >= 45) return "Morno";
+  return "Frio";
+}
+
+function inferPrioridadeByScore(score, urgencia) {
+  if (urgencia === "alta" || score >= 75) return "alta";
+  if (urgencia === "baixa" && score < 45) return "baixa";
+  return "media";
+}
+
+function inferMaterialState(raw) {
+  const text = String(raw || "").toLowerCase();
+  if (!text) return "desconhecido";
+  if (text.includes("sim")) return "sim";
+  if (text.includes("nao") || text.includes("não")) return "nao";
+  return "parcial";
+}
+
+function estimateLeadScoreFromRow(row, pricing) {
+  const flow = row?.Fluxo === "DR" ? "DR" : "DU";
+  const urgencia = inferUrgenciaFromPrazo(row?.Prazo);
+  const material = inferMaterialState(row?.MaterialGravado);
+  const quantidade = Math.max(1, Number(pricing?.totalQuantidade || parsePositiveNumber(row?.Quantidade) || 1));
+  const tempoHours = parseHours(row?.TempoBruto);
+  const hasReferencia = stripDangerousText(String(row?.Referencia || ""), LIMITS.referencia).length > 3;
+  const servico = String(row?.ServicoOuOperacao || "").toLowerCase();
+  const servicoAltoValor = /(criativo|ads|anuncio|lancamento|youtube|estrutura|recorrente)/.test(servico);
+
+  let score = 20;
+  if (flow === "DR") score += 20;
+  if (servicoAltoValor) score += 12;
+
+  if (quantidade >= 20) score += 20;
+  else if (quantidade >= 10) score += 14;
+  else if (quantidade >= 5) score += 8;
+  else if (quantidade >= 2) score += 4;
+
+  if (material === "sim") score += 10;
+  if (material === "nao") score -= 4;
+
+  if (tempoHours >= 10) score += 10;
+  else if (tempoHours >= 4) score += 6;
+
+  if (hasReferencia) score += 8;
+
+  if (urgencia === "alta") score += 18;
+  else if (urgencia === "media") score += 8;
+  else score -= 6;
+
+  const obs = stripDangerousText(String(row?.Observacoes || ""), 500);
+  if (obs.length >= 80) score += 4;
+
+  return Math.min(100, Math.max(0, Math.round(score)));
+}
+
+function estimateMargemFromPricing(row, pricing) {
+  const valor = Number(pricing?.precoFinal || pricing?.precoBase || 0);
+  if (!Number.isFinite(valor) || valor <= 0) return 0;
+
+  const urgencia = inferUrgenciaFromPrazo(row?.Prazo);
+  const material = inferMaterialState(row?.MaterialGravado);
+  const tempoHours = parseHours(row?.TempoBruto);
+  const flow = row?.Fluxo === "DR" ? "DR" : "DU";
+
+  let costRatio = 0.46;
+  if (material === "nao") costRatio += 0.12;
+  if (tempoHours >= 8) costRatio += 0.09;
+  if (urgencia === "alta") costRatio += 0.08;
+  if (flow === "DR") costRatio -= 0.05;
+
+  costRatio = Math.min(0.9, Math.max(0.25, costRatio));
+  const margem = ((valor - (valor * costRatio)) / valor) * 100;
+  return roundCurrency(Math.min(95, Math.max(0, margem)));
+}
+
+function buildResumoComercial(row, pricing, score, urgencia, prioridade) {
+  const parts = [
+    row?.Fluxo || "",
+    `Servico: ${normalizeServicoCurto(row?.ServicoOuOperacao || "") || "-"}`,
+    `Quantidade: ${row?.Quantidade || "-"}`,
+    `Prazo: ${row?.Prazo || "-"}`,
+    `Urgencia: ${urgencia}`,
+    `Prioridade: ${prioridade}`,
+    `Score: ${score}`,
+    `Valor estimado: ${pricing?.precoFinal || pricing?.precoBase || 0}`
+  ];
+  return stripDangerousText(parts.join(" | "), 1800);
+}
+
 async function saveLeadToSupabase(env, lead) {
   const config = getSupabaseConfig(env);
   if (!config.url || !config.writeKey || config.missing.length > 0) {
@@ -461,6 +561,14 @@ async function saveLeadToSupabase(env, lead) {
 
   const row = lead?.row || {};
   const pricing = calculateOrcamentoPricing(row);
+  const urgencia = inferUrgenciaFromPrazo(row.Prazo);
+  const scoreLead = estimateLeadScoreFromRow(row, pricing);
+  const prioridade = inferPrioridadeByScore(scoreLead, urgencia);
+  const temperatura = inferTemperaturaByScore(scoreLead);
+  const valorEstimado = Number(pricing.precoFinal || pricing.precoBase || 0);
+  const margemEstimada = estimateMargemFromPricing(row, pricing);
+  const resumoComercial = buildResumoComercial(row, pricing, scoreLead, urgencia, prioridade);
+
   const orcamentoInsert = {
     fluxo: row.Fluxo || "",
     pagina: row.Pagina || "orcamento",
@@ -479,6 +587,15 @@ async function saveLeadToSupabase(env, lead) {
     resumo_orcamento: buildResumoOrcamento(row),
     preco_base: Number(pricing.precoBase || 0),
     preco_final: Number(pricing.precoFinal || 0),
+    valor_estimado: valorEstimado,
+    margem_estimada: margemEstimada,
+    score_lead: scoreLead,
+    urgencia,
+    prioridade,
+    temperatura,
+    proxima_acao: "",
+    ultimo_contato_em: null,
+    resumo_comercial: resumoComercial,
     pacote_sugerido: stripDangerousText(pricing.pacoteSugerido || "", 120),
     status_orcamento: stripDangerousText(pricing.statusOrcamento || STATUS_ORCAMENTO_PADRAO, 60),
     observacoes_internas: stripDangerousText(pricing.observacoesInternas || "", 500),
@@ -487,6 +604,7 @@ async function saveLeadToSupabase(env, lead) {
 
   const orcamentoResult = await postSupabaseRowWithColumnFallback(config, "orcamentos", orcamentoInsert);
   if (!orcamentoResult.ok) return orcamentoResult;
+
   const leadInsert = {
     fluxo: row.Fluxo || "",
     pagina: row.Pagina || "orcamento",
@@ -494,7 +612,23 @@ async function saveLeadToSupabase(env, lead) {
     status: row.Status || STATUS_PADRAO,
     nome: row.Nome || "",
     whatsapp: row.WhatsApp || "",
-    observacoes: row.Observacoes || ""
+    servico: stripDangerousText(normalizeServicoCurto(row.ServicoOuOperacao || ""), 300),
+    quantidade: row.Quantidade || "",
+    material_gravado: row.MaterialGravado || "",
+    tempo_bruto: row.TempoBruto || "",
+    prazo: row.Prazo || "",
+    referencia: row.Referencia || "",
+    observacoes: row.Observacoes || "",
+    score_lead: scoreLead,
+    urgencia,
+    prioridade,
+    temperatura,
+    valor_estimado: valorEstimado,
+    margem_estimada: margemEstimada,
+    proxima_acao: "",
+    ultimo_contato_em: null,
+    resumo_orcamento: buildResumoOrcamento(row),
+    resumo_comercial: resumoComercial
   };
   const leadResult = await postSupabaseRowWithColumnFallback(config, "leads", leadInsert);
   if (!leadResult.ok) {
@@ -829,6 +963,7 @@ function calculateOrcamentoPricing(row) {
   return {
     precoBase,
     precoFinal,
+    totalQuantidade: totalQty,
     pacoteSugerido: suggestPackage(flow, totalQty, precoBase),
     statusOrcamento: STATUS_ORCAMENTO_PADRAO,
     observacoesInternas: "",
@@ -1031,4 +1166,5 @@ export async function onRequest(context) {
   }
   return json({ ok: false, error: "Method not allowed" }, 405);
 }
+
 

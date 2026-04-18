@@ -1,163 +1,210 @@
 'use client';
 
-import { useState } from 'react';
-import { Save, Eye, EyeOff, Database, Palette, Bell, Shield } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Save, RefreshCw, SlidersHorizontal, BarChart3, ShieldCheck } from 'lucide-react';
+import { fetchCommercialSettings, saveCommercialSettings } from '@/lib/supabase';
+import { COMMERCIAL_DEFAULTS } from '@/lib/commercial';
 
-function Section({ icon: Icon, title, children }) {
+function Section({ icon: Icon, title, description, children }) {
   return (
     <div className="hcard space-y-4">
-      <div className="flex items-center gap-2.5 pb-3 border-b border-hagav-border">
+      <div className="flex items-start gap-2.5 pb-3 border-b border-hagav-border">
         <div className="w-8 h-8 rounded-lg bg-hagav-muted/40 border border-hagav-border flex items-center justify-center">
           <Icon size={15} className="text-hagav-gold" />
         </div>
-        <h2 className="text-sm font-semibold text-hagav-white">{title}</h2>
+        <div>
+          <h2 className="text-sm font-semibold text-hagav-white">{title}</h2>
+          {description && <p className="text-xs text-hagav-gray mt-0.5">{description}</p>}
+        </div>
       </div>
       {children}
     </div>
   );
 }
 
-function Field({ label, description, children }) {
+function NumberField({ label, value, onChange, step = 1, min = 0 }) {
   return (
-    <div className="flex flex-col sm:flex-row sm:items-start gap-2">
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-hagav-light">{label}</p>
-        {description && <p className="text-xs text-hagav-gray mt-0.5">{description}</p>}
-      </div>
-      <div className="sm:w-64">{children}</div>
-    </div>
+    <label className="space-y-1">
+      <span className="text-xs text-hagav-gray uppercase tracking-wider">{label}</span>
+      <input
+        type="number"
+        className="hinput w-full"
+        value={value}
+        min={min}
+        step={step}
+        onChange={(event) => onChange(Number(event.target.value))}
+      />
+    </label>
   );
 }
 
 export default function ConfiguracoesPage() {
-  const [supabaseUrl, setSupabaseUrl]   = useState(process.env.NEXT_PUBLIC_SUPABASE_URL ?? '');
-  const [supabaseKey, setSupabaseKey]   = useState('');
-  const [showKey, setShowKey]           = useState(false);
-  const [adminKey, setAdminKey]         = useState('');
-  const [showAdminKey, setShowAdminKey] = useState(false);
-  const [saved, setSaved]               = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState('');
 
-  function handleSave() {
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+  const [scoreWeights, setScoreWeights] = useState(COMMERCIAL_DEFAULTS.scoreWeights);
+  const [pricing, setPricing] = useState(COMMERCIAL_DEFAULTS.pricing);
+  const [pipelineStatusText, setPipelineStatusText] = useState(COMMERCIAL_DEFAULTS.pipelineStatus.join(', '));
+
+  async function load() {
+    setLoading(true);
+    setError('');
+    try {
+      const settings = await fetchCommercialSettings();
+      setScoreWeights(settings.scoreWeights || COMMERCIAL_DEFAULTS.scoreWeights);
+      setPricing(settings.pricing || COMMERCIAL_DEFAULTS.pricing);
+      setPipelineStatusText((settings.pipelineStatus || COMMERCIAL_DEFAULTS.pipelineStatus).join(', '));
+    } catch (err) {
+      console.error('[Configuracoes]', err);
+      setError('Nao foi possivel carregar configuracoes.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    load();
+  }, []);
+
+  async function handleSave() {
+    setSaving(true);
+    setSaved(false);
+    setError('');
+
+    const pipelineStatus = pipelineStatusText
+      .split(',')
+      .map((item) => item.trim().toLowerCase())
+      .filter(Boolean);
+
+    try {
+      await saveCommercialSettings({
+        scoreWeights,
+        pricing,
+        pipelineStatus,
+      });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2200);
+    } catch (err) {
+      console.error('[Configuracoes] save', err);
+      setError(err.message || 'Falha ao salvar configuracoes.');
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
-    <div className="space-y-5 animate-fade-in max-w-2xl">
-      {/* Header */}
-      <div>
-        <h1 className="text-xl font-bold text-hagav-white">Configurações</h1>
-        <p className="text-xs text-hagav-gray mt-0.5">Preferências do painel interno HAGAV.</p>
+    <div className="space-y-5 animate-fade-in max-w-4xl">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-bold text-hagav-white">Configuracoes comerciais</h1>
+          <p className="text-xs text-hagav-gray mt-0.5">Ajuste regras de score, precificacao e pipeline sem alterar codigo.</p>
+        </div>
+        <button onClick={load} disabled={loading} className="btn-ghost btn-sm">
+          <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
+          Recarregar
+        </button>
       </div>
 
-      {/* Supabase */}
-      <Section icon={Database} title="Conexão Supabase">
-        <Field
-          label="URL do projeto"
-          description="NEXT_PUBLIC_SUPABASE_URL no .env.local"
-        >
+      <Section
+        icon={BarChart3}
+        title="Pesos de score"
+        description="Ajusta como o painel classifica leads em quente, morno e frio."
+      >
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <NumberField
+            label="Urgencia alta"
+            value={scoreWeights.urgenciaAlta}
+            onChange={(value) => setScoreWeights((prev) => ({ ...prev, urgenciaAlta: value }))}
+          />
+          <NumberField
+            label="Fluxo recorrente"
+            value={scoreWeights.fluxoRecorrente}
+            onChange={(value) => setScoreWeights((prev) => ({ ...prev, fluxoRecorrente: value }))}
+          />
+          <NumberField
+            label="Referencia visual"
+            value={scoreWeights.referenciaVisual}
+            onChange={(value) => setScoreWeights((prev) => ({ ...prev, referenciaVisual: value }))}
+          />
+          <NumberField
+            label="Material gravado"
+            value={scoreWeights.materialGravado}
+            onChange={(value) => setScoreWeights((prev) => ({ ...prev, materialGravado: value }))}
+          />
+          <NumberField
+            label="Servico alto valor"
+            value={scoreWeights.servicoAltoValor}
+            onChange={(value) => setScoreWeights((prev) => ({ ...prev, servicoAltoValor: value }))}
+          />
+        </div>
+      </Section>
+
+      <Section
+        icon={SlidersHorizontal}
+        title="Regras de precificacao"
+        description="Multiplicadores base usados no preco sugerido e valor estimado."
+      >
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <NumberField
+            label="Urgencia 24h"
+            value={pricing.urgencia24h}
+            step={0.01}
+            min={0.5}
+            onChange={(value) => setPricing((prev) => ({ ...prev, urgencia24h: value }))}
+          />
+          <NumberField
+            label="Urgencia semana"
+            value={pricing.urgenciaSemana}
+            step={0.01}
+            min={0.5}
+            onChange={(value) => setPricing((prev) => ({ ...prev, urgenciaSemana: value }))}
+          />
+          <NumberField
+            label="Material nao gravado"
+            value={pricing.materialNaoGravado}
+            step={0.01}
+            min={0.5}
+            onChange={(value) => setPricing((prev) => ({ ...prev, materialNaoGravado: value }))}
+          />
+          <NumberField
+            label="Recorrencia 40+"
+            value={pricing.recorrencia40Plus}
+            step={0.01}
+            min={0.5}
+            onChange={(value) => setPricing((prev) => ({ ...prev, recorrencia40Plus: value }))}
+          />
+        </div>
+      </Section>
+
+      <Section
+        icon={ShieldCheck}
+        title="Pipeline e operacao"
+        description="Lista de status validos usados no funil."
+      >
+        <label className="space-y-1 block">
+          <span className="text-xs text-hagav-gray uppercase tracking-wider">Status (separados por virgula)</span>
           <input
             type="text"
-            value={supabaseUrl}
-            onChange={e => setSupabaseUrl(e.target.value)}
-            placeholder="https://xxx.supabase.co"
-            className="hinput w-full text-sm"
+            value={pipelineStatusText}
+            onChange={(event) => setPipelineStatusText(event.target.value)}
+            className="hinput w-full"
           />
-        </Field>
-        <Field
-          label="Chave anon"
-          description="NEXT_PUBLIC_SUPABASE_ANON_KEY no .env.local"
-        >
-          <div className="relative">
-            <input
-              type={showKey ? 'text' : 'password'}
-              value={supabaseKey}
-              onChange={e => setSupabaseKey(e.target.value)}
-              placeholder="eyJhbGciOiJIUzI1NiIs…"
-              className="hinput w-full text-sm pr-9"
-            />
-            <button
-              type="button"
-              onClick={() => setShowKey(v => !v)}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-hagav-gray hover:text-hagav-light"
-            >
-              {showKey ? <EyeOff size={13} /> : <Eye size={13} />}
-            </button>
-          </div>
-        </Field>
-        <div className="bg-hagav-surface border border-hagav-border rounded-lg p-3 text-xs text-hagav-gray">
-          <strong className="text-hagav-light">Importante:</strong> as credenciais são lidas do arquivo{' '}
-          <code className="bg-hagav-muted/50 px-1 py-0.5 rounded text-hagav-gold">.env.local</code>.
-          Configure o arquivo e reinicie o servidor.
-        </div>
+        </label>
+        <p className="text-xs text-hagav-gray">
+          Sugestao: novo, chamado, proposta enviada, fechado, perdido.
+        </p>
       </Section>
 
-      {/* Acesso */}
-      <Section icon={Shield} title="Acesso interno">
-        <Field
-          label="Chave de acesso admin"
-          description="Proteção simples do painel. Use variável de ambiente ADMIN_KEY."
-        >
-          <div className="relative">
-            <input
-              type={showAdminKey ? 'text' : 'password'}
-              value={adminKey}
-              onChange={e => setAdminKey(e.target.value)}
-              placeholder="••••••••"
-              className="hinput w-full text-sm pr-9"
-            />
-            <button
-              type="button"
-              onClick={() => setShowAdminKey(v => !v)}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-hagav-gray hover:text-hagav-light"
-            >
-              {showAdminKey ? <EyeOff size={13} /> : <Eye size={13} />}
-            </button>
-          </div>
-        </Field>
-      </Section>
+      {error && (
+        <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{error}</p>
+      )}
 
-      {/* Notificações */}
-      <Section icon={Bell} title="Notificações">
-        {[
-          { label: 'Novo lead recebido',         description: 'Alerta ao receber um lead novo' },
-          { label: 'Orçamento pendente revisão', description: 'Lembrete de orçamentos em espera' },
-          { label: 'Lead sem contato em 48h',    description: 'Aviso de leads esquecidos' },
-        ].map(({ label, description }) => (
-          <Field key={label} label={label} description={description}>
-            <label className="flex items-center gap-2 cursor-pointer">
-              <div className="relative">
-                <input type="checkbox" className="sr-only peer" defaultChecked />
-                <div className="w-9 h-5 bg-hagav-muted peer-checked:bg-hagav-gold rounded-full transition-colors" />
-                <div className="absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform peer-checked:translate-x-4 shadow" />
-              </div>
-              <span className="text-xs text-hagav-gray peer-checked:text-hagav-light">Ativo</span>
-            </label>
-          </Field>
-        ))}
-        <div className="bg-hagav-surface border border-hagav-border rounded-lg p-3 text-xs text-hagav-gray">
-          Notificações em tempo real via Supabase Realtime estão prontas para ativar. Configure webhooks conforme necessário.
-        </div>
-      </Section>
-
-      {/* Aparência */}
-      <Section icon={Palette} title="Aparência">
-        <Field label="Tema" description="O painel é fixo em modo escuro premium HAGAV.">
-          <div className="flex items-center gap-2">
-            <div className="w-5 h-5 rounded-full bg-hagav-black border border-hagav-gold" />
-            <span className="text-sm text-hagav-light">Escuro · HAGAV Gold</span>
-          </div>
-        </Field>
-        <Field label="Versão" description="Versão atual do painel.">
-          <span className="text-sm text-hagav-gray font-mono">v1.0.0</span>
-        </Field>
-      </Section>
-
-      {/* Save */}
       <div className="flex justify-end">
-        <button onClick={handleSave} className="btn-gold">
-          <Save size={14} />
-          {saved ? 'Salvo!' : 'Salvar configurações'}
+        <button onClick={handleSave} disabled={saving || loading} className="btn-gold">
+          {saving ? <RefreshCw size={14} className="animate-spin" /> : <Save size={14} />}
+          {saved ? 'Salvo!' : 'Salvar configuracoes'}
         </button>
       </div>
     </div>

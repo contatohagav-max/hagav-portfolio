@@ -214,7 +214,23 @@ export async function onRequestPost(context) {
       status: "novo",
       nome: "",
       whatsapp: "",
-      observacoes
+      servico: "Clique no WhatsApp",
+      quantidade: "",
+      material_gravado: "",
+      tempo_bruto: "",
+      prazo: "",
+      referencia: "",
+      observacoes,
+      score_lead: 18,
+      urgencia: "baixa",
+      prioridade: "baixa",
+      temperatura: "Frio",
+      valor_estimado: 0,
+      margem_estimada: 0,
+      proxima_acao: "",
+      ultimo_contato_em: null,
+      resumo_orcamento: "WhatsApp | Evento de interesse sem formulario",
+      resumo_comercial: `WhatsApp | Origem: ${origem} | Evento de interesse`
     }
   });
 
@@ -227,3 +243,4 @@ export async function onRequest(context) {
   }
   return json({ ok: false, error: "Method not allowed" }, 405);
 }
+

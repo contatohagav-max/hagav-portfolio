@@ -1,13 +1,17 @@
 'use client';
 
 import { useState } from 'react';
-import { LogIn, Loader2, Eye, EyeOff, Zap } from 'lucide-react';
+// Using img instead of next/image to avoid basePath prefix on static asset
+import { LogIn, Loader2, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
+
+const TEST_LOGIN_EMAIL = 'admin.hagav@gmail.com';
+const TEST_LOGIN_PASSWORD = '123';
 
 export default function LoginScreen() {
   const { login } = useAuth();
-  const [email, setEmail]       = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail]       = useState(TEST_LOGIN_EMAIL);
+  const [password, setPassword] = useState(TEST_LOGIN_PASSWORD);
   const [showPw, setShowPw]     = useState(false);
   const [error, setError]       = useState('');
   const [loading, setLoading]   = useState(false);
@@ -32,22 +36,25 @@ export default function LoginScreen() {
     <div className="min-h-screen bg-hagav-black flex items-center justify-center p-4">
       {/* Background glow */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-hagav-gold/5 rounded-full blur-3xl" />
+        <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-hagav-gold/5 rounded-full blur-3xl" />
       </div>
 
       <div className="relative w-full max-w-sm animate-slide-up">
         {/* Logo */}
         <div className="flex flex-col items-center mb-8">
-          <div className="w-12 h-12 rounded-xl bg-gold-gradient flex items-center justify-center mb-4 shadow-gold">
-            <Zap size={22} className="text-hagav-black" fill="currentColor" />
-          </div>
-          <h1 className="text-2xl font-bold tracking-widest text-hagav-gold uppercase">HAGAV</h1>
-          <p className="text-xs text-hagav-gray mt-1 tracking-wider">Painel Interno</p>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/hagav-logo.png"
+            alt="HAGAV Studio"
+            className="h-20 w-auto object-contain drop-shadow-lg"
+          />
+          <p className="text-xs text-hagav-gray mt-3 tracking-wider uppercase">Painel Interno</p>
         </div>
 
         {/* Card */}
-        <div className="bg-hagav-dark border border-hagav-border rounded-2xl p-7 shadow-modal">
-          <div className="absolute top-0 left-8 right-8 h-px bg-gold-gradient opacity-60" />
+        <div className="relative bg-hagav-dark border border-hagav-border rounded-2xl p-7 shadow-modal overflow-hidden">
+          {/* top accent */}
+          <div className="absolute top-0 left-0 right-0 h-px bg-gold-gradient" />
 
           <h2 className="text-sm font-semibold text-hagav-white mb-5">Acesso restrito</h2>
 
@@ -58,7 +65,7 @@ export default function LoginScreen() {
                 type="email"
                 value={email}
                 onChange={e => setEmail(e.target.value)}
-                placeholder="admin@hagav.com.br"
+                placeholder={TEST_LOGIN_EMAIL}
                 autoComplete="email"
                 className="hinput w-full"
               />
@@ -71,7 +78,7 @@ export default function LoginScreen() {
                   type={showPw ? 'text' : 'password'}
                   value={password}
                   onChange={e => setPassword(e.target.value)}
-                  placeholder="••••••••••"
+                  placeholder={TEST_LOGIN_PASSWORD}
                   autoComplete="current-password"
                   className="hinput w-full pr-9"
                 />
@@ -96,10 +103,7 @@ export default function LoginScreen() {
               disabled={loading}
               className="btn-gold w-full justify-center mt-2"
             >
-              {loading
-                ? <Loader2 size={15} className="animate-spin" />
-                : <LogIn size={15} />
-              }
+              {loading ? <Loader2 size={15} className="animate-spin" /> : <LogIn size={15} />}
               {loading ? 'Entrando…' : 'Entrar no painel'}
             </button>
           </form>

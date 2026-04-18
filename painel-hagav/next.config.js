@@ -1,6 +1,18 @@
 /** @type {import('next').NextConfig} */
 const path = require('path');
 
+const publicSupabaseUrl = String(
+  process.env.NEXT_PUBLIC_SUPABASE_URL ||
+  process.env.SUPABASE_URL ||
+  ''
+).trim();
+
+const publicSupabaseAnonKey = String(
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+  process.env.SUPABASE_ANON_KEY ||
+  ''
+).trim();
+
 const nextConfig = {
   reactStrictMode: true,
 
@@ -14,6 +26,12 @@ const nextConfig = {
 
   images: {
     unoptimized: true, // necessário para output: 'export'
+  },
+
+  // Garante injeção no client build mesmo quando o painel recebe envs sem prefixo NEXT_PUBLIC_.
+  env: {
+    NEXT_PUBLIC_SUPABASE_URL: publicSupabaseUrl,
+    NEXT_PUBLIC_SUPABASE_ANON_KEY: publicSupabaseAnonKey,
   },
 
   webpack(config) {

@@ -44,9 +44,10 @@ export default function LoginScreen() {
         <div className="flex flex-col items-center mb-8">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src="/hagav-logo.png"
+            src="/admin/hagav-logo.png"
             alt="HAGAV Studio"
             className="h-20 w-auto object-contain drop-shadow-lg"
+            onError={(e) => { e.currentTarget.src = '/hagav-logo.png'; }}
           />
           <p className="text-xs text-hagav-gray mt-3 tracking-wider uppercase">Painel Interno</p>
         </div>

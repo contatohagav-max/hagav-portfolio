@@ -239,7 +239,7 @@ export default function DashboardPage() {
         <div className="hcard xl:col-span-2">
           <div className="flex items-center gap-2 mb-4">
             <div className="w-8 h-8 rounded-lg bg-hagav-muted/40 border border-hagav-border flex items-center justify-center">
-              <Funnel size={14} className="text-hagav-gold" />
+              <Workflow size={14} className="text-hagav-gold" />
             </div>
             <h3 className="text-sm font-semibold text-hagav-white">Funil real</h3>
           </div>

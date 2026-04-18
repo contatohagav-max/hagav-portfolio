@@ -14,43 +14,22 @@ const supabaseKey = String(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '')
 
 let _client = null;
 
-function extractMissingColumn(errorMessage) {
-  const text = String(errorMessage || '');
-  const patterns = [
-    /Could not find the '([^']+)' column/i,
-    /column ["']?([a-zA-Z0-9_]+)["']? does not exist/i,
-  ];
-
-  for (const pattern of patterns) {
-    const match = text.match(pattern);
-    if (match?.[1]) return match[1];
-  }
-  return '';
-}
-
-async function updateWithColumnFallback(client, table, id, patch) {
-  const payload = { ...(patch || {}) };
-  const maxAttempts = Math.max(1, Object.keys(payload).length + 1);
-
-  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-    const { data, error } = await client
-      .from(table)
-      .update(payload)
-      .eq('id', id)
-      .select()
-      .single();
-
-    if (!error) return data;
-
-    const missingColumn = extractMissingColumn(error.message);
-    if (!missingColumn || !Object.prototype.hasOwnProperty.call(payload, missingColumn)) {
-      throw error;
+function deepMerge(base, override) {
+  if (!override || typeof override !== 'object') return base;
+  if (!base || typeof base !== 'object') return override;
+  const merged = { ...base };
+  Object.entries(override).forEach(([key, value]) => {
+    if (Array.isArray(value)) {
+      merged[key] = value.slice();
+      return;
     }
-
-    delete payload[missingColumn];
-  }
-
-  throw new Error(`Falha ao atualizar ${table}.`);
+    if (value && typeof value === 'object') {
+      merged[key] = deepMerge(base[key], value);
+      return;
+    }
+    merged[key] = value;
+  });
+  return merged;
 }
 
 export function getSupabase() {
@@ -161,8 +140,14 @@ export async function fetchLeads({
 export async function updateLead(id, patch) {
   const client = getSupabase();
   if (!client) throw new Error('Supabase nao configurado');
-
-  const updated = await updateWithColumnFallback(client, 'leads', id, patch);
+  const { data, error } = await client
+    .from('leads')
+    .update(patch)
+    .eq('id', id)
+    .select('*')
+    .single();
+  if (error) throw error;
+  const updated = data;
   return enrichLeadRecord(updated);
 }
 
@@ -205,8 +190,14 @@ export async function fetchOrcamentos({
 export async function updateOrcamento(id, patch) {
   const client = getSupabase();
   if (!client) throw new Error('Supabase nao configurado');
-
-  const updated = await updateWithColumnFallback(client, 'orcamentos', id, patch);
+  const { data, error } = await client
+    .from('orcamentos')
+    .update(patch)
+    .eq('id', id)
+    .select('*')
+    .single();
+  if (error) throw error;
+  const updated = data;
   return enrichOrcamentoRecord(updated);
 }
 
@@ -233,7 +224,14 @@ export async function fetchContatos({ status, search, limit = 200 } = {}) {
 export async function updateContato(id, patch) {
   const client = getSupabase();
   if (!client) throw new Error('Supabase nao configurado');
-  return updateWithColumnFallback(client, 'contatos', id, patch);
+  const { data, error } = await client
+    .from('contatos')
+    .update(patch)
+    .eq('id', id)
+    .select('*')
+    .single();
+  if (error) throw error;
+  return data;
 }
 
 // Configuracoes comerciais
@@ -250,21 +248,16 @@ export async function fetchCommercialSettings() {
     .in('chave', ['score_weights', 'pricing_rules', 'pipeline_status'])
     .limit(10);
 
-  if (error) {
-    if (extractMissingColumn(error.message) || String(error.message || '').includes('does not exist')) {
-      return { ...COMMERCIAL_DEFAULTS };
-    }
-    throw error;
-  }
+  if (error) throw error;
 
   const settings = { ...COMMERCIAL_DEFAULTS };
   for (const row of data || []) {
     if (!row?.chave) continue;
     if (row.chave === 'score_weights' && row.valor && typeof row.valor === 'object') {
-      settings.scoreWeights = { ...settings.scoreWeights, ...row.valor };
+      settings.scoreWeights = deepMerge(settings.scoreWeights, row.valor);
     }
     if (row.chave === 'pricing_rules' && row.valor && typeof row.valor === 'object') {
-      settings.pricing = { ...settings.pricing, ...row.valor };
+      settings.pricing = deepMerge(settings.pricing, row.valor);
     }
     if (row.chave === 'pipeline_status' && Array.isArray(row.valor)) {
       settings.pipelineStatus = row.valor;

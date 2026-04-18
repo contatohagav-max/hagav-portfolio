@@ -16,6 +16,7 @@ export default function OrcamentosPage() {
   const [search, setSearch] = useState('');
   const [statusOrc, setStatusOrc] = useState('');
   const [urgencia, setUrgencia] = useState('');
+  const [prioridade, setPrioridade] = useState('');
   const [incompletoOnly, setIncompletoOnly] = useState(false);
 
   const load = useCallback(async () => {
@@ -25,6 +26,7 @@ export default function OrcamentosPage() {
         statusOrcamento: statusOrc || undefined,
         search: search || undefined,
         urgencia: urgencia || undefined,
+        prioridade: prioridade || undefined,
         incompleto: incompletoOnly || undefined,
         limit: 800,
       });
@@ -34,7 +36,7 @@ export default function OrcamentosPage() {
     } finally {
       setLoading(false);
     }
-  }, [search, statusOrc, urgencia, incompletoOnly]);
+  }, [search, statusOrc, urgencia, prioridade, incompletoOnly]);
 
   useEffect(() => {
     const timer = setTimeout(load, 250);
@@ -106,6 +108,13 @@ export default function OrcamentosPage() {
 
         <select value={urgencia} onChange={(e) => setUrgencia(e.target.value)} className="hselect">
           <option value="">Urgencia</option>
+          <option value="alta">Alta</option>
+          <option value="media">Media</option>
+          <option value="baixa">Baixa</option>
+        </select>
+
+        <select value={prioridade} onChange={(e) => setPrioridade(e.target.value)} className="hselect">
+          <option value="">Prioridade</option>
           <option value="alta">Alta</option>
           <option value="media">Media</option>
           <option value="baixa">Baixa</option>

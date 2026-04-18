@@ -17,6 +17,22 @@ function InfoRow({ label, value }) {
   );
 }
 
+function toDateTimeLocal(iso) {
+  if (!iso) return '';
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '';
+  const offset = date.getTimezoneOffset();
+  const local = new Date(date.getTime() - offset * 60000);
+  return local.toISOString().slice(0, 16);
+}
+
+function fromDateTimeLocal(value) {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toISOString();
+}
+
 export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
   const [statusOrc, setStatusOrc] = useState(orc?.status_orcamento ?? 'pendente_revisao');
   const [precoFinal, setPrecoFinal] = useState(orc?.preco_final ?? 0);
@@ -24,6 +40,8 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
   const [urgencia, setUrgencia] = useState(orc?.urgencia ?? 'media');
   const [prioridade, setPrioridade] = useState(orc?.prioridade ?? 'media');
   const [proximaAcao, setProximaAcao] = useState(orc?.proxima_acao ?? '');
+  const [responsavel, setResponsavel] = useState(orc?.responsavel ?? '');
+  const [followup, setFollowup] = useState(toDateTimeLocal(orc?.proximo_followup_em));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -40,6 +58,8 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
         urgencia,
         prioridade,
         proxima_acao: proximaAcao,
+        responsavel,
+        proximo_followup_em: fromDateTimeLocal(followup),
       });
       onUpdated?.(updated);
       onClose();
@@ -75,15 +95,17 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
             </div>
             <div className="bg-hagav-gold/5 border border-hagav-gold/20 rounded-xl p-4 text-center relative overflow-hidden">
               <div className="absolute top-0 left-0 right-0 h-px bg-gold-gradient" />
-              <p className="text-[10px] text-hagav-gray uppercase tracking-wider mb-1">Preco final</p>
-              <p className="text-2xl font-bold text-hagav-gold">{fmtBRL(precoFinal || orc.preco_base)}</p>
+              <p className="text-[10px] text-hagav-gray uppercase tracking-wider mb-1">Valor sugerido</p>
+              <p className="text-2xl font-bold text-hagav-gold">{fmtBRL(orc.valor_sugerido || orc.preco_base)}</p>
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+            <InfoRow label="Preco final editavel" value={fmtBRL(precoFinal || orc.preco_base)} />
             <InfoRow label="Margem estimada" value={`${Number(orc.margem_estimada || 0).toFixed(1)}%`} />
             <InfoRow label="Valor potencial" value={fmtBRL(orc.valor_estimado || orc.preco_final || orc.preco_base)} />
             <InfoRow label="Pacote sugerido" value={orc.pacote_sugerido || '—'} />
+            <InfoRow label="Faixa sugerida" value={orc.faixa_sugerida || '—'} />
           </div>
 
           <div className="flex flex-wrap gap-2">
@@ -112,14 +134,32 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
           )}
 
           <div>
+            <p className="text-xs text-hagav-gray uppercase tracking-wider mb-2">Motor de calculo</p>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+              <InfoRow label="Complexidade" value={orc.complexidade_nivel || '—'} />
+              <InfoRow label="Mult. complexidade" value={Number(orc.multiplicador_complexidade || 1).toFixed(2)} />
+              <InfoRow label="Mult. urgencia" value={Number(orc.multiplicador_urgencia || 1).toFixed(2)} />
+              <InfoRow label="Desc. volume" value={`${Number(orc.desconto_volume_percent || 0).toFixed(1)}%`} />
+              <InfoRow label="Ajuste referencia" value={`${Number(orc.ajuste_referencia_percent || 0).toFixed(1)}%`} />
+              <InfoRow label="Ajuste multicamera" value={`${Number(orc.ajuste_multicamera_percent || 0).toFixed(1)}%`} />
+            </div>
+            {orc.motivo_calculo ? (
+              <div className="bg-hagav-surface border border-hagav-border rounded-lg p-3 mt-2 text-xs text-hagav-gray whitespace-pre-wrap">
+                {orc.motivo_calculo}
+              </div>
+            ) : null}
+          </div>
+
+          <div>
             <p className="text-xs text-hagav-gray uppercase tracking-wider mb-2">Dados para operacao</p>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
               <InfoRow label="Servico/Operacao" value={orc.servico} />
               <InfoRow label="Quantidade" value={orc.quantidade} />
               <InfoRow label="Material gravado" value={orc.material_gravado} />
               <InfoRow label="Tempo bruto" value={orc.tempo_bruto} />
               <InfoRow label="Prazo" value={orc.prazo} />
               <InfoRow label="Referencia" value={orc.referencia} />
+              <InfoRow label="Fluxo" value={orc.fluxo} />
               <InfoRow label="Origem" value={orc.origem} />
               <InfoRow label="Criado em" value={fmtDateTime(orc.created_at)} />
             </div>
@@ -195,6 +235,28 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
                 className="hinput w-full"
                 placeholder="Ex.: validar escopo e enviar proposta"
               />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              <div>
+                <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Responsavel</label>
+                <input
+                  type="text"
+                  value={responsavel}
+                  onChange={(e) => setResponsavel(e.target.value)}
+                  className="hinput w-full"
+                  placeholder="Ex.: Time comercial"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Proximo follow-up</label>
+                <input
+                  type="datetime-local"
+                  value={followup}
+                  onChange={(e) => setFollowup(e.target.value)}
+                  className="hinput w-full"
+                />
+              </div>
             </div>
 
             <div>

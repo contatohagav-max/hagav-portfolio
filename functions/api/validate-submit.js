@@ -25,25 +25,82 @@ const SUBMIT_COOLDOWN_MS = 8000;
 const lastSubmitByIp = new Map();
 const recentSubmissionIds = new Map();
 const SUPABASE_TIMEOUT_MS = 12000;
-const LEGACY_WEBHOOK_TIMEOUT_MS = 15000;
-const LEGACY_WEBHOOK_RETRY_DELAY_MS = 400;
 const SUBMISSION_ID_TTL_MS = 1000 * 60 * 30;
 const STATUS_PADRAO = "novo";
 const STATUS_ORCAMENTO_PADRAO = "pendente_revisao";
+const DEFAULT_SCORE_WEIGHTS = {
+  urgenciaAlta: 18,
+  fluxoRecorrente: 20,
+  referenciaVisual: 8,
+  materialGravado: 10,
+  servicoAltoValor: 12,
+  semPressa: -6
+};
 
-const SERVICE_BASE_PRICES = {
-  DU: {
-    "reels tiktok e shorts": 180,
-    "corte estrategico": 150,
-    "criativo para ads": 240,
-    outro: 190
+const DEFAULT_PRICING_RULES = {
+  serviceBase: {
+    reels_shorts_tiktok: 170,
+    criativo_trafego_pago: 204,
+    corte_podcast: 123,
+    video_medio: 264,
+    depoimento: 220,
+    videoaula_modulo: 396,
+    youtube: 607,
+    vsl_15: 880,
+    vsl_longa: 2000,
+    motion_min: 900,
+    motion_max: 2500,
+    default_du: 190,
+    default_dr: 210
   },
-  DR: {
-    "conteudo para redes sociais": 150,
-    "criativos para anuncios": 220,
-    lancamentos: 260,
-    "youtube recorrente": 280,
-    outro: 210
+  volumeDiscounts: [
+    { min: 1, max: 4, percent: 0 },
+    { min: 5, max: 9, percent: 3 },
+    { min: 10, max: 19, percent: 6 },
+    { min: 20, max: 29, percent: 10 },
+    { min: 30, max: 99999, percent: 10 }
+  ],
+  complexidade: {
+    N1: 0.7,
+    N2: 1.0,
+    N3: 1.5,
+    n1MaxMin: 30,
+    n2MaxMin: 120
+  },
+  urgencia: {
+    DU: {
+      "24h": 1.3,
+      "3 dias": 1.15,
+      "essa semana": 1.0,
+      "sem pressa": 1.0
+    },
+    DR: {
+      imediato: 1.2,
+      "essa semana": 1.0,
+      "esse mês": 1.0,
+      "estou analisando": 1.0
+    },
+    VSL: {
+      "3 dias": 1.4
+    }
+  },
+  ajustes: {
+    semReferencia: 10,
+    multicamera: 15
+  },
+  margem: {
+    choHora: 41.67,
+    minimaSegura: 60,
+    saudavelMin: 65,
+    saudavelMax: 75,
+    excelente: 75,
+    recusaAbaixo: 55,
+    repasseEditorMin: 30,
+    repasseEditorMax: 35
+  },
+  pacotes: {
+    sugerirAcimaQtd: 8,
+    revisaoCapacidadeAcimaQtd: 30
   }
 };
 
@@ -285,35 +342,6 @@ async function parseJsonSafe(response) {
   }
 }
 
-function isMissingLeadsTable(reason) {
-  const text = String(reason || "");
-  return text.includes("public.leads") && (
-    text.includes("Could not find the table") ||
-    text.includes("does not exist")
-  );
-}
-
-function extractMissingColumn(reason, table) {
-  const text = String(reason || "");
-  const normalizedTable = String(table || "").toLowerCase();
-  const patterns = [
-    /Could not find the '([^']+)' column of '([^']+)'/i,
-    /column ["']?([a-zA-Z0-9_]+)["']? of relation ["']?([a-zA-Z0-9_.]+)["']? does not exist/i
-  ];
-  for (const pattern of patterns) {
-    const match = text.match(pattern);
-    if (!match) continue;
-    const column = String(match[1] || "").trim();
-    const tableFromError = String(match[2] || "").trim().toLowerCase();
-    const tableShort = tableFromError.split(".").pop();
-    if (!column) continue;
-    if (!normalizedTable || tableShort === normalizedTable || tableFromError === normalizedTable) {
-      return column;
-    }
-  }
-  return "";
-}
-
 async function postSupabaseRow(config, table, payload) {
   const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
   const timeoutId = controller
@@ -346,23 +374,65 @@ async function postSupabaseRow(config, table, payload) {
   }
 }
 
-async function postSupabaseRowWithColumnFallback(config, table, payload) {
-  const body = { ...(payload || {}) };
-  const adjustedColumns = [];
-  const maxAttempts = Math.max(1, Object.keys(body).length + 1);
+async function fetchSupabaseConfigValue(config, key) {
+  const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+  const timeoutId = controller
+    ? setTimeout(() => controller.abort("timeout"), SUPABASE_TIMEOUT_MS)
+    : null;
+  try {
+    const response = await fetch(
+      `${config.url}/rest/v1/configuracoes?chave=eq.${encodeURIComponent(key)}&select=valor&limit=1`,
+      {
+        method: "GET",
+        headers: {
+          "content-type": "application/json; charset=utf-8",
+          apikey: config.writeKey,
+          authorization: `Bearer ${config.writeKey}`
+        },
+        signal: controller ? controller.signal : undefined
+      }
+    );
 
-  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-    const result = await postSupabaseRow(config, table, body);
-    if (result.ok) return { ok: true, adjustedColumns };
-    const missingColumn = extractMissingColumn(result.reason, table);
-    if (!missingColumn || !Object.prototype.hasOwnProperty.call(body, missingColumn)) {
-      return result;
-    }
-    delete body[missingColumn];
-    adjustedColumns.push(missingColumn);
+    if (!response.ok) return null;
+    const parsed = await parseJsonSafe(response);
+    if (!Array.isArray(parsed) || parsed.length === 0) return null;
+    const value = parsed[0]?.valor;
+    return value && typeof value === "object" ? value : null;
+  } catch {
+    return null;
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
   }
+}
 
-  return { ok: false, reason: "supabase_schema_mismatch" };
+function deepMerge(base, override) {
+  if (!override || typeof override !== "object") return base;
+  if (!base || typeof base !== "object") return override;
+  const merged = { ...base };
+  for (const [key, value] of Object.entries(override)) {
+    if (Array.isArray(value)) {
+      merged[key] = value.slice();
+      continue;
+    }
+    if (value && typeof value === "object") {
+      merged[key] = deepMerge(base[key], value);
+      continue;
+    }
+    merged[key] = value;
+  }
+  return merged;
+}
+
+async function loadPricingContext(config) {
+  const [pricing, score] = await Promise.all([
+    fetchSupabaseConfigValue(config, "pricing_rules"),
+    fetchSupabaseConfigValue(config, "score_weights")
+  ]);
+
+  return {
+    pricingRules: deepMerge(DEFAULT_PRICING_RULES, pricing || {}),
+    scoreWeights: deepMerge(DEFAULT_SCORE_WEIGHTS, score || {})
+  };
 }
 
 function buildOrcamentoDetalhesSerializado(lead, pricing) {
@@ -385,6 +455,17 @@ function buildOrcamentoDetalhesSerializado(lead, pricing) {
     calculoAutomatico: {
       precoBase: Number(pricing?.precoBase || 0),
       precoFinal: Number(pricing?.precoFinal || 0),
+      valorSugerido: Number(pricing?.valorSugerido || 0),
+      faixaSugerida: pricing?.faixaSugerida || "",
+      margemEstimada: Number(pricing?.margemEstimada || 0),
+      revisaoManual: Boolean(pricing?.revisaoManual),
+      motivoCalculo: pricing?.motivoCalculo || "",
+      complexidadeNivel: pricing?.complexidadeNivel || "",
+      multiplicadorComplexidade: Number(pricing?.multiplicadorComplexidade || 1),
+      multiplicadorUrgencia: Number(pricing?.multiplicadorUrgencia || 1),
+      descontoVolumePercent: Number(pricing?.descontoVolumePercent || 0),
+      ajusteReferenciaPercent: Number(pricing?.ajusteReferenciaPercent || 0),
+      ajusteMulticameraPercent: Number(pricing?.ajusteMulticameraPercent || 0),
       pacoteSugerido: pricing?.pacoteSugerido || "",
       statusOrcamento: pricing?.statusOrcamento || STATUS_ORCAMENTO_PADRAO
     },
@@ -450,12 +531,13 @@ function buildResumoOrcamento(row) {
   return stripDangerousText(parts.join(" | "), 2000);
 }
 
-function inferUrgenciaFromPrazo(prazoRaw) {
-  const prazo = String(prazoRaw || "").toLowerCase();
-  if (!prazo) return "media";
-  if (prazo.includes("24h") || prazo.includes("imediato") || prazo.includes("urgente")) return "alta";
-  if (prazo.includes("3 dia") || prazo.includes("essa semana") || prazo.includes("semana")) return "media";
-  if (prazo.includes("sem pressa") || prazo.includes("analisando")) return "baixa";
+function inferUrgenciaFromPrazo(flow, prazoRaw) {
+  const key = canonicalPrazoKey(prazoRaw);
+  if (!key) return "media";
+  if (key === "24h" || key === "imediato") return "alta";
+  if (key === "3 dias" || key === "essa semana") return "media";
+  if (flow === "DR" && (key === "esse mês" || key === "estou analisando")) return "baixa";
+  if (key === "sem pressa") return "baixa";
   return "media";
 }
 
@@ -479,9 +561,9 @@ function inferMaterialState(raw) {
   return "parcial";
 }
 
-function estimateLeadScoreFromRow(row, pricing) {
+function estimateLeadScoreFromRow(row, pricing, scoreWeights) {
   const flow = row?.Fluxo === "DR" ? "DR" : "DU";
-  const urgencia = inferUrgenciaFromPrazo(row?.Prazo);
+  const urgencia = inferUrgenciaFromPrazo(flow, row?.Prazo);
   const material = inferMaterialState(row?.MaterialGravado);
   const quantidade = Math.max(1, Number(pricing?.totalQuantidade || parsePositiveNumber(row?.Quantidade) || 1));
   const tempoHours = parseHours(row?.TempoBruto);
@@ -490,25 +572,25 @@ function estimateLeadScoreFromRow(row, pricing) {
   const servicoAltoValor = /(criativo|ads|anuncio|lancamento|youtube|estrutura|recorrente)/.test(servico);
 
   let score = 20;
-  if (flow === "DR") score += 20;
-  if (servicoAltoValor) score += 12;
+  if (flow === "DR") score += Number(scoreWeights?.fluxoRecorrente || DEFAULT_SCORE_WEIGHTS.fluxoRecorrente);
+  if (servicoAltoValor) score += Number(scoreWeights?.servicoAltoValor || DEFAULT_SCORE_WEIGHTS.servicoAltoValor);
 
   if (quantidade >= 20) score += 20;
   else if (quantidade >= 10) score += 14;
   else if (quantidade >= 5) score += 8;
   else if (quantidade >= 2) score += 4;
 
-  if (material === "sim") score += 10;
+  if (material === "sim") score += Number(scoreWeights?.materialGravado || DEFAULT_SCORE_WEIGHTS.materialGravado);
   if (material === "nao") score -= 4;
 
   if (tempoHours >= 10) score += 10;
   else if (tempoHours >= 4) score += 6;
 
-  if (hasReferencia) score += 8;
+  if (hasReferencia) score += Number(scoreWeights?.referenciaVisual || DEFAULT_SCORE_WEIGHTS.referenciaVisual);
 
-  if (urgencia === "alta") score += 18;
+  if (urgencia === "alta") score += Number(scoreWeights?.urgenciaAlta || DEFAULT_SCORE_WEIGHTS.urgenciaAlta);
   else if (urgencia === "media") score += 8;
-  else score -= 6;
+  else score += Number(scoreWeights?.semPressa || DEFAULT_SCORE_WEIGHTS.semPressa);
 
   const obs = stripDangerousText(String(row?.Observacoes || ""), 500);
   if (obs.length >= 80) score += 4;
@@ -520,7 +602,7 @@ function estimateMargemFromPricing(row, pricing) {
   const valor = Number(pricing?.precoFinal || pricing?.precoBase || 0);
   if (!Number.isFinite(valor) || valor <= 0) return 0;
 
-  const urgencia = inferUrgenciaFromPrazo(row?.Prazo);
+  const urgencia = inferUrgenciaFromPrazo(row?.Fluxo, row?.Prazo);
   const material = inferMaterialState(row?.MaterialGravado);
   const tempoHours = parseHours(row?.TempoBruto);
   const flow = row?.Fluxo === "DR" ? "DR" : "DU";
@@ -545,7 +627,8 @@ function buildResumoComercial(row, pricing, score, urgencia, prioridade) {
     `Urgencia: ${urgencia}`,
     `Prioridade: ${prioridade}`,
     `Score: ${score}`,
-    `Valor estimado: ${pricing?.precoFinal || pricing?.precoBase || 0}`
+    `Valor sugerido: ${pricing?.valorSugerido || pricing?.precoFinal || pricing?.precoBase || 0}`,
+    `Revisao manual: ${pricing?.revisaoManual ? "sim" : "nao"}`
   ];
   return stripDangerousText(parts.join(" | "), 1800);
 }
@@ -560,13 +643,14 @@ async function saveLeadToSupabase(env, lead) {
   }
 
   const row = lead?.row || {};
-  const pricing = calculateOrcamentoPricing(row);
-  const urgencia = inferUrgenciaFromPrazo(row.Prazo);
-  const scoreLead = estimateLeadScoreFromRow(row, pricing);
+  const { pricingRules, scoreWeights } = await loadPricingContext(config);
+  const pricing = calculateOrcamentoPricing(row, pricingRules);
+  const urgencia = inferUrgenciaFromPrazo(row?.Fluxo, row?.Prazo);
+  const scoreLead = estimateLeadScoreFromRow(row, pricing, scoreWeights);
   const prioridade = inferPrioridadeByScore(scoreLead, urgencia);
   const temperatura = inferTemperaturaByScore(scoreLead);
-  const valorEstimado = Number(pricing.precoFinal || pricing.precoBase || 0);
-  const margemEstimada = estimateMargemFromPricing(row, pricing);
+  const valorEstimado = Number(pricing.valorSugerido || pricing.precoFinal || pricing.precoBase || 0);
+  const margemEstimada = Number(pricing.margemEstimada || estimateMargemFromPricing(row, pricing));
   const resumoComercial = buildResumoComercial(row, pricing, scoreLead, urgencia, prioridade);
 
   const orcamentoInsert = {
@@ -588,13 +672,27 @@ async function saveLeadToSupabase(env, lead) {
     preco_base: Number(pricing.precoBase || 0),
     preco_final: Number(pricing.precoFinal || 0),
     valor_estimado: valorEstimado,
+    valor_sugerido: Number(pricing.valorSugerido || 0),
     margem_estimada: margemEstimada,
+    faixa_sugerida: stripDangerousText(pricing.faixaSugerida || "", 200),
+    motivo_calculo: stripDangerousText(pricing.motivoCalculo || "", 2000),
+    revisao_manual: Boolean(pricing.revisaoManual),
+    alerta_capacidade: Boolean(pricing.alertaCapacidade),
+    operacao_especial: Boolean(pricing.operacaoEspecial),
+    complexidade_nivel: stripDangerousText(pricing.complexidadeNivel || "N2", 20),
+    multiplicador_complexidade: Number(pricing.multiplicadorComplexidade || 1),
+    multiplicador_urgencia: Number(pricing.multiplicadorUrgencia || 1),
+    desconto_volume_percent: Number(pricing.descontoVolumePercent || 0),
+    ajuste_referencia_percent: Number(pricing.ajusteReferenciaPercent || 0),
+    ajuste_multicamera_percent: Number(pricing.ajusteMulticameraPercent || 0),
     score_lead: scoreLead,
     urgencia,
     prioridade,
     temperatura,
     proxima_acao: "",
+    responsavel: "",
     ultimo_contato_em: null,
+    proximo_followup_em: null,
     resumo_comercial: resumoComercial,
     pacote_sugerido: stripDangerousText(pricing.pacoteSugerido || "", 120),
     status_orcamento: stripDangerousText(pricing.statusOrcamento || STATUS_ORCAMENTO_PADRAO, 60),
@@ -602,7 +700,7 @@ async function saveLeadToSupabase(env, lead) {
     link_pdf: stripDangerousText(pricing.linkPdf || "", 500)
   };
 
-  const orcamentoResult = await postSupabaseRowWithColumnFallback(config, "orcamentos", orcamentoInsert);
+  const orcamentoResult = await postSupabaseRow(config, "orcamentos", orcamentoInsert);
   if (!orcamentoResult.ok) return orcamentoResult;
 
   const leadInsert = {
@@ -626,164 +724,20 @@ async function saveLeadToSupabase(env, lead) {
     valor_estimado: valorEstimado,
     margem_estimada: margemEstimada,
     proxima_acao: "",
+    responsavel: "",
     ultimo_contato_em: null,
+    proximo_followup_em: null,
     resumo_orcamento: buildResumoOrcamento(row),
     resumo_comercial: resumoComercial
   };
-  const leadResult = await postSupabaseRowWithColumnFallback(config, "leads", leadInsert);
-  if (!leadResult.ok) {
-    if (isMissingLeadsTable(leadResult.reason)) {
-      return { ok: true, reason: "leads_table_missing" };
-    }
-    return leadResult;
-  }
+  const leadResult = await postSupabaseRow(config, "leads", leadInsert);
+  if (!leadResult.ok) return leadResult;
 
-  const adjustedNotes = [];
-  if (Array.isArray(orcamentoResult.adjustedColumns) && orcamentoResult.adjustedColumns.length > 0) {
-    adjustedNotes.push(`orcamentos:${orcamentoResult.adjustedColumns.join("|")}`);
-  }
-  if (Array.isArray(leadResult.adjustedColumns) && leadResult.adjustedColumns.length > 0) {
-    adjustedNotes.push(`leads:${leadResult.adjustedColumns.join("|")}`);
-  }
-  return adjustedNotes.length > 0
-    ? { ok: true, reason: `supabase_columns_adjusted:${adjustedNotes.join(",")}` }
-    : { ok: true };
-}
-
-function getLegacyWebhookConfigByTipo(env, tipo) {
-  const isUnica = tipo === "unica";
-  const webhookUrl = String(
-    isUnica
-      ? (env.GOOGLE_SHEETS_WEBHOOK_URL_DU || "")
-      : (env.GOOGLE_SHEETS_WEBHOOK_URL_DR || "")
-  ).trim();
-  const secret = String(env.GOOGLE_SHEETS_WEBHOOK_SECRET || "").trim();
-  return { webhookUrl, secret };
-}
-
-async function saveLeadToLegacyWebhook(env, lead) {
-  const { webhookUrl, secret } = getLegacyWebhookConfigByTipo(env, lead?.raw?.tipo);
-  if (!webhookUrl) {
-    return { ok: false, reason: "legacy_not_configured" };
-  }
-
-  const row = lead?.row || {};
-  const rawAnswers = lead?.raw?.answers || {};
-  const answersForWebhook = { ...rawAnswers };
-  if (lead?.raw?.tipo === "unica") {
-    answersForWebhook.unica_servicos = row.ServicoOuOperacao || "";
-    answersForWebhook.unica_quantidades = row.Quantidade || "";
-    answersForWebhook.unica_gravado = row.MaterialGravado || "";
-    answersForWebhook.unica_tempo_bruto = row.TempoBruto || "";
-  } else if (lead?.raw?.tipo === "recorrente") {
-    answersForWebhook.rec_tipo_operacao = row.ServicoOuOperacao || "";
-    answersForWebhook.rec_volume = row.Quantidade || "";
-    answersForWebhook.rec_gravado = row.MaterialGravado || "";
-    answersForWebhook.rec_tempo_bruto = row.TempoBruto || "";
-    answersForWebhook.rec_inicio = row.Prazo || "";
-    answersForWebhook.rec_referencia = row.Referencia || "";
-    answersForWebhook.rec_objetivo = row.Objetivo || "";
-  }
-  const valuesByHeader = {
-    DataHora: row.DataHora || "",
-    TipoFluxo: row.TipoFluxo || "",
-    Nome: row.Nome || "",
-    WhatsApp: row.WhatsApp || "",
-    Instagram: row.Instagram || "",
-    Empresa: row.Empresa || "",
-    ServicoOuOperacao: row.ServicoOuOperacao || "",
-    Quantidade: row.Quantidade || "",
-    MaterialGravado: row.MaterialGravado || "",
-    TempoBruto: row.TempoBruto || "",
-    Prazo: row.Prazo || "",
-    Referencia: row.Referencia || "",
-    Objetivo: row.Objetivo || "",
-    Observacoes: row.Observacoes || "",
-    Origem: row.Origem || ""
-  };
-  const webhookBody = {
-    ...row,
-    rowData: row,
-    valuesByHeader,
-    answers: answersForWebhook,
-    rawAnswers,
-    tipo: lead?.raw?.tipo || "",
-    nome: row.Nome || "",
-    whatsapp: row.WhatsApp || "",
-    instagram: row.Instagram || "",
-    empresa: row.Empresa || "",
-    servicoOuOperacao: row.ServicoOuOperacao || "",
-    servico: row.ServicoOuOperacao || "",
-    quantidade: row.Quantidade || "",
-    materialGravado: row.MaterialGravado || "",
-    tempoBruto: row.TempoBruto || "",
-    prazo: row.Prazo || "",
-    referencia: row.Referencia || "",
-    objetivo: row.Objetivo || "",
-    observacoes: row.Observacoes || "",
-    origem: row.Origem || "",
-    values: [
-      row.DataHora || "",
-      row.TipoFluxo || "",
-      row.Nome || "",
-      row.WhatsApp || "",
-      row.Instagram || "",
-      row.Empresa || "",
-      row.ServicoOuOperacao || "",
-      row.Quantidade || "",
-      row.MaterialGravado || "",
-      row.TempoBruto || "",
-      row.Prazo || "",
-      row.Referencia || "",
-      row.Objetivo || "",
-      row.Observacoes || "",
-      row.Origem || ""
-    ],
-    secret: secret || "",
-    auth: { secret: secret || "" }
-  };
-
-  async function runWebhookPost() {
-    const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
-    const timeoutId = controller
-      ? setTimeout(() => controller.abort("timeout"), LEGACY_WEBHOOK_TIMEOUT_MS)
-      : null;
-    try {
-      const headers = { "content-type": "application/json; charset=utf-8" };
-      if (secret) headers["x-webhook-secret"] = secret;
-      const response = await fetch(webhookUrl, {
-        method: "POST",
-        headers,
-        body: JSON.stringify(webhookBody),
-        signal: controller ? controller.signal : undefined
-      });
-      if (!response.ok) {
-        return { ok: false, reason: `legacy_http_${response.status}` };
-      }
-      return { ok: true };
-    } catch {
-      return { ok: false, reason: "legacy_request_failed" };
-    } finally {
-      if (timeoutId) clearTimeout(timeoutId);
-    }
-  }
-
-  const firstTry = await runWebhookPost();
-  if (firstTry.ok) return firstTry;
-  await new Promise((resolve) => setTimeout(resolve, LEGACY_WEBHOOK_RETRY_DELAY_MS));
-  const secondTry = await runWebhookPost();
-  return secondTry.ok ? secondTry : firstTry;
+  return { ok: true };
 }
 
 async function saveLead(env, lead) {
-  const supabaseResult = await saveLeadToSupabase(env, lead);
-  if (supabaseResult.ok) return supabaseResult;
-
-  const legacyResult = await saveLeadToLegacyWebhook(env, lead);
-  if (legacyResult.ok) return { ok: true, reason: "legacy_fallback_used" };
-
-  if (supabaseResult.reason) return supabaseResult;
-  return legacyResult;
+  return saveLeadToSupabase(env, lead);
 }
 
 function toFlatMap(value, keyLimit, valLimit) {
@@ -869,105 +823,344 @@ function parseLabeledMap(value, keyLimit = 120, valLimit = 120) {
   return map;
 }
 
-function getMaterialMultiplier(value) {
-  const text = String(value || "").toLowerCase();
-  if (!text) return 1;
-  if (text.includes("nao") || text.includes("não")) return 1.35;
-  return 1;
-}
-
-function getDeadlineMultiplier(rawPrazo) {
-  const prazo = String(rawPrazo || "").toLowerCase();
-  if (!prazo) return 1;
-  if (prazo.includes("24h") || prazo.includes("imediato")) return 1.3;
-  if (prazo.includes("3 dia")) return 1.18;
-  if (prazo.includes("essa semana")) return 1.1;
-  return 1;
-}
-
-function getUnitPrice(flow, service) {
-  const table = SERVICE_BASE_PRICES[flow] || SERVICE_BASE_PRICES.DU;
-  const normalized = normalizeServiceKey(service);
-  if (table[normalized]) return table[normalized];
-  if (normalized.startsWith("outro")) return table.outro || 190;
-  return flow === "DR" ? 170 : 190;
-}
-
-function getRecurringVolumeMultiplier(totalQty) {
-  if (!Number.isFinite(totalQty) || totalQty <= 0) return 1;
-  if (totalQty >= 40) return 0.88;
-  if (totalQty >= 20) return 0.92;
-  if (totalQty >= 10) return 0.95;
-  return 1;
-}
-
-function suggestPackage(flow, totalQty, precoBase) {
-  if (flow === "DR") {
-    if (totalQty >= 40 || precoBase >= 8000) return "Pacote Escala";
-    if (totalQty >= 20 || precoBase >= 4500) return "Pacote Crescimento";
-    return "Pacote Essencial";
-  }
-  if (totalQty >= 20 || precoBase >= 5000) return "Lote Intensivo";
-  if (totalQty >= 8 || precoBase >= 2200) return "Projeto Plus";
-  return "Projeto Pontual";
-}
-
 function roundCurrency(value) {
   const num = Number(value || 0);
   if (!Number.isFinite(num)) return 0;
   return Math.round(num * 100) / 100;
 }
 
-function calculateOrcamentoPricing(row) {
+function getComplexidadeByMinutes(minutes, pricingRules) {
+  const safeMinutes = Number.isFinite(minutes) ? minutes : 0;
+  const limits = pricingRules?.complexidade || DEFAULT_PRICING_RULES.complexidade;
+  if (safeMinutes <= limits.n1MaxMin) return { nivel: "N1", multiplicador: Number(limits.N1 || 0.7) };
+  if (safeMinutes <= limits.n2MaxMin) return { nivel: "N2", multiplicador: Number(limits.N2 || 1) };
+  return { nivel: "N3", multiplicador: Number(limits.N3 || 1.5) };
+}
+
+function canonicalPrazoKey(rawPrazo) {
+  const prazo = String(rawPrazo || "").toLowerCase();
+  if (!prazo) return "";
+  if (prazo.includes("24h")) return "24h";
+  if (prazo.includes("3 dia")) return "3 dias";
+  if (prazo.includes("essa semana")) return "essa semana";
+  if (prazo.includes("sem pressa")) return "sem pressa";
+  if (prazo.includes("imediato")) return "imediato";
+  if (prazo.includes("esse mês") || prazo.includes("esse mes")) return "esse mês";
+  if (prazo.includes("estou analisando")) return "estou analisando";
+  return prazo.trim();
+}
+
+function mapServiceCatalog(serviceLabel) {
+  const normalized = normalizeServiceKey(serviceLabel);
+  if (/(reels|shorts|tiktok|conteudo para redes sociais)/.test(normalized)) return "reels_shorts_tiktok";
+  if (/(criativo|trafego|anuncio|ads|criativos para anuncios)/.test(normalized)) return "criativo_trafego_pago";
+  if (/(corte|podcast)/.test(normalized)) return "corte_podcast";
+  if (/video medio/.test(normalized)) return "video_medio";
+  if (/depoimento/.test(normalized)) return "depoimento";
+  if (/(videoaula|modulo)/.test(normalized)) return "videoaula_modulo";
+  if (/(youtube|youtube recorrente)/.test(normalized)) return "youtube";
+  if (/lancamento/.test(normalized)) return "video_medio";
+  if (/vsl/.test(normalized) && /(longa|30|min|45|min|60|min)/.test(normalized)) return "vsl_longa";
+  if (/vsl/.test(normalized)) return "vsl_15";
+  if (/(motion|vinheta)/.test(normalized)) return "motion";
+  return "default";
+}
+
+function getUnitPriceFromRules(flow, serviceKey, pricingRules) {
+  const base = pricingRules?.serviceBase || DEFAULT_PRICING_RULES.serviceBase;
+  if (serviceKey === "motion") {
+    const min = Number(base.motion_min || 900);
+    const max = Number(base.motion_max || 2500);
+    return { min, max, value: min, heavy: true, manual: true };
+  }
+
+  const fromTable = Number(base[serviceKey]);
+  if (Number.isFinite(fromTable) && fromTable > 0) {
+    const heavy = serviceKey === "youtube" || serviceKey === "vsl_15" || serviceKey === "vsl_longa";
+    return { min: fromTable, max: fromTable, value: fromTable, heavy, manual: false };
+  }
+
+  const fallback = flow === "DR"
+    ? Number(base.default_dr || DEFAULT_PRICING_RULES.serviceBase.default_dr)
+    : Number(base.default_du || DEFAULT_PRICING_RULES.serviceBase.default_du);
+  return { min: fallback, max: fallback, value: fallback, heavy: false, manual: false };
+}
+
+function readUrgencyMultiplier(flowTable, key) {
+  const canonicalKey = normalizeServiceKey(key);
+  if (!canonicalKey) return 1;
+  for (const [rawKey, rawValue] of Object.entries(flowTable || {})) {
+    if (normalizeServiceKey(rawKey) === canonicalKey) {
+      const parsed = Number(rawValue);
+      return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
+    }
+  }
+  return 1;
+}
+
+function getUrgencyMultiplier(flow, prazoKey, serviceKey, pricingRules) {
+  const urg = pricingRules?.urgencia || DEFAULT_PRICING_RULES.urgencia;
+  const flowTable = flow === "DR" ? (urg.DR || {}) : (urg.DU || {});
+  const vslTable = urg.VSL || {};
+
+  let multiplier = readUrgencyMultiplier(flowTable, prazoKey);
+  let blocked = false;
+  let forcedManual = false;
+  const reasons = [];
+
+  if (serviceKey === "vsl_15" || serviceKey === "vsl_longa") {
+    if (prazoKey === "24h") {
+      blocked = true;
+      forcedManual = true;
+      multiplier = 1;
+      reasons.push("VSL nao aceita prazo 24h.");
+    } else if (prazoKey === "3 dias") {
+      multiplier = Math.max(multiplier, readUrgencyMultiplier(vslTable, "3 dias") || 1.4);
+      reasons.push("Prazo 3 dias para VSL aplica adicional de 40%.");
+    }
+  }
+
+  if (flow === "DU" && prazoKey === "24h") {
+    const allow24h = serviceKey === "reels_shorts_tiktok" || serviceKey === "criativo_trafego_pago";
+    if (!allow24h) {
+      forcedManual = true;
+      reasons.push("24h em DU so e aplicado para Reels e Criativo.");
+    }
+  }
+
+  return {
+    multiplier: Number.isFinite(multiplier) ? multiplier : 1,
+    blocked,
+    forcedManual,
+    reasons
+  };
+}
+
+function getVolumeDiscount(totalQty, pricingRules) {
+  const rules = Array.isArray(pricingRules?.volumeDiscounts)
+    ? pricingRules.volumeDiscounts
+    : DEFAULT_PRICING_RULES.volumeDiscounts;
+  const safeQty = Math.max(1, Math.round(Number(totalQty || 0) || 1));
+  for (const rule of rules) {
+    const min = Number(rule?.min || 0);
+    const max = Number(rule?.max || 999999);
+    if (safeQty >= min && safeQty <= max) {
+      return Number(rule?.percent || 0);
+    }
+  }
+  return 0;
+}
+
+function detectMulticamera(text) {
+  const normalized = String(text || "").toLowerCase();
+  return /(multicamera|multi camera|3 cameras|3 camera|3 cam|tricamera)/.test(normalized);
+}
+
+function detectOperacaoEspecial(text) {
+  const normalized = String(text || "").toLowerCase();
+  return /(operacao especial|operação especial|efeito complexo|animacao complexa|captação externa|captacao externa)/.test(normalized);
+}
+
+function getPackageSuggestion(flow, totalQty, value, pricingRules) {
+  const pkgRules = pricingRules?.pacotes || DEFAULT_PRICING_RULES.pacotes;
+  const threshold = Number(pkgRules?.sugerirAcimaQtd || 8);
+  if (totalQty <= threshold) return "Projeto avulso";
+  if (flow === "DR") {
+    if (totalQty >= 30) return "Pacote Escala DR";
+    if (totalQty >= 15) return "Pacote Crescimento DR";
+    return "Pacote Recorrente DR";
+  }
+  if (value >= 6000 || totalQty >= 20) return "Pacote Intensivo DU";
+  return "Pacote Plus DU";
+}
+
+function calculateOrcamentoPricing(row, pricingRules) {
   const flow = row?.Fluxo === "DR" ? "DR" : "DU";
   const services = splitPipeValues(row?.ServicoOuOperacao);
   const qtyParts = splitPipeValues(row?.Quantidade);
+  const tempoMap = parseLabeledMap(row?.TempoBruto, 180, 60);
   const materialMap = parseLabeledMap(row?.MaterialGravado, 180, 40);
-  const tempoMap = parseLabeledMap(row?.TempoBruto, 180, 40);
+  const prazoKey = canonicalPrazoKey(row?.Prazo);
+  const observacoes = String(row?.Observacoes || "");
+  const referencia = String(row?.Referencia || "");
 
-  let subtotal = 0;
+  const adjustments = pricingRules?.ajustes || DEFAULT_PRICING_RULES.ajustes;
+  const marginRules = pricingRules?.margem || DEFAULT_PRICING_RULES.margem;
+  const semReferenciaPercent = !referencia.trim() ? Number(adjustments?.semReferencia || 10) : 0;
+  const multicameraPercent = detectMulticamera(`${observacoes} ${referencia}`) ? Number(adjustments?.multicamera || 15) : 0;
+  const operacaoEspecial = detectOperacaoEspecial(`${observacoes} ${row?.ServicoOuOperacao || ""}`);
+
+  let subtotalBase = 0;
+  let subtotalSuggested = 0;
+  let faixaMinTotal = 0;
+  let faixaMaxTotal = 0;
   let totalQty = 0;
+  let weightedComplexity = 0;
+  let maxUrgencyMultiplier = 1;
+  let hasHeavyService = false;
+  let revisaoManual = false;
+  let alertaCapacidade = false;
+  let prazoBloqueado = false;
+  let estimatedHours = 0;
+  const reasons = [];
 
-  for (let idx = 0; idx < services.length; idx += 1) {
-    const service = services[idx];
-    const qtyRaw = qtyParts[idx] || "";
-    const qty = Math.max(1, Math.round(parsePositiveNumber(qtyRaw) || 1));
-    const key = normalizeServiceKey(service);
-    const material = materialMap[key] || "";
-    const tempoRaw = tempoMap[key] || "";
-    const tempoHours = parseHours(tempoRaw);
+  const baseHoursByService = {
+    reels_shorts_tiktok: 0.9,
+    criativo_trafego_pago: 1.2,
+    corte_podcast: 0.8,
+    video_medio: 2.1,
+    depoimento: 1.6,
+    videoaula_modulo: 2.8,
+    youtube: 4.0,
+    vsl_15: 6.0,
+    vsl_longa: 14.0,
+    motion: 10.0,
+    default: 1.4
+  };
 
-    let itemTotal = qty * getUnitPrice(flow, service);
-    itemTotal *= getMaterialMultiplier(material);
+  for (let index = 0; index < services.length; index += 1) {
+    const serviceLabel = services[index];
+    const qty = Math.max(1, Math.round(parsePositiveNumber(qtyParts[index] || "1") || 1));
+    const serviceKey = mapServiceCatalog(serviceLabel);
+    const unit = getUnitPriceFromRules(flow, serviceKey, pricingRules);
+    const tempoRaw = tempoMap[normalizeServiceKey(serviceLabel)] || "";
+    const tempoMinutes = Math.round(parseHours(tempoRaw) * 60);
+    const complexity = getComplexidadeByMinutes(tempoMinutes, pricingRules);
+    const urg = getUrgencyMultiplier(flow, prazoKey, serviceKey, pricingRules);
+    const materialRaw = String(materialMap[normalizeServiceKey(serviceLabel)] || row?.MaterialGravado || "").toLowerCase();
+    const materialPronto = materialRaw.includes("sim");
 
-    if (tempoHours > 2) {
-      const extraHours = tempoHours - 2;
-      itemTotal *= (1 + Math.min(0.35, extraHours * 0.08));
+    let itemBase = unit.value * qty;
+    let itemSuggested = itemBase * complexity.multiplicador * urg.multiplier;
+
+    if (!materialPronto && materialRaw.trim()) {
+      itemSuggested *= 1.05;
+      reasons.push(`${serviceLabel}: material nao totalmente pronto aplicou +5%.`);
     }
 
-    subtotal += itemTotal;
+    subtotalBase += itemBase;
+    subtotalSuggested += itemSuggested;
     totalQty += qty;
+    weightedComplexity += complexity.multiplicador * qty;
+    maxUrgencyMultiplier = Math.max(maxUrgencyMultiplier, urg.multiplier);
+    hasHeavyService = hasHeavyService || unit.heavy;
+    revisaoManual = revisaoManual || unit.manual || urg.forcedManual;
+    prazoBloqueado = prazoBloqueado || urg.blocked;
+    urg.reasons.forEach((reason) => reasons.push(reason));
+
+    const hourBase = baseHoursByService[serviceKey] || baseHoursByService.default;
+    estimatedHours += (hourBase * complexity.multiplicador) * qty;
+
+    if (complexity.nivel === "N3") {
+      revisaoManual = true;
+      reasons.push(`${serviceLabel}: bruto acima de 2h exige revisao manual.`);
+    }
+    if ((serviceKey === "vsl_15" || serviceKey === "vsl_longa") && tempoMinutes > 30) {
+      revisaoManual = true;
+      reasons.push("VSL com bruto acima de 30min exige revisao manual.");
+    }
+
+    const spread = unit.heavy ? 0.2 : (serviceKey === "video_medio" || serviceKey === "depoimento" || serviceKey === "videoaula_modulo" ? 0.1 : 0.05);
+    faixaMinTotal += itemSuggested * (1 - spread);
+    faixaMaxTotal += itemSuggested * (1 + spread);
   }
 
-  if (!subtotal) {
-    const fallbackQty = Math.max(1, Math.round(parsePositiveNumber(row?.Quantidade) || 1));
-    subtotal = fallbackQty * (flow === "DR" ? 170 : 190);
+  if (!services.length) {
+    const fallbackQty = Math.max(1, Math.round(parsePositiveNumber(row?.Quantidade || "1") || 1));
+    const fallbackUnit = getUnitPriceFromRules(flow, "default", pricingRules);
+    subtotalBase = fallbackUnit.value * fallbackQty;
+    subtotalSuggested = subtotalBase;
+    faixaMinTotal = subtotalBase * 0.95;
+    faixaMaxTotal = subtotalBase * 1.05;
     totalQty = fallbackQty;
+    weightedComplexity = fallbackQty;
+    estimatedHours = fallbackQty * 1.4;
+    reasons.push("Servico nao mapeado automaticamente, aplicado valor base padrao.");
+    revisaoManual = true;
   }
 
-  const prazoMultiplier = getDeadlineMultiplier(row?.Prazo);
-  const volumeMultiplier = flow === "DR" ? getRecurringVolumeMultiplier(totalQty) : 1;
-  const precoBase = Math.max(150, roundCurrency(subtotal * prazoMultiplier * volumeMultiplier));
-  const precoFinal = precoBase;
+  if (semReferenciaPercent > 0) {
+    const factor = 1 + (semReferenciaPercent / 100);
+    subtotalSuggested *= factor;
+    faixaMinTotal *= factor;
+    faixaMaxTotal *= factor;
+    reasons.push(`Sem referencia visual: +${semReferenciaPercent}%.`);
+  }
+
+  if (multicameraPercent > 0) {
+    const factor = 1 + (multicameraPercent / 100);
+    subtotalSuggested *= factor;
+    faixaMinTotal *= factor;
+    faixaMaxTotal *= factor;
+    reasons.push(`Multicamera detectada: +${multicameraPercent}%.`);
+  }
+
+  if (operacaoEspecial) {
+    revisaoManual = true;
+    reasons.push("Operacao especial detectada: revisao manual obrigatoria.");
+  }
+
+  const discountPercent = getVolumeDiscount(totalQty, pricingRules);
+  const discountFactor = 1 - (discountPercent / 100);
+  subtotalSuggested *= discountFactor;
+  faixaMinTotal *= discountFactor;
+  faixaMaxTotal *= discountFactor;
+
+  const pacote = getPackageSuggestion(flow, totalQty, subtotalSuggested, pricingRules);
+  if (totalQty > Number((pricingRules?.pacotes || DEFAULT_PRICING_RULES.pacotes).revisaoCapacidadeAcimaQtd || 30)) {
+    alertaCapacidade = true;
+    revisaoManual = true;
+    reasons.push("Volume acima de 30 itens: revisar capacidade antes de aprovar.");
+  }
+
+  if (hasHeavyService) {
+    reasons.push("Servico pesado identificado: revisar escopo antes de enviar proposta.");
+  }
+
+  const precoBase = Math.max(1, roundCurrency(subtotalBase));
+  const valorSugerido = Math.max(1, roundCurrency(subtotalSuggested));
+  const faixaMin = Math.max(1, roundCurrency(faixaMinTotal));
+  const faixaMax = Math.max(faixaMin, roundCurrency(faixaMaxTotal));
+  const faixaSugerida = `R$ ${faixaMin.toFixed(2)} a R$ ${faixaMax.toFixed(2)}`;
+
+  const complexityAvg = totalQty > 0 ? (weightedComplexity / totalQty) : 1;
+  const complexityLevel = complexityAvg <= 0.8 ? "N1" : (complexityAvg < 1.3 ? "N2" : "N3");
+  const custoEstimado = roundCurrency((Number(marginRules?.choHora || 41.67) || 41.67) * Math.max(estimatedHours, 0.5));
+  const margemPercent = valorSugerido > 0 ? roundCurrency(((valorSugerido - custoEstimado) / valorSugerido) * 100) : 0;
+  if (margemPercent < Number(marginRules?.recusaAbaixo || 55)) {
+    revisaoManual = true;
+    reasons.push(`Margem estimada (${margemPercent}%) abaixo do limite de ${marginRules?.recusaAbaixo || 55}%.`);
+  }
+  if (prazoBloqueado) {
+    revisaoManual = true;
+  }
 
   return {
     precoBase,
-    precoFinal,
+    precoFinal: valorSugerido,
+    valorSugerido,
+    faixaSugerida,
+    margemEstimada: margemPercent,
+    custoEstimado,
     totalQuantidade: totalQty,
-    pacoteSugerido: suggestPackage(flow, totalQty, precoBase),
+    pacoteSugerido: pacote,
     statusOrcamento: STATUS_ORCAMENTO_PADRAO,
     observacoesInternas: "",
-    linkPdf: ""
+    linkPdf: "",
+    revisaoManual,
+    alertaCapacidade,
+    operacaoEspecial,
+    complexidadeNivel: revisaoManual && complexityLevel === "N3" ? "manual" : complexityLevel,
+    multiplicadorComplexidade: roundCurrency(complexityAvg),
+    multiplicadorUrgencia: roundCurrency(maxUrgencyMultiplier),
+    descontoVolumePercent: discountPercent,
+    ajusteReferenciaPercent: semReferenciaPercent,
+    ajusteMulticameraPercent: multicameraPercent,
+    motivoCalculo: stripDangerousText(reasons.join(" "), 2000),
+    metrics: {
+      prazoKey,
+      hasHeavyService
+    }
   };
 }
 

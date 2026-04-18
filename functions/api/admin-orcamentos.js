@@ -101,7 +101,7 @@ async function listOrcamentos(request, env) {
   const query = new URLSearchParams();
   query.set(
     "select",
-    "id,created_at,fluxo,pagina,origem,status,nome,whatsapp,servico,quantidade,material_gravado,tempo_bruto,prazo,referencia,observacoes,detalhes,resumo_orcamento,resumo_comercial,preco_base,preco_final,valor_estimado,margem_estimada,pacote_sugerido,status_orcamento,urgencia,prioridade,temperatura,score_lead,proxima_acao,ultimo_contato_em,observacoes_internas,link_pdf"
+    "id,created_at,fluxo,pagina,origem,status,nome,whatsapp,servico,quantidade,material_gravado,tempo_bruto,prazo,referencia,observacoes,detalhes,resumo_orcamento,resumo_comercial,preco_base,preco_final,valor_estimado,valor_sugerido,margem_estimada,faixa_sugerida,motivo_calculo,revisao_manual,alerta_capacidade,operacao_especial,complexidade_nivel,multiplicador_complexidade,multiplicador_urgencia,desconto_volume_percent,ajuste_referencia_percent,ajuste_multicamera_percent,pacote_sugerido,status_orcamento,urgencia,prioridade,temperatura,score_lead,proxima_acao,responsavel,ultimo_contato_em,proximo_followup_em,observacoes_internas,link_pdf"
   );
   query.set("order", "created_at.desc");
   query.set("limit", String(limit));
@@ -163,6 +163,15 @@ async function updateOrcamento(request, env) {
     payload.proxima_acao = stripDangerousText(String(body.proxima_acao || ""), 300);
   }
 
+  if (body?.responsavel !== undefined) {
+    payload.responsavel = stripDangerousText(String(body.responsavel || ""), 120);
+  }
+
+  if (body?.proximo_followup_em !== undefined) {
+    const followupRaw = String(body.proximo_followup_em || "").trim();
+    payload.proximo_followup_em = followupRaw ? followupRaw : null;
+  }
+
   if (body?.margem_estimada !== undefined) {
     const margem = Number(body.margem_estimada);
     if (!Number.isFinite(margem) || margem < 0 || margem > 100) {
@@ -185,7 +194,7 @@ async function updateOrcamento(request, env) {
 
   const result = await fetchSupabase(
     config,
-    `/rest/v1/orcamentos?id=eq.${id}&select=id,preco_base,preco_final,valor_estimado,margem_estimada,pacote_sugerido,status_orcamento,urgencia,prioridade,proxima_acao,observacoes_internas,link_pdf`,
+    `/rest/v1/orcamentos?id=eq.${id}&select=id,preco_base,preco_final,valor_estimado,valor_sugerido,margem_estimada,faixa_sugerida,motivo_calculo,revisao_manual,complexidade_nivel,multiplicador_complexidade,multiplicador_urgencia,desconto_volume_percent,ajuste_referencia_percent,ajuste_multicamera_percent,pacote_sugerido,status_orcamento,urgencia,prioridade,proxima_acao,responsavel,proximo_followup_em,observacoes_internas,link_pdf`,
     {
       method: "PATCH",
       headers: { prefer: "return=representation" },

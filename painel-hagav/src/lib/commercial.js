@@ -18,19 +18,70 @@ const ORC_ABERTO = new Set(['pendente_revisao', 'em_revisao', 'aprovado', 'envia
 const ORC_GANHO = new Set(['aprovado', 'enviado']);
 const ORC_REVISAO = new Set(['pendente_revisao', 'em_revisao']);
 
-const SERVICE_UNIT_PRICE = {
-  DU: {
-    'reels tiktok e shorts': 180,
-    'corte estrategico': 150,
-    'criativo para ads': 240,
-    outro: 190,
+const DEFAULT_PRICING_RULES = {
+  serviceBase: {
+    reels_shorts_tiktok: 170,
+    criativo_trafego_pago: 204,
+    corte_podcast: 123,
+    video_medio: 264,
+    depoimento: 220,
+    videoaula_modulo: 396,
+    youtube: 607,
+    vsl_15: 880,
+    vsl_longa: 2000,
+    motion_min: 900,
+    motion_max: 2500,
+    default_du: 190,
+    default_dr: 210,
   },
-  DR: {
-    'conteudo para redes sociais': 150,
-    'criativos para anuncios': 220,
-    lancamentos: 260,
-    'youtube recorrente': 280,
-    outro: 210,
+  volumeDiscounts: [
+    { min: 1, max: 4, percent: 0 },
+    { min: 5, max: 9, percent: 3 },
+    { min: 10, max: 19, percent: 6 },
+    { min: 20, max: 29, percent: 10 },
+    { min: 30, max: 99999, percent: 10 },
+  ],
+  complexidade: {
+    N1: 0.7,
+    N2: 1,
+    N3: 1.5,
+    n1MaxMin: 30,
+    n2MaxMin: 120,
+  },
+  urgencia: {
+    DU: {
+      '24h': 1.3,
+      '3 dias': 1.15,
+      'Essa semana': 1,
+      'Sem pressa': 1,
+    },
+    DR: {
+      Imediato: 1.2,
+      'Essa semana': 1,
+      'Esse mês': 1,
+      'Estou analisando': 1,
+    },
+    VSL: {
+      '3 dias': 1.4,
+    },
+  },
+  ajustes: {
+    semReferencia: 10,
+    multicamera: 15,
+  },
+  margem: {
+    choHora: 41.67,
+    minimaSegura: 60,
+    saudavelMin: 65,
+    saudavelMax: 75,
+    excelente: 75,
+    recusaAbaixo: 55,
+    repasseEditorMin: 30,
+    repasseEditorMax: 35,
+  },
+  pacotes: {
+    sugerirAcimaQtd: 8,
+    revisaoCapacidadeAcimaQtd: 30,
   },
 };
 
@@ -108,12 +159,60 @@ function sumQuantidade(value) {
   return Math.max(1, total);
 }
 
-function getUnitPrice(flow, service) {
-  const table = SERVICE_UNIT_PRICE[flow] || SERVICE_UNIT_PRICE.DU;
-  const normalized = normalizeServiceKey(service);
-  if (table[normalized]) return table[normalized];
-  if (normalized.startsWith('outro')) return table.outro || 190;
-  return flow === 'DR' ? 170 : 190;
+function canonicalPrazoKey(rawPrazo) {
+  const prazo = normalizeServiceKey(rawPrazo);
+  if (!prazo) return '';
+  if (prazo.includes('24h')) return '24h';
+  if (prazo.includes('3 dia')) return '3 dias';
+  if (prazo.includes('essa semana')) return 'Essa semana';
+  if (prazo.includes('sem pressa')) return 'Sem pressa';
+  if (prazo.includes('imediato')) return 'Imediato';
+  if (prazo.includes('esse mes')) return 'Esse mês';
+  if (prazo.includes('estou analisando')) return 'Estou analisando';
+  return rawPrazo || '';
+}
+
+function mapServiceCatalog(serviceLabel) {
+  const normalized = normalizeServiceKey(serviceLabel);
+  if (/(reels|shorts|tiktok|conteudo para redes sociais)/.test(normalized)) return 'reels_shorts_tiktok';
+  if (/(criativo|trafego|anuncio|ads|criativos para anuncios)/.test(normalized)) return 'criativo_trafego_pago';
+  if (/(corte|podcast)/.test(normalized)) return 'corte_podcast';
+  if (/video medio/.test(normalized)) return 'video_medio';
+  if (/depoimento/.test(normalized)) return 'depoimento';
+  if (/(videoaula|modulo)/.test(normalized)) return 'videoaula_modulo';
+  if (/(youtube|youtube recorrente)/.test(normalized)) return 'youtube';
+  if (/vsl/.test(normalized) && /(longa|30|min|45|min|60|min)/.test(normalized)) return 'vsl_longa';
+  if (/vsl/.test(normalized)) return 'vsl_15';
+  if (/(motion|vinheta)/.test(normalized)) return 'motion';
+  return 'default';
+}
+
+function getUnitPriceFromRules(flow, serviceKey, pricingRules = DEFAULT_PRICING_RULES) {
+  const base = pricingRules.serviceBase || DEFAULT_PRICING_RULES.serviceBase;
+  if (serviceKey === 'motion') return Number(base.motion_min || 900);
+  const fromTable = Number(base[serviceKey]);
+  if (Number.isFinite(fromTable) && fromTable > 0) return fromTable;
+  return flow === 'DR'
+    ? Number(base.default_dr || DEFAULT_PRICING_RULES.serviceBase.default_dr)
+    : Number(base.default_du || DEFAULT_PRICING_RULES.serviceBase.default_du);
+}
+
+function getUrgencyMultiplier(flow, prazo, serviceKey) {
+  const key = canonicalPrazoKey(prazo);
+  const urgencia = DEFAULT_PRICING_RULES.urgencia;
+  const flowTable = flow === 'DR' ? urgencia.DR : urgencia.DU;
+  let multiplier = Number(flowTable[key] || 1);
+  if ((serviceKey === 'vsl_15' || serviceKey === 'vsl_longa') && key === '3 dias') {
+    multiplier = Math.max(multiplier, Number(urgencia.VSL['3 dias'] || 1.4));
+  }
+  return multiplier;
+}
+
+function getVolumeDiscount(totalQty) {
+  const tiers = DEFAULT_PRICING_RULES.volumeDiscounts;
+  const safeQty = Math.max(1, Math.round(Number(totalQty || 0) || 1));
+  const tier = tiers.find((item) => safeQty >= Number(item.min) && safeQty <= Number(item.max));
+  return Number(tier?.percent || 0);
 }
 
 function inferFlow(record) {
@@ -152,9 +251,11 @@ function hasHighValueService(rawService) {
 }
 
 export function estimateValorPotencial(record) {
+  const valorSugerido = toNumber(record?.valor_sugerido, 0);
   const precoFinal = toNumber(record?.preco_final, 0);
   const precoBase = toNumber(record?.preco_base, 0);
   const savedEstimate = toNumber(record?.valor_estimado, 0);
+  if (valorSugerido > 0) return valorSugerido;
   if (precoFinal > 0) return precoFinal;
   if (savedEstimate > 0) return savedEstimate;
   if (precoBase > 0) return precoBase;
@@ -174,28 +275,31 @@ export function estimateValorPotencial(record) {
 
   for (let idx = 0; idx < services.length; idx += 1) {
     const service = services[idx];
+    const serviceKey = mapServiceCatalog(service);
     const key = normalizeServiceKey(service);
     const qty = Math.max(1, Math.round(parsePositiveNumber(quantities[idx] || '') || 1));
     const material = inferMaterialState(materialMap[key] || record?.material_gravado || '');
-    const tempoHours = parseHours(tempoMap[key] || record?.tempo_bruto || '');
+    const tempoMinutes = parseHours(tempoMap[key] || record?.tempo_bruto || '') * 60;
+    const unitPrice = getUnitPriceFromRules(flow, serviceKey);
 
-    let itemTotal = qty * getUnitPrice(flow, service);
-    if (material === 'nao') itemTotal *= 1.35;
-    if (tempoHours > 2) itemTotal *= 1 + Math.min(0.35, (tempoHours - 2) * 0.08);
+    let complexity = DEFAULT_PRICING_RULES.complexidade.N2;
+    if (tempoMinutes <= DEFAULT_PRICING_RULES.complexidade.n1MaxMin) complexity = DEFAULT_PRICING_RULES.complexidade.N1;
+    if (tempoMinutes > DEFAULT_PRICING_RULES.complexidade.n2MaxMin) complexity = DEFAULT_PRICING_RULES.complexidade.N3;
+
+    let itemTotal = qty * unitPrice * complexity;
+    itemTotal *= getUrgencyMultiplier(flow, record?.prazo || record?.Prazo || '', serviceKey);
+    if (material === 'nao') itemTotal *= 1.05;
 
     subtotal += itemTotal;
     totalQty += qty;
   }
 
-  const urgencia = inferUrgencia(record?.prazo || record?.Prazo || '');
-  if (urgencia === 'alta') subtotal *= 1.2;
-  if (urgencia === 'media') subtotal *= 1.08;
-
-  if (flow === 'DR') {
-    if (totalQty >= 40) subtotal *= 0.88;
-    else if (totalQty >= 20) subtotal *= 0.92;
-    else if (totalQty >= 10) subtotal *= 0.95;
+  if (!hasReference(record?.referencia || record?.Referencia || '')) {
+    subtotal *= 1 + (Number(DEFAULT_PRICING_RULES.ajustes.semReferencia || 10) / 100);
   }
+
+  const volumeDiscount = getVolumeDiscount(totalQty);
+  subtotal *= (1 - (volumeDiscount / 100));
 
   return Math.max(150, Math.round(subtotal * 100) / 100);
 }
@@ -212,14 +316,13 @@ export function estimateMargem(record) {
   const tempoHours = parseHours(record?.tempo_bruto || record?.TempoBruto || '');
   const flow = inferFlow(record);
 
-  let custoPercentual = 0.46;
-  if (material === 'nao') custoPercentual += 0.12;
-  if (tempoHours >= 8) custoPercentual += 0.09;
-  if (urgencia === 'alta') custoPercentual += 0.08;
-  if (flow === 'DR') custoPercentual -= 0.05;
+  const choHora = Number(DEFAULT_PRICING_RULES.margem.choHora || 41.67);
+  const horasBase = tempoHours > 0 ? tempoHours : Math.max(1, sumQuantidade(record?.quantidade || record?.Quantidade || '1') * (flow === 'DR' ? 1.1 : 1.3));
+  let custoEstimado = horasBase * choHora;
+  if (material === 'nao') custoEstimado *= 1.1;
+  if (urgencia === 'alta') custoEstimado *= 1.08;
 
-  custoPercentual = Math.min(0.9, Math.max(0.25, custoPercentual));
-  const margem = ((valor - (valor * custoPercentual)) / valor) * 100;
+  const margem = ((valor - custoEstimado) / valor) * 100;
   return Math.round(Math.min(95, Math.max(0, margem)) * 10) / 10;
 }
 
@@ -535,12 +638,8 @@ export const COMMERCIAL_DEFAULTS = {
     referenciaVisual: 8,
     materialGravado: 10,
     servicoAltoValor: 12,
+    semPressa: -6,
   },
-  pricing: {
-    urgencia24h: 1.2,
-    urgenciaSemana: 1.08,
-    materialNaoGravado: 1.35,
-    recorrencia40Plus: 0.88,
-  },
+  pricing: DEFAULT_PRICING_RULES,
   pipelineStatus: ['novo', 'chamado', 'proposta enviada', 'fechado', 'perdido'],
 };

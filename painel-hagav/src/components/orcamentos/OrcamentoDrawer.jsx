@@ -277,6 +277,14 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
         </div>
 
         <div className="px-6 py-4 border-t border-hagav-border shrink-0 flex items-center gap-2">
+          <button
+            type="button"
+            disabled
+            title="Geracao de proposta/PDF entra na proxima etapa"
+            className="btn-ghost btn-sm opacity-60 cursor-not-allowed"
+          >
+            Gerar proposta (em breve)
+          </button>
           <a href={waLink} target="_blank" rel="noreferrer" className="btn-ghost btn-sm">
             <MessageCircle size={13} />
             WhatsApp

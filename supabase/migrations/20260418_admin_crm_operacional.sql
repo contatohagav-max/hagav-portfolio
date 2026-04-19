@@ -83,6 +83,54 @@ create index if not exists idx_orcamentos_revisao_manual on public.orcamentos (r
 create index if not exists idx_orcamentos_status_orcamento on public.orcamentos (status_orcamento);
 
 alter table public.configuracoes enable row level security;
+alter table public.leads enable row level security;
+alter table public.orcamentos enable row level security;
+alter table public.contatos enable row level security;
+
+drop policy if exists leads_admin_select on public.leads;
+create policy leads_admin_select
+on public.leads
+for select
+to authenticated
+using (true);
+
+drop policy if exists leads_admin_update on public.leads;
+create policy leads_admin_update
+on public.leads
+for update
+to authenticated
+using (true)
+with check (true);
+
+drop policy if exists orcamentos_admin_select on public.orcamentos;
+create policy orcamentos_admin_select
+on public.orcamentos
+for select
+to authenticated
+using (true);
+
+drop policy if exists orcamentos_admin_update on public.orcamentos;
+create policy orcamentos_admin_update
+on public.orcamentos
+for update
+to authenticated
+using (true)
+with check (true);
+
+drop policy if exists contatos_admin_select on public.contatos;
+create policy contatos_admin_select
+on public.contatos
+for select
+to authenticated
+using (true);
+
+drop policy if exists contatos_admin_update on public.contatos;
+create policy contatos_admin_update
+on public.contatos
+for update
+to authenticated
+using (true)
+with check (true);
 
 drop policy if exists configuracoes_admin_select on public.configuracoes;
 create policy configuracoes_admin_select

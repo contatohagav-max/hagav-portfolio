@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Search, RefreshCw, FileText, AlertTriangle, ClipboardList } from 'lucide-react';
 import OrcamentosTable from '@/components/orcamentos/OrcamentosTable';
 import OrcamentoDrawer from '@/components/orcamentos/OrcamentoDrawer';
@@ -9,18 +10,32 @@ import { fetchOrcamentos } from '@/lib/supabase';
 import { ORC_STATUS_LABELS, fmtBRL } from '@/lib/utils';
 
 export default function OrcamentosPage() {
+  const searchParams = useSearchParams();
   const [orcamentos, setOrcamentos] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [feedback, setFeedback] = useState('');
   const [selected, setSelected] = useState(null);
 
-  const [search, setSearch] = useState('');
-  const [statusOrc, setStatusOrc] = useState('');
-  const [urgencia, setUrgencia] = useState('');
-  const [prioridade, setPrioridade] = useState('');
-  const [incompletoOnly, setIncompletoOnly] = useState(false);
+  const [search, setSearch] = useState(searchParams.get('search') || '');
+  const [statusOrc, setStatusOrc] = useState(searchParams.get('status_orcamento') || '');
+  const [urgencia, setUrgencia] = useState(searchParams.get('urgencia') || '');
+  const [prioridade, setPrioridade] = useState(searchParams.get('prioridade') || '');
+  const [incompletoOnly, setIncompletoOnly] = useState(searchParams.get('incompleto') === '1');
+  const [abertosOnly, setAbertosOnly] = useState(searchParams.get('abertos') === '1');
+
+  useEffect(() => {
+    setSearch(searchParams.get('search') || '');
+    setStatusOrc(searchParams.get('status_orcamento') || '');
+    setUrgencia(searchParams.get('urgencia') || '');
+    setPrioridade(searchParams.get('prioridade') || '');
+    setIncompletoOnly(searchParams.get('incompleto') === '1');
+    setAbertosOnly(searchParams.get('abertos') === '1');
+  }, [searchParams]);
 
   const load = useCallback(async () => {
     setLoading(true);
+    setLoadError('');
     try {
       const data = await fetchOrcamentos({
         statusOrcamento: statusOrc || undefined,
@@ -30,13 +45,17 @@ export default function OrcamentosPage() {
         incompleto: incompletoOnly || undefined,
         limit: 800,
       });
-      setOrcamentos(data);
+      const rows = abertosOnly
+        ? data.filter((item) => ['pendente_revisao', 'em_revisao', 'aprovado', 'enviado'].includes(String(item.status_orcamento || '')))
+        : data;
+      setOrcamentos(rows);
     } catch (err) {
       console.error('[Orcamentos]', err);
+      setLoadError('Nao foi possivel carregar os orcamentos. Tente novamente.');
     } finally {
       setLoading(false);
     }
-  }, [search, statusOrc, urgencia, prioridade, incompletoOnly]);
+  }, [search, statusOrc, urgencia, prioridade, incompletoOnly, abertosOnly]);
 
   useEffect(() => {
     const timer = setTimeout(load, 250);
@@ -45,6 +64,8 @@ export default function OrcamentosPage() {
 
   function handleUpdated(updated) {
     setOrcamentos((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
+    setFeedback('Orcamento salvo com sucesso.');
+    setTimeout(() => setFeedback(''), 2500);
   }
 
   const totalBase = orcamentos.reduce((sum, item) => sum + Number(item.preco_base || 0), 0);
@@ -128,7 +149,22 @@ export default function OrcamentosPage() {
           <ClipboardList size={12} />
           Campos incompletos
         </button>
+
+        <button
+          type="button"
+          onClick={() => setAbertosOnly((prev) => !prev)}
+          className={`btn-ghost btn-sm ${abertosOnly ? 'border-hagav-gold/40 text-hagav-gold' : ''}`}
+        >
+          Orcamentos em aberto
+        </button>
       </div>
+
+      {loadError && (
+        <p className="text-xs text-red-300 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{loadError}</p>
+      )}
+      {feedback && (
+        <p className="text-xs text-emerald-300 bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-3 py-2">{feedback}</p>
+      )}
 
       {loading ? (
         <div className="flex items-center justify-center py-20">

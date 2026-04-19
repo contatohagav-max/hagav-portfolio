@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import {
   DndContext,
   closestCenter,
@@ -20,7 +20,7 @@ import KanbanCard from './KanbanCard';
 import { KANBAN_COLUMNS, classNames } from '@/lib/utils';
 import { updateLead } from '@/lib/supabase';
 
-function DroppableColumn({ column, leads }) {
+function DroppableColumn({ column, leads, onSelectLead }) {
   const { setNodeRef, isOver } = useDroppable({ id: column.id });
 
   return (
@@ -41,7 +41,7 @@ function DroppableColumn({ column, leads }) {
           strategy={verticalListSortingStrategy}
         >
           {leads.map(lead => (
-            <KanbanCard key={lead.id} lead={lead} />
+            <KanbanCard key={lead.id} lead={lead} onSelect={onSelectLead} />
           ))}
         </SortableContext>
         {leads.length === 0 && (
@@ -54,9 +54,18 @@ function DroppableColumn({ column, leads }) {
   );
 }
 
-export default function KanbanBoard({ initialLeads = [] }) {
+export default function KanbanBoard({
+  initialLeads = [],
+  onLeadsChange,
+  onStatusPersist,
+  onSelectLead,
+}) {
   const [leads, setLeads] = useState(initialLeads);
   const [activeId, setActiveId] = useState(null);
+
+  useEffect(() => {
+    setLeads(initialLeads);
+  }, [initialLeads]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -72,12 +81,6 @@ export default function KanbanBoard({ initialLeads = [] }) {
     });
     return map;
   }, [leads]);
-
-  function findColumnForItem(id) {
-    return KANBAN_COLUMNS.find(col =>
-      leads.find(l => String(l.id) === id)?.status === col.id
-    )?.id ?? null;
-  }
 
   async function handleDragEnd(event) {
     const { active, over } = event;
@@ -98,15 +101,25 @@ export default function KanbanBoard({ initialLeads = [] }) {
     if (targetColId === activeLead.status) return;
 
     // Optimistic update
-    setLeads(prev => prev.map(l => l.id === activeLeadId ? { ...l, status: targetColId } : l));
+    setLeads((prev) => {
+      const next = prev.map((l) => (l.id === activeLeadId ? { ...l, status: targetColId } : l));
+      onLeadsChange?.(next);
+      return next;
+    });
 
     // Persist
     try {
       await updateLead(activeLeadId, { status: targetColId });
+      onStatusPersist?.({ type: 'success', message: `Lead #${activeLeadId} movido para ${targetColId}.` });
     } catch (err) {
       console.error('[Kanban] Error updating lead status:', err);
       // Rollback
-      setLeads(prev => prev.map(l => l.id === activeLeadId ? { ...l, status: activeLead.status } : l));
+      setLeads((prev) => {
+        const next = prev.map((l) => (l.id === activeLeadId ? { ...l, status: activeLead.status } : l));
+        onLeadsChange?.(next);
+        return next;
+      });
+      onStatusPersist?.({ type: 'error', message: 'Nao foi possivel salvar o status no pipeline.' });
     }
   }
 
@@ -127,6 +140,7 @@ export default function KanbanBoard({ initialLeads = [] }) {
             key={col.id}
             column={col}
             leads={colMap[col.id] ?? []}
+            onSelectLead={onSelectLead}
           />
         ))}
       </div>

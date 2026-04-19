@@ -4,7 +4,7 @@ import { MessageCircle, GripVertical } from 'lucide-react';
 import { UrgenciaBadge, TemperaturaBadge } from '@/components/ui/StatusBadge';
 import { fmtRelative, whatsappLink, fmtBRL, truncate } from '@/lib/utils';
 
-export default function KanbanCard({ lead }) {
+export default function KanbanCard({ lead, onSelect }) {
   const {
     attributes,
     listeners,
@@ -21,11 +21,18 @@ export default function KanbanCard({ lead }) {
   };
 
   return (
-    <div ref={setNodeRef} style={style} className="kanban-card group">
+    <div
+      ref={setNodeRef}
+      style={style}
+      className="kanban-card group cursor-pointer"
+      onClick={() => onSelect?.(lead)}
+      title="Abrir lead"
+    >
       <div className="flex items-start gap-2">
         <div
           {...attributes}
           {...listeners}
+          onClick={(e) => e.stopPropagation()}
           className="mt-0.5 text-hagav-muted hover:text-hagav-gray cursor-grab active:cursor-grabbing shrink-0"
         >
           <GripVertical size={14} />

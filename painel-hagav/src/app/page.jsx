@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   Users,
   Wallet,
@@ -82,12 +83,15 @@ function ChartCard({ title, icon: Icon, children, empty, loading }) {
 }
 
 export default function DashboardPage() {
+  const router = useRouter();
   const [insights, setInsights] = useState(EMPTY_INSIGHTS);
   const [loading, setLoading] = useState(true);
   const [lastRefresh, setLastRefresh] = useState(null);
+  const [loadError, setLoadError] = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
+    setLoadError('');
     try {
       const data = await fetchDashboardMetrics();
       setInsights(data || EMPTY_INSIGHTS);
@@ -95,6 +99,7 @@ export default function DashboardPage() {
     } catch (err) {
       console.error('[Dashboard]', err);
       setInsights(EMPTY_INSIGHTS);
+      setLoadError('Nao foi possivel carregar o dashboard agora. Tente novamente.');
     } finally {
       setLoading(false);
     }
@@ -108,14 +113,14 @@ export default function DashboardPage() {
   const charts = insights.charts;
 
   const metricCards = [
-    { label: 'Leads no mes', value: m.leadsMes, icon: Users },
-    { label: 'Orcamentos em aberto', value: fmtBRL(m.orcamentosAbertos), icon: Wallet, accent: true },
-    { label: 'Receita fechada no mes', value: fmtBRL(m.receitaFechadaMes), icon: CircleDollarSign },
-    { label: 'Ticket medio', value: fmtBRL(m.ticketMedio), icon: BadgeDollarSign },
-    { label: 'Taxa de conversao', value: fmtPercent(m.taxaConversao), icon: Percent },
-    { label: 'Leads urgentes', value: m.leadsUrgentes, icon: Siren },
-    { label: 'Follow-up atrasado', value: m.followupAtrasado, icon: Clock3 },
-    { label: 'Tempo medio de resposta', value: fmtHours(m.tempoMedioResposta), icon: Timer },
+    { label: 'Leads no mes', value: m.leadsMes, icon: Users, onClick: () => router.push('/leads'), title: 'Abrir tela de leads' },
+    { label: 'Orcamentos em aberto', value: fmtBRL(m.orcamentosAbertos), icon: Wallet, accent: true, onClick: () => router.push('/orcamentos?abertos=1'), title: 'Abrir orcamentos em aberto' },
+    { label: 'Receita fechada no mes', value: fmtBRL(m.receitaFechadaMes), icon: CircleDollarSign, onClick: () => router.push('/orcamentos?status_orcamento=enviado'), title: 'Abrir orcamentos enviados/aprovados' },
+    { label: 'Ticket medio', value: fmtBRL(m.ticketMedio), icon: BadgeDollarSign, onClick: () => router.push('/orcamentos'), title: 'Abrir tela de orcamentos' },
+    { label: 'Taxa de conversao', value: fmtPercent(m.taxaConversao), icon: Percent, onClick: () => router.push('/pipeline'), title: 'Abrir pipeline' },
+    { label: 'Leads urgentes', value: m.leadsUrgentes, icon: Siren, onClick: () => router.push('/leads?urgencia=alta'), title: 'Filtrar leads urgentes' },
+    { label: 'Follow-up atrasado', value: m.followupAtrasado, icon: Clock3, onClick: () => router.push('/leads?followup=1'), title: 'Filtrar follow-up atrasado' },
+    { label: 'Tempo medio de resposta', value: fmtHours(m.tempoMedioResposta), icon: Timer, onClick: () => router.push('/leads'), title: 'Abrir leads e revisar tempos de resposta' },
   ];
 
   return (
@@ -138,6 +143,12 @@ export default function DashboardPage() {
           <MetricCard key={card.label} {...card} />
         ))}
       </div>
+
+      {loadError && (
+        <p className="text-xs text-red-300 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
+          {loadError}
+        </p>
+      )}
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
         <ChartCard

@@ -1,11 +1,29 @@
 import { classNames } from '@/lib/utils';
 
-export default function MetricCard({ label, value, sub, icon: Icon, accent = false, trend }) {
+export default function MetricCard({
+  label,
+  value,
+  sub,
+  icon: Icon,
+  accent = false,
+  trend,
+  onClick,
+  title,
+}) {
+  const interactive = typeof onClick === 'function';
+
   return (
-    <div className={classNames(
-      'metric-card group',
-      accent && 'border-hagav-gold/30 shadow-gold',
-    )}>
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={!interactive}
+      title={title || ''}
+      className={classNames(
+        'metric-card group text-left',
+        accent && 'border-hagav-gold/30 shadow-gold',
+        interactive ? 'cursor-pointer hover:border-hagav-gold/25 transition-colors' : 'cursor-default',
+      )}
+    >
       {/* Gold top accent line */}
       {accent && (
         <div className="absolute top-0 left-0 right-0 h-px bg-gold-gradient" />
@@ -45,6 +63,6 @@ export default function MetricCard({ label, value, sub, icon: Icon, accent = fal
           <span className="text-xs text-hagav-gray">vs. mês anterior</span>
         </div>
       )}
-    </div>
+    </button>
   );
 }

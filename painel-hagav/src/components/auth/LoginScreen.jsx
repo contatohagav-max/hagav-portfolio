@@ -5,13 +5,10 @@ import { useState } from 'react';
 import { LogIn, Loader2, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 
-const TEST_LOGIN_EMAIL = 'admin.hagav@gmail.com';
-const TEST_LOGIN_PASSWORD = '123';
-
 export default function LoginScreen() {
   const { login } = useAuth();
-  const [email, setEmail]       = useState(TEST_LOGIN_EMAIL);
-  const [password, setPassword] = useState(TEST_LOGIN_PASSWORD);
+  const [email, setEmail]       = useState('');
+  const [password, setPassword] = useState('');
   const [showPw, setShowPw]     = useState(false);
   const [error, setError]       = useState('');
   const [loading, setLoading]   = useState(false);
@@ -66,7 +63,7 @@ export default function LoginScreen() {
                 type="email"
                 value={email}
                 onChange={e => setEmail(e.target.value)}
-                placeholder={TEST_LOGIN_EMAIL}
+                placeholder="seu-email@empresa.com"
                 autoComplete="email"
                 className="hinput w-full"
               />
@@ -79,7 +76,7 @@ export default function LoginScreen() {
                   type={showPw ? 'text' : 'password'}
                   value={password}
                   onChange={e => setPassword(e.target.value)}
-                  placeholder={TEST_LOGIN_PASSWORD}
+                  placeholder="Digite sua senha"
                   autoComplete="current-password"
                   className="hinput w-full pr-9"
                 />

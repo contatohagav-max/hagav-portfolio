@@ -5,18 +5,24 @@ import { RefreshCw, Kanban, Siren, Clock3 } from 'lucide-react';
 import KanbanBoard from '@/components/pipeline/KanbanBoard';
 import EmptyState from '@/components/ui/EmptyState';
 import { fetchLeads } from '@/lib/supabase';
+import LeadDrawer from '@/components/leads/LeadDrawer';
 
 export default function PipelinePage() {
   const [leads, setLeads] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [feedback, setFeedback] = useState({ type: '', message: '' });
+  const [selectedLead, setSelectedLead] = useState(null);
 
   async function load() {
     setLoading(true);
+    setLoadError('');
     try {
       const data = await fetchLeads({ limit: 900 });
       setLeads(data);
     } catch (err) {
       console.error('[Pipeline]', err);
+      setLoadError('Nao foi possivel carregar o pipeline. Tente novamente.');
     } finally {
       setLoading(false);
     }
@@ -33,6 +39,18 @@ export default function PipelinePage() {
     if (Number.isFinite(next)) return next < Date.now();
     return false;
   }).length;
+
+  function handleStatusFeedback(next) {
+    if (!next?.message) return;
+    setFeedback(next);
+    setTimeout(() => setFeedback({ type: '', message: '' }), 2600);
+  }
+
+  function handleLeadUpdated(updated) {
+    setLeads((prev) => prev.map((lead) => (lead.id === updated.id ? updated : lead)));
+    setFeedback({ type: 'success', message: 'Lead atualizado com sucesso.' });
+    setTimeout(() => setFeedback({ type: '', message: '' }), 2600);
+  }
 
   return (
     <div className="space-y-5 animate-fade-in h-full flex flex-col">
@@ -70,6 +88,17 @@ export default function PipelinePage() {
         Arraste os cards para mover o lead no funil comercial (Novo &gt; Contatado &gt; Proposta &gt; Fechado &gt; Perdido).
       </p>
 
+      {loadError && (
+        <p className="text-xs text-red-300 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2 shrink-0">
+          {loadError}
+        </p>
+      )}
+      {feedback.message && (
+        <p className={`text-xs rounded-lg px-3 py-2 shrink-0 border ${feedback.type === 'error' ? 'text-red-300 bg-red-500/10 border-red-500/20' : 'text-emerald-300 bg-emerald-500/10 border-emerald-500/20'}`}>
+          {feedback.message}
+        </p>
+      )}
+
       {loading ? (
         <div className="flex items-center justify-center py-20 flex-1">
           <RefreshCw size={20} className="animate-spin text-hagav-gold" />
@@ -83,8 +112,21 @@ export default function PipelinePage() {
         />
       ) : (
         <div className="flex-1 overflow-hidden">
-          <KanbanBoard initialLeads={leads} />
+          <KanbanBoard
+            initialLeads={leads}
+            onLeadsChange={setLeads}
+            onStatusPersist={handleStatusFeedback}
+            onSelectLead={setSelectedLead}
+          />
         </div>
+      )}
+
+      {selectedLead && (
+        <LeadDrawer
+          lead={selectedLead}
+          onClose={() => setSelectedLead(null)}
+          onUpdated={handleLeadUpdated}
+        />
       )}
     </div>
   );

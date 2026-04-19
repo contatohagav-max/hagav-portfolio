@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Search, RefreshCw, Users, Flame, Clock3, Target } from 'lucide-react';
 import LeadsTable from '@/components/leads/LeadsTable';
 import LeadDrawer from '@/components/leads/LeadDrawer';
@@ -11,21 +12,36 @@ import { LEAD_STATUS_LABELS } from '@/lib/utils';
 const FLUXOS = ['', 'DU', 'DR', 'WhatsApp', 'Contato'];
 
 export default function LeadsPage() {
+  const searchParams = useSearchParams();
   const [leads, setLeads] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [feedback, setFeedback] = useState('');
   const [selected, setSelected] = useState(null);
 
-  const [search, setSearch] = useState('');
-  const [status, setStatus] = useState('');
-  const [origem, setOrigem] = useState('');
-  const [fluxo, setFluxo] = useState('');
-  const [urgencia, setUrgencia] = useState('');
-  const [prioridade, setPrioridade] = useState('');
-  const [temperatura, setTemperatura] = useState('');
-  const [followupAtrasado, setFollowupAtrasado] = useState(false);
+  const [search, setSearch] = useState(searchParams.get('search') || '');
+  const [status, setStatus] = useState(searchParams.get('status') || '');
+  const [origem, setOrigem] = useState(searchParams.get('origem') || '');
+  const [fluxo, setFluxo] = useState(searchParams.get('fluxo') || '');
+  const [urgencia, setUrgencia] = useState(searchParams.get('urgencia') || '');
+  const [prioridade, setPrioridade] = useState(searchParams.get('prioridade') || '');
+  const [temperatura, setTemperatura] = useState(searchParams.get('temperatura') || '');
+  const [followupAtrasado, setFollowupAtrasado] = useState(searchParams.get('followup') === '1');
+
+  useEffect(() => {
+    setSearch(searchParams.get('search') || '');
+    setStatus(searchParams.get('status') || '');
+    setOrigem(searchParams.get('origem') || '');
+    setFluxo(searchParams.get('fluxo') || '');
+    setUrgencia(searchParams.get('urgencia') || '');
+    setPrioridade(searchParams.get('prioridade') || '');
+    setTemperatura(searchParams.get('temperatura') || '');
+    setFollowupAtrasado(searchParams.get('followup') === '1');
+  }, [searchParams]);
 
   const load = useCallback(async () => {
     setLoading(true);
+    setLoadError('');
     try {
       const data = await fetchLeads({
         status: status || undefined,
@@ -41,6 +57,7 @@ export default function LeadsPage() {
       setLeads(data);
     } catch (err) {
       console.error('[Leads]', err);
+      setLoadError('Nao foi possivel carregar os leads. Tente novamente.');
     } finally {
       setLoading(false);
     }
@@ -53,6 +70,8 @@ export default function LeadsPage() {
 
   function handleUpdated(updated) {
     setLeads((prev) => prev.map((lead) => (lead.id === updated.id ? updated : lead)));
+    setFeedback('Lead salvo com sucesso.');
+    setTimeout(() => setFeedback(''), 2500);
   }
 
   const origens = [...new Set(leads.map((lead) => lead.origem).filter(Boolean))];
@@ -103,6 +122,13 @@ export default function LeadsPage() {
           <p className="text-2xl font-bold text-hagav-white mt-2">{followupLateCount}</p>
         </div>
       </div>
+
+      {loadError && (
+        <p className="text-xs text-red-300 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{loadError}</p>
+      )}
+      {feedback && (
+        <p className="text-xs text-emerald-300 bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-3 py-2">{feedback}</p>
+      )}
 
       <div className="flex flex-wrap gap-2">
         <div className="relative flex-1 min-w-[220px]">

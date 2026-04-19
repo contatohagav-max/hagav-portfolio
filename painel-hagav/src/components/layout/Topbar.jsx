@@ -1,10 +1,13 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
 import { Menu, Search, Bell, LogOut, User, ChevronDown } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 
 export default function Topbar({ onMenuClick }) {
+  const router = useRouter();
+  const pathname = usePathname();
   const { session, logout } = useAuth();
   const [searchVal, setSearchVal]   = useState('');
   const [menuOpen, setMenuOpen]     = useState(false);
@@ -21,6 +24,15 @@ export default function Topbar({ onMenuClick }) {
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
+  function handleGlobalSearch(event) {
+    event.preventDefault();
+    const query = searchVal.trim();
+    if (!query) return;
+
+    const targetBase = pathname?.startsWith('/orcamentos') ? '/orcamentos' : '/leads';
+    router.push(`${targetBase}?search=${encodeURIComponent(query)}`);
+  }
+
   return (
     <header className="h-14 flex items-center gap-3 px-4 lg:px-6 bg-hagav-dark border-b border-hagav-border shrink-0">
       {/* Mobile menu */}
@@ -32,23 +44,27 @@ export default function Topbar({ onMenuClick }) {
       </button>
 
       {/* Search */}
-      <div className="flex-1 max-w-md relative">
+      <form onSubmit={handleGlobalSearch} className="flex-1 max-w-md relative">
         <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-hagav-gray pointer-events-none" />
         <input
           type="text"
-          placeholder="Buscar lead, orçamento…"
+          placeholder="Buscar lead ou orcamento e pressionar Enter"
           value={searchVal}
           onChange={e => setSearchVal(e.target.value)}
           className="hinput w-full pl-8 py-1.5 text-sm"
         />
-      </div>
+      </form>
 
       <div className="flex-1" />
 
       {/* Notifications */}
-      <button className="relative text-hagav-gray hover:text-hagav-white p-2 rounded-lg hover:bg-hagav-muted/30 transition-colors">
+      <button
+        type="button"
+        disabled
+        title="Notificacoes em breve"
+        className="relative text-hagav-gray/60 p-2 rounded-lg cursor-not-allowed"
+      >
         <Bell size={17} />
-        <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-hagav-gold" />
       </button>
 
       {/* Profile dropdown */}

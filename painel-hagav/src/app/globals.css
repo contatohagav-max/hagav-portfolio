@@ -121,8 +121,16 @@
     @apply fixed inset-0 bg-black/70 backdrop-blur-sm z-40 animate-fade-in;
   }
   .drawer-panel {
-    @apply fixed right-0 top-0 bottom-0 w-full max-w-xl bg-hagav-dark border-l
-           border-hagav-border shadow-modal z-50 overflow-y-auto animate-slide-in;
+    @apply fixed left-1/2 top-1/2 z-50 w-[min(94vw,760px)] max-h-[calc(100vh-2rem)]
+           rounded-2xl bg-hagav-dark border border-hagav-border shadow-modal overflow-y-auto;
+    transform: translate(-50%, -50%);
+    animation: drawerCenterIn 0.22s ease-out;
+  }
+
+  @media (max-width: 768px) {
+    .drawer-panel {
+      @apply w-[calc(100vw-1rem)] max-h-[calc(100vh-1rem)] rounded-xl;
+    }
   }
 
   /* Kanban column */
@@ -136,6 +144,17 @@
   .kanban-card {
     @apply hcard mx-3 my-2 cursor-grab active:cursor-grabbing active:scale-[0.98]
            select-none;
+  }
+}
+
+@keyframes drawerCenterIn {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -48%) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
   }
 }
 

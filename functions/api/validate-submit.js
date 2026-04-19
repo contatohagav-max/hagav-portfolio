@@ -804,8 +804,71 @@ async function saveLeadToSupabase(env, lead) {
   return { ok: true };
 }
 
+function getSheetsWebhookUrl(env, tipo) {
+  const isDu = tipo === "unica";
+  return firstEnvValue(env, isDu
+    ? [
+      "GOOGLE_SHEETS_WEBHOOK_URL_DU",
+      "GOOGLE_SHEETS_WEBHOOK_DU",
+      "GOOGLE_SHEETS_WEBHOOK_URL"
+    ]
+    : [
+      "GOOGLE_SHEETS_WEBHOOK_URL_DR",
+      "GOOGLE_SHEETS_WEBHOOK_DR",
+      "GOOGLE_SHEETS_WEBHOOK_URL"
+    ]);
+}
+
+async function saveLeadToSheetsWebhook(env, lead) {
+  const tipo = normalizeTipoValue(lead?.raw?.tipo, lead?.raw?.answers || {});
+  const webhookUrl = getSheetsWebhookUrl(env, tipo);
+  if (!webhookUrl) return { ok: false, reason: "webhook_not_configured" };
+
+  const secret = firstEnvValue(env, ["GOOGLE_SHEETS_WEBHOOK_SECRET", "WEBHOOK_SECRET"]);
+  const payload = {
+    secret,
+    row: lead?.row || {},
+    raw: lead?.raw || {},
+    source: "hagav.com.br",
+    sentAt: new Date().toISOString()
+  };
+
+  try {
+    const response = await fetch(webhookUrl, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json; charset=utf-8",
+        "x-webhook-secret": secret || ""
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+      return { ok: false, reason: `webhook_http_${response.status}` };
+    }
+    const parsed = await parseJsonSafe(response);
+    if (parsed && (parsed.ok === false || parsed.saved === false)) {
+      return { ok: false, reason: String(parsed.error || parsed.reason || "webhook_rejected") };
+    }
+    return { ok: true };
+  } catch {
+    return { ok: false, reason: "webhook_request_failed" };
+  }
+}
+
 async function saveLead(env, lead) {
-  return saveLeadToSupabase(env, lead);
+  const supabaseResult = await saveLeadToSupabase(env, lead);
+  if (supabaseResult.ok) return supabaseResult;
+
+  const webhookResult = await saveLeadToSheetsWebhook(env, lead);
+  if (webhookResult.ok) {
+    return { ok: true, reason: "saved_via_webhook_fallback" };
+  }
+
+  return {
+    ok: false,
+    reason: [supabaseResult.reason, webhookResult.reason].filter(Boolean).join(" | ")
+  };
 }
 
 function toFlatMap(value, keyLimit, valLimit) {

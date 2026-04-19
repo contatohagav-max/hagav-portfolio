@@ -504,6 +504,39 @@ async function postSupabaseRow(config, table, payload) {
   }
 }
 
+function extractMissingColumnFromReason(reason) {
+  const text = String(reason || "");
+  const match = text.match(/Could not find the '([^']+)' column/i);
+  return match?.[1] || "";
+}
+
+async function postSupabaseRowWithSchemaFallback(config, table, payload) {
+  const attemptPayload = { ...(payload || {}) };
+  const droppedColumns = [];
+
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    const result = await postSupabaseRow(config, table, attemptPayload);
+    if (result.ok) {
+      if (droppedColumns.length > 0) {
+        console.warn("[validate-submit][supabase] schema_fallback_used", JSON.stringify({
+          table,
+          droppedColumns
+        }));
+      }
+      return result;
+    }
+
+    const missingColumn = extractMissingColumnFromReason(result.reason);
+    if (!missingColumn) return result;
+    if (!Object.prototype.hasOwnProperty.call(attemptPayload, missingColumn)) return result;
+
+    delete attemptPayload[missingColumn];
+    droppedColumns.push(missingColumn);
+  }
+
+  return { ok: false, reason: "schema_fallback_limit_reached" };
+}
+
 async function fetchSupabaseConfigValue(config, key) {
   const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
   const timeoutId = controller
@@ -836,7 +869,7 @@ async function saveLeadToSupabase(env, lead) {
     link_pdf: stripDangerousText(pricing.linkPdf || "", 500)
   };
 
-  const orcamentoResult = await postSupabaseRow(config, "orcamentos", orcamentoInsert);
+  const orcamentoResult = await postSupabaseRowWithSchemaFallback(config, "orcamentos", orcamentoInsert);
   if (!orcamentoResult.ok) {
     console.warn("[validate-submit][supabase] orcamentos_insert_failed", JSON.stringify({ reason: orcamentoResult.reason || "" }));
     return orcamentoResult;
@@ -869,7 +902,7 @@ async function saveLeadToSupabase(env, lead) {
     resumo_orcamento: buildResumoOrcamento(row),
     resumo_comercial: resumoComercial
   };
-  const leadResult = await postSupabaseRow(config, "leads", leadInsert);
+  const leadResult = await postSupabaseRowWithSchemaFallback(config, "leads", leadInsert);
   if (!leadResult.ok) {
     console.warn("[validate-submit][supabase] leads_insert_failed", JSON.stringify({ reason: leadResult.reason || "" }));
     return leadResult;

@@ -39,20 +39,35 @@ export default function OrcamentosTable({ orcamentos, onSelect }) {
         <tbody>
           {orcamentos.map((orc) => (
             <tr key={orc.id} onClick={() => onSelect(orc)} className={orc.incompleto ? 'bg-yellow-500/5' : ''}>
-              <td className="text-hagav-gray font-mono text-xs">{orc.id}</td>
-              <td>
-                <div>
-                  <p className="font-medium text-hagav-white">{orc.nome || '—'}</p>
-                  <p className="text-[11px] text-hagav-gray font-mono">{orc.whatsapp || ''}</p>
-                </div>
-              </td>
-              <td className="text-xs">
-                <span className="badge bg-hagav-muted/40 border-hagav-border text-hagav-light">{orc.fluxo || '—'}</span>
-              </td>
-              <td className="text-hagav-light text-xs max-w-[180px]" title={orc.servico || ''}>
-                {truncate(orc.servico, 68)}
-              </td>
-              <td className="text-hagav-gray text-xs">{orc.quantidade || '—'}</td>
+              {(() => {
+                const itens = Array.isArray(orc.itens_servico) ? orc.itens_servico : [];
+                const servicoResumo = itens.length > 0
+                  ? itens.map((item) => item?.servico).filter(Boolean).join(' | ')
+                  : (orc.servico || '');
+                const quantidadeResumo = itens.length > 0
+                  ? itens.map((item) => `${item?.servico || 'Servico'}: ${item?.quantidade || '-'}`).join(' | ')
+                  : (orc.quantidade || '');
+                return (
+                  <>
+                    <td className="text-hagav-gray font-mono text-xs">{orc.id}</td>
+                    <td>
+                      <div>
+                        <p className="font-medium text-hagav-white">{orc.nome || '—'}</p>
+                        <p className="text-[11px] text-hagav-gray font-mono">{orc.whatsapp || ''}</p>
+                      </div>
+                    </td>
+                    <td className="text-xs">
+                      <span className="badge bg-hagav-muted/40 border-hagav-border text-hagav-light">{orc.fluxo || '—'}</span>
+                    </td>
+                    <td className="text-hagav-light text-xs max-w-[180px]" title={servicoResumo}>
+                      {truncate(servicoResumo, 68)}
+                    </td>
+                    <td className="text-hagav-gray text-xs max-w-[220px]" title={quantidadeResumo}>
+                      {truncate(quantidadeResumo, 56) || '—'}
+                    </td>
+                  </>
+                );
+              })()}
               <td className="text-hagav-gray text-xs">{truncate(orc.material_gravado, 40)}</td>
               <td className="text-hagav-gray text-xs">{truncate(orc.tempo_bruto, 40)}</td>
               <td className="text-hagav-gray text-xs">{orc.prazo || '—'}</td>

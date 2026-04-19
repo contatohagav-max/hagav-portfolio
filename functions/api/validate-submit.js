@@ -467,7 +467,8 @@ function buildOrcamentoDetalhesSerializado(lead, pricing) {
       ajusteReferenciaPercent: Number(pricing?.ajusteReferenciaPercent || 0),
       ajusteMulticameraPercent: Number(pricing?.ajusteMulticameraPercent || 0),
       pacoteSugerido: pricing?.pacoteSugerido || "",
-      statusOrcamento: pricing?.statusOrcamento || STATUS_ORCAMENTO_PADRAO
+      statusOrcamento: pricing?.statusOrcamento || STATUS_ORCAMENTO_PADRAO,
+      itensServico: Array.isArray(pricing?.itensServico) ? pricing.itensServico : []
     },
     respostasCompletas: rawAnswers
   };
@@ -1014,19 +1015,56 @@ function entriesToLookup(entries) {
   return map;
 }
 
+function buildItemFromService(serviceLabel, qtyEntries, materialEntries, tempoEntries, defaults = {}) {
+  const servico = stripDangerousText(String(serviceLabel || ""), LIMITS.service);
+  if (!servico) return null;
+  const quantidade = getLooseMapValue(qtyEntries, servico)
+    || stripDangerousText(String(defaults.quantidade || ""), 16)
+    || "-";
+  const materialGravado = getLooseMapValue(materialEntries, servico)
+    || stripDangerousText(String(defaults.materialGravado || ""), 40)
+    || "";
+  const tempoBruto = getLooseMapValue(tempoEntries, servico)
+    || stripDangerousText(String(defaults.tempoBruto || ""), LIMITS.duration)
+    || "";
+
+  return {
+    servico,
+    quantidade,
+    material_gravado: materialGravado,
+    tempo_bruto: tempoBruto
+  };
+}
+
+function summarizeItemsField(items, field, fallback = "-") {
+  if (!Array.isArray(items) || items.length === 0) return fallback;
+  const parts = items.map((item) => {
+    const service = stripDangerousText(String(item?.servico || ""), LIMITS.service);
+    const value = stripDangerousText(String(item?.[field] || ""), 80) || "-";
+    if (!service) return value;
+    return `${service}: ${value}`;
+  }).filter(Boolean);
+  return parts.length > 0 ? parts.join(" | ") : fallback;
+}
+
 function buildStructuredDataFromAnswers(tipo, answers) {
   const data = {
     servicePrimary: "",
+    serviceSummary: "",
     quantityPrimary: "",
+    quantitySummary: "",
     materialPrimary: "",
+    materialSummary: "",
     tempoPrimary: "",
+    tempoSummary: "",
     prazo: "",
     referencia: "",
     objetivo: "",
     services: [],
     quantities: [],
     materialLookup: {},
-    tempoLookup: {}
+    tempoLookup: {},
+    items: []
   };
 
   if (tipo === "unica") {
@@ -1039,16 +1077,27 @@ function buildStructuredDataFromAnswers(tipo, answers) {
     const primaryService = resolvedServices[0] || qtyEntries[0]?.label || "";
     const resolvedQuantities = resolvedServices.map((service) => getLooseMapValue(qtyEntries, service) || "-");
 
+    const items = resolvedServices.map((service) => buildItemFromService(service, qtyEntries, materialEntries, tempoEntries)).filter(Boolean);
+
     data.servicePrimary = primaryService;
+    data.serviceSummary = resolvedServices.join(" | ");
     data.quantityPrimary = getLooseMapValue(qtyEntries, primaryService) || resolvedQuantities[0] || "";
+    data.quantitySummary = summarizeItemsField(items, "quantidade", data.quantityPrimary || "-");
     data.materialPrimary = getLooseMapValue(materialEntries, primaryService) || materialEntries[0]?.value || "";
+    data.materialSummary = summarizeItemsField(items, "material_gravado", data.materialPrimary || "-");
     data.tempoPrimary = getLooseMapValue(tempoEntries, primaryService) || tempoEntries[0]?.value || "";
+    data.tempoSummary = summarizeItemsField(items, "tempo_bruto", data.tempoPrimary || "-");
     data.prazo = stripDangerousText(String(answers?.unica_prazo || ""), 60);
     data.referencia = stripDangerousText(String(answers?.unica_referencia || ""), LIMITS.referencia);
     data.services = resolvedServices;
     data.quantities = resolvedQuantities;
     data.materialLookup = entriesToLookup(materialEntries);
     data.tempoLookup = entriesToLookup(tempoEntries);
+    data.items = items.map((item) => ({
+      ...item,
+      referencia: data.referencia,
+      prazo: data.prazo
+    }));
     return data;
   }
 
@@ -1061,17 +1110,46 @@ function buildStructuredDataFromAnswers(tipo, answers) {
   const primaryOperation = resolvedOperations[0] || qtyEntries[0]?.label || "";
   const resolvedQuantities = resolvedOperations.map((operation) => getLooseMapValue(qtyEntries, operation) || "-");
 
-  data.servicePrimary = primaryOperation || composeWithOutro(answers?.rec_tipo_operacao, answers?.rec_tipo_operacao_outro, 120);
+  const fallbackService = composeWithOutro(answers?.rec_tipo_operacao, answers?.rec_tipo_operacao_outro, 120);
+  const fallbackItem = buildItemFromService(
+    primaryOperation || fallbackService,
+    qtyEntries,
+    materialEntries,
+    tempoEntries,
+    {
+      quantidade: stripDangerousText(String(answers?.rec_volume || ""), 60),
+      materialGravado: stripDangerousText(String(answers?.rec_gravado || ""), 40),
+      tempoBruto: stripDangerousText(String(answers?.rec_tempo_bruto || ""), LIMITS.duration)
+    }
+  );
+  const items = resolvedOperations.length > 0
+    ? resolvedOperations.map((operation) => buildItemFromService(operation, qtyEntries, materialEntries, tempoEntries, {
+      quantidade: stripDangerousText(String(answers?.rec_volume || ""), 60),
+      materialGravado: stripDangerousText(String(answers?.rec_gravado || ""), 40),
+      tempoBruto: stripDangerousText(String(answers?.rec_tempo_bruto || ""), LIMITS.duration)
+    })).filter(Boolean)
+    : (fallbackItem ? [fallbackItem] : []);
+
+  data.servicePrimary = primaryOperation || fallbackService;
+  data.serviceSummary = items.map((item) => item.servico).join(" | ");
   data.quantityPrimary = getLooseMapValue(qtyEntries, primaryOperation) || resolvedQuantities[0] || stripDangerousText(String(answers?.rec_volume || ""), 60);
+  data.quantitySummary = summarizeItemsField(items, "quantidade", data.quantityPrimary || "-");
   data.materialPrimary = getLooseMapValue(materialEntries, primaryOperation) || materialEntries[0]?.value || stripDangerousText(String(answers?.rec_gravado || ""), 40);
+  data.materialSummary = summarizeItemsField(items, "material_gravado", data.materialPrimary || "-");
   data.tempoPrimary = getLooseMapValue(tempoEntries, primaryOperation) || tempoEntries[0]?.value || stripDangerousText(String(answers?.rec_tempo_bruto || ""), LIMITS.duration);
+  data.tempoSummary = summarizeItemsField(items, "tempo_bruto", data.tempoPrimary || "-");
   data.prazo = stripDangerousText(String(answers?.rec_inicio || answers?.recorrente_prazo || ""), 60);
   data.referencia = stripDangerousText(String(answers?.rec_referencia || answers?.referencia || ""), LIMITS.referencia);
   data.objetivo = stripDangerousText(String(answers?.rec_objetivo || answers?.objetivo || ""), 120);
-  data.services = resolvedOperations.length > 0 ? resolvedOperations : (data.servicePrimary ? [data.servicePrimary] : []);
-  data.quantities = resolvedQuantities.length > 0 ? resolvedQuantities : [data.quantityPrimary || "-"];
+  data.services = items.map((item) => item.servico);
+  data.quantities = items.map((item) => item.quantidade || "-");
   data.materialLookup = entriesToLookup(materialEntries);
   data.tempoLookup = entriesToLookup(tempoEntries);
+  data.items = items.map((item) => ({
+    ...item,
+    referencia: data.referencia,
+    prazo: data.prazo
+  }));
   return data;
 }
 
@@ -1110,6 +1188,8 @@ function calculateOrcamentoPricing(row, pricingRules, rawAnswers) {
   let alertaCapacidade = false;
   let prazoBloqueado = false;
   let estimatedHours = 0;
+  let globalSuggestedFactor = 1;
+  const itensServico = [];
   const reasons = [];
 
   const baseHoursByService = {
@@ -1126,16 +1206,29 @@ function calculateOrcamentoPricing(row, pricingRules, rawAnswers) {
     default: 1.4
   };
 
-  for (let index = 0; index < services.length; index += 1) {
-    const serviceLabel = services[index];
-    const qty = Math.max(1, Math.round(parsePositiveNumber(qtyParts[index] || "1") || 1));
+  const structuredItems = Array.isArray(structured.items) ? structured.items : [];
+  const baseItems = structuredItems.length > 0
+    ? structuredItems
+    : services.map((serviceLabel, index) => ({
+      servico: serviceLabel,
+      quantidade: qtyParts[index] || "1",
+      material_gravado: materialMap[normalizeServiceKey(serviceLabel)] || row?.MaterialGravado || "",
+      tempo_bruto: tempoMap[normalizeServiceKey(serviceLabel)] || "",
+      referencia: referenciaBase || "",
+      prazo: prazoBase || ""
+    }));
+
+  for (let index = 0; index < baseItems.length; index += 1) {
+    const item = baseItems[index] || {};
+    const serviceLabel = stripDangerousText(String(item?.servico || services[index] || ""), LIMITS.service);
+    const qty = Math.max(1, Math.round(parsePositiveNumber(item?.quantidade || qtyParts[index] || "1") || 1));
     const serviceKey = mapServiceCatalog(serviceLabel);
     const unit = getUnitPriceFromRules(flow, serviceKey, pricingRules);
-    const tempoRaw = tempoMap[normalizeServiceKey(serviceLabel)] || "";
+    const tempoRaw = stripDangerousText(String(item?.tempo_bruto || tempoMap[normalizeServiceKey(serviceLabel)] || ""), LIMITS.duration);
     const tempoMinutes = Math.round(parseHours(tempoRaw) * 60);
     const complexity = getComplexidadeByMinutes(tempoMinutes, pricingRules);
     const urg = getUrgencyMultiplier(flow, prazoKey, serviceKey, pricingRules);
-    const materialRaw = String(materialMap[normalizeServiceKey(serviceLabel)] || row?.MaterialGravado || "").toLowerCase();
+    const materialRaw = String(item?.material_gravado || materialMap[normalizeServiceKey(serviceLabel)] || row?.MaterialGravado || "").toLowerCase();
     const materialPronto = materialRaw.includes("sim");
 
     let itemBase = unit.value * qty;
@@ -1168,6 +1261,20 @@ function calculateOrcamentoPricing(row, pricingRules, rawAnswers) {
       reasons.push("VSL com bruto acima de 30min exige revisao manual.");
     }
 
+    itensServico.push({
+      servico: serviceLabel,
+      quantidade: qty,
+      material_gravado: stripDangerousText(String(item?.material_gravado || ""), 40),
+      tempo_bruto: tempoRaw,
+      referencia: stripDangerousText(String(item?.referencia || referenciaBase || ""), LIMITS.referencia),
+      prazo: stripDangerousText(String(item?.prazo || prazoBase || ""), 60),
+      preco_base_item: roundCurrency(itemBase),
+      valor_sugerido_item: roundCurrency(itemSuggested),
+      complexidade_nivel: complexity.nivel,
+      multiplicador_complexidade: roundCurrency(complexity.multiplicador),
+      multiplicador_urgencia: roundCurrency(urg.multiplier)
+    });
+
     const spread = unit.heavy ? 0.2 : (serviceKey === "video_medio" || serviceKey === "depoimento" || serviceKey === "videoaula_modulo" ? 0.1 : 0.05);
     faixaMinTotal += itemSuggested * (1 - spread);
     faixaMaxTotal += itemSuggested * (1 + spread);
@@ -1185,10 +1292,24 @@ function calculateOrcamentoPricing(row, pricingRules, rawAnswers) {
     estimatedHours = fallbackQty * 1.4;
     reasons.push("Servico nao mapeado automaticamente, aplicado valor base padrao.");
     revisaoManual = true;
+    itensServico.push({
+      servico: stripDangerousText(String(row?.ServicoOuOperacao || "Servico padrao"), LIMITS.service),
+      quantidade: fallbackQty,
+      material_gravado: stripDangerousText(String(row?.MaterialGravado || ""), 40),
+      tempo_bruto: stripDangerousText(String(row?.TempoBruto || ""), LIMITS.duration),
+      referencia: stripDangerousText(String(referenciaBase || ""), LIMITS.referencia),
+      prazo: stripDangerousText(String(prazoBase || ""), 60),
+      preco_base_item: roundCurrency(subtotalBase),
+      valor_sugerido_item: roundCurrency(subtotalSuggested),
+      complexidade_nivel: "N2",
+      multiplicador_complexidade: 1,
+      multiplicador_urgencia: 1
+    });
   }
 
   if (semReferenciaPercent > 0) {
     const factor = 1 + (semReferenciaPercent / 100);
+    globalSuggestedFactor *= factor;
     subtotalSuggested *= factor;
     faixaMinTotal *= factor;
     faixaMaxTotal *= factor;
@@ -1197,6 +1318,7 @@ function calculateOrcamentoPricing(row, pricingRules, rawAnswers) {
 
   if (multicameraPercent > 0) {
     const factor = 1 + (multicameraPercent / 100);
+    globalSuggestedFactor *= factor;
     subtotalSuggested *= factor;
     faixaMinTotal *= factor;
     faixaMaxTotal *= factor;
@@ -1210,6 +1332,7 @@ function calculateOrcamentoPricing(row, pricingRules, rawAnswers) {
 
   const discountPercent = getVolumeDiscount(totalQty, pricingRules);
   const discountFactor = 1 - (discountPercent / 100);
+  globalSuggestedFactor *= discountFactor;
   subtotalSuggested *= discountFactor;
   faixaMinTotal *= discountFactor;
   faixaMaxTotal *= discountFactor;
@@ -1243,6 +1366,12 @@ function calculateOrcamentoPricing(row, pricingRules, rawAnswers) {
     revisaoManual = true;
   }
 
+  if (itensServico.length > 0) {
+    for (const item of itensServico) {
+      item.valor_sugerido_item = roundCurrency((Number(item.valor_sugerido_item || 0) * globalSuggestedFactor));
+    }
+  }
+
   return {
     precoBase,
     precoFinal: valorSugerido,
@@ -1264,6 +1393,7 @@ function calculateOrcamentoPricing(row, pricingRules, rawAnswers) {
     descontoVolumePercent: discountPercent,
     ajusteReferenciaPercent: semReferenciaPercent,
     ajusteMulticameraPercent: multicameraPercent,
+    itensServico,
     motivoCalculo: stripDangerousText(reasons.join(" "), 2000),
     metrics: {
       prazoKey,
@@ -1288,10 +1418,10 @@ function buildLeadRow(body, request, ip, nowIso) {
     WhatsApp: stripDangerousText(String(answers?.whatsapp || ""), 16),
     Instagram: stripDangerousText(String(answers?.instagram || ""), LIMITS.instagram),
     Empresa: stripDangerousText(String(answers?.empresa || ""), LIMITS.empresa),
-    ServicoOuOperacao: stripDangerousText(structured.servicePrimary, 600),
-    Quantidade: stripDangerousText(structured.quantityPrimary, 600),
-    MaterialGravado: stripDangerousText(structured.materialPrimary, 600),
-    TempoBruto: stripDangerousText(structured.tempoPrimary, 600),
+    ServicoOuOperacao: stripDangerousText(structured.serviceSummary || structured.servicePrimary, 600),
+    Quantidade: stripDangerousText(structured.quantitySummary || structured.quantityPrimary, 600),
+    MaterialGravado: stripDangerousText(structured.materialSummary || structured.materialPrimary, 600),
+    TempoBruto: stripDangerousText(structured.tempoSummary || structured.tempoPrimary, 600),
     Prazo: stripDangerousText(structured.prazo, 120),
     Referencia: stripDangerousText(structured.referencia, LIMITS.referencia),
     Objetivo: stripDangerousText(structured.objetivo, 300),

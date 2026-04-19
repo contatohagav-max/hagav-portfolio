@@ -149,6 +149,19 @@ function parseLabeledMap(value) {
   return map;
 }
 
+function summarizeItemsField(items, field, fallback = '') {
+  if (!Array.isArray(items) || items.length === 0) return normalizeText(fallback);
+  const parts = items
+    .map((item) => {
+      const service = normalizeText(item?.servico);
+      const value = normalizeText(item?.[field]) || '-';
+      if (!service) return value;
+      return `${service}: ${value}`;
+    })
+    .filter(Boolean);
+  return parts.length > 0 ? parts.join(' | ') : normalizeText(fallback);
+}
+
 function sumQuantidade(value) {
   const parts = splitPipeValues(value);
   if (parts.length === 0) return Math.max(1, Math.round(parsePositiveNumber(value) || 1));
@@ -157,6 +170,12 @@ function sumQuantidade(value) {
     return sum + qty;
   }, 0);
   return Math.max(1, total);
+}
+
+function roundCurrency(value) {
+  const safe = Number(value || 0);
+  if (!Number.isFinite(safe)) return 0;
+  return Math.round(safe * 100) / 100;
 }
 
 function canonicalPrazoKey(rawPrazo) {
@@ -260,14 +279,37 @@ function getLooseMapValue(entries, targetLabel) {
   return found?.value || '';
 }
 
+function buildItemFromEntries(serviceLabel, qtyEntries, materialEntries, tempoEntries, defaults = {}) {
+  const servico = normalizeText(serviceLabel);
+  if (!servico) return null;
+
+  const quantidade = getLooseMapValue(qtyEntries, servico) || normalizeText(defaults.quantidade) || '';
+  const material = getLooseMapValue(materialEntries, servico) || normalizeText(defaults.material_gravado) || '';
+  const tempo = getLooseMapValue(tempoEntries, servico) || normalizeText(defaults.tempo_bruto) || '';
+
+  return {
+    servico,
+    quantidade: quantidade || '-',
+    material_gravado: material,
+    tempo_bruto: tempo,
+    prazo: normalizeText(defaults.prazo),
+    referencia: normalizeText(defaults.referencia),
+  };
+}
+
 function buildStructuredFromAnswers(flow, answers) {
   const empty = {
     servico: '',
+    servico_resumo: '',
     quantidade: '',
+    quantidade_resumo: '',
     material_gravado: '',
+    material_resumo: '',
     tempo_bruto: '',
+    tempo_resumo: '',
     prazo: '',
     referencia: '',
+    items: [],
   };
   if (!answers || typeof answers !== 'object') return empty;
 
@@ -276,16 +318,29 @@ function buildStructuredFromAnswers(flow, answers) {
     const qtyEntries = toLooseMapEntries(answers.unica_quantidades);
     const materialEntries = toLooseMapEntries(answers.unica_gravado);
     const tempoEntries = toLooseMapEntries(answers.unica_tempo_bruto);
-    const resolvedServices = services.length > 0 ? services : qtyEntries.map((entry) => entry.label).filter(Boolean);
-    const primaryService = resolvedServices[0] || qtyEntries[0]?.label || '';
+    const resolvedServices = services.length > 0
+      ? services
+      : qtyEntries.map((entry) => entry.label).filter(Boolean);
+    const prazo = normalizeText(answers.unica_prazo);
+    const referencia = normalizeText(answers.unica_referencia);
+
+    const items = resolvedServices
+      .map((service) => buildItemFromEntries(service, qtyEntries, materialEntries, tempoEntries, { prazo, referencia }))
+      .filter(Boolean);
+    const primary = items[0] || null;
 
     return {
-      servico: primaryService,
-      quantidade: getLooseMapValue(qtyEntries, primaryService) || qtyEntries[0]?.value || '',
-      material_gravado: getLooseMapValue(materialEntries, primaryService) || materialEntries[0]?.value || '',
-      tempo_bruto: getLooseMapValue(tempoEntries, primaryService) || tempoEntries[0]?.value || '',
-      prazo: normalizeText(answers.unica_prazo),
-      referencia: normalizeText(answers.unica_referencia),
+      servico: normalizeText(primary?.servico),
+      servico_resumo: items.map((item) => item.servico).join(' | '),
+      quantidade: normalizeText(primary?.quantidade),
+      quantidade_resumo: summarizeItemsField(items, 'quantidade', primary?.quantidade || ''),
+      material_gravado: normalizeText(primary?.material_gravado),
+      material_resumo: summarizeItemsField(items, 'material_gravado', primary?.material_gravado || ''),
+      tempo_bruto: normalizeText(primary?.tempo_bruto),
+      tempo_resumo: summarizeItemsField(items, 'tempo_bruto', primary?.tempo_bruto || ''),
+      prazo,
+      referencia,
+      items,
     };
   }
 
@@ -293,36 +348,150 @@ function buildStructuredFromAnswers(flow, answers) {
   const qtyEntries = toLooseMapEntries(answers.rec_quantidades);
   const materialEntries = toLooseMapEntries(answers.rec_gravado_por_tipo);
   const tempoEntries = toLooseMapEntries(answers.rec_tempo_bruto_por_tipo);
-  const resolvedOperations = operations.length > 0 ? operations : qtyEntries.map((entry) => entry.label).filter(Boolean);
-  const primaryOperation = resolvedOperations[0] || qtyEntries[0]?.label || normalizeText(answers.rec_tipo_operacao);
+  const resolvedOperations = operations.length > 0
+    ? operations
+    : qtyEntries.map((entry) => entry.label).filter(Boolean);
+  const fallbackOperation = normalizeText(answers.rec_tipo_operacao);
+  const prazo = normalizeText(answers.rec_inicio || answers.recorrente_prazo);
+  const referencia = normalizeText(answers.rec_referencia || answers.referencia);
+
+  const items = (resolvedOperations.length > 0 ? resolvedOperations : [fallbackOperation])
+    .map((operation) => buildItemFromEntries(operation, qtyEntries, materialEntries, tempoEntries, {
+      quantidade: normalizeText(answers.rec_volume),
+      material_gravado: normalizeText(answers.rec_gravado),
+      tempo_bruto: normalizeText(answers.rec_tempo_bruto),
+      prazo,
+      referencia,
+    }))
+    .filter(Boolean);
+  const primary = items[0] || null;
 
   return {
-    servico: primaryOperation,
-    quantidade: getLooseMapValue(qtyEntries, primaryOperation) || qtyEntries[0]?.value || normalizeText(answers.rec_volume),
-    material_gravado: getLooseMapValue(materialEntries, primaryOperation) || materialEntries[0]?.value || normalizeText(answers.rec_gravado),
-    tempo_bruto: getLooseMapValue(tempoEntries, primaryOperation) || tempoEntries[0]?.value || normalizeText(answers.rec_tempo_bruto),
-    prazo: normalizeText(answers.rec_inicio || answers.recorrente_prazo),
-    referencia: normalizeText(answers.rec_referencia || answers.referencia),
+    servico: normalizeText(primary?.servico),
+    servico_resumo: items.map((item) => item.servico).join(' | '),
+    quantidade: normalizeText(primary?.quantidade),
+    quantidade_resumo: summarizeItemsField(items, 'quantidade', primary?.quantidade || ''),
+    material_gravado: normalizeText(primary?.material_gravado),
+    material_resumo: summarizeItemsField(items, 'material_gravado', primary?.material_gravado || ''),
+    tempo_bruto: normalizeText(primary?.tempo_bruto),
+    tempo_resumo: summarizeItemsField(items, 'tempo_bruto', primary?.tempo_bruto || ''),
+    prazo,
+    referencia,
+    items,
   };
 }
 
-function applyStructuredFallback(record) {
-  const parsed = parseJsonSafe(record?.detalhes);
-  const answers = parsed?.respostasCompletas || parsed?.answers || null;
-  if (!answers || typeof answers !== 'object') return record;
+function normalizeItemPayload(rawItem, defaults = {}) {
+  if (!rawItem || typeof rawItem !== 'object') return null;
+  const servico = normalizeText(rawItem.servico || rawItem.servico_ou_operacao || rawItem.operacao || '');
+  if (!servico) return null;
+  return {
+    servico,
+    quantidade: normalizeText(rawItem.quantidade || defaults.quantidade) || '-',
+    material_gravado: normalizeText(rawItem.material_gravado || defaults.material_gravado),
+    tempo_bruto: normalizeText(rawItem.tempo_bruto || defaults.tempo_bruto),
+    prazo: normalizeText(rawItem.prazo || defaults.prazo),
+    referencia: normalizeText(rawItem.referencia || defaults.referencia),
+    preco_base_item: toNumber(rawItem.preco_base_item, 0),
+    valor_sugerido_item: toNumber(rawItem.valor_sugerido_item, 0),
+    complexidade_nivel: normalizeText(rawItem.complexidade_nivel),
+    multiplicador_complexidade: toNumber(rawItem.multiplicador_complexidade, 0),
+    multiplicador_urgencia: toNumber(rawItem.multiplicador_urgencia, 0),
+  };
+}
 
-  const flowRaw = normalizeText(record?.fluxo || record?.Fluxo || parsed?.fluxo || '');
-  const flow = flowRaw.toUpperCase() === 'DR' ? 'DR' : 'DU';
-  const structured = buildStructuredFromAnswers(flow, answers);
+function extractItemsFromRecordFields(record) {
+  const services = splitPipeValues(record?.servico || record?.ServicoOuOperacao || '');
+  const qtyByService = parseLabeledMap(record?.quantidade || record?.Quantidade || '');
+  const materialByService = parseLabeledMap(record?.material_gravado || record?.MaterialGravado || '');
+  const tempoByService = parseLabeledMap(record?.tempo_bruto || record?.TempoBruto || '');
+  const qtyParts = splitPipeValues(record?.quantidade || record?.Quantidade || '');
+  const materialParts = splitPipeValues(record?.material_gravado || record?.MaterialGravado || '');
+  const tempoParts = splitPipeValues(record?.tempo_bruto || record?.TempoBruto || '');
+  const prazo = normalizeText(record?.prazo || record?.Prazo || '');
+  const referencia = normalizeText(record?.referencia || record?.Referencia || '');
+
+  if (services.length === 0) {
+    const fallbackService = normalizeText(record?.servico || record?.ServicoOuOperacao || '');
+    if (!fallbackService) return [];
+    return [
+      {
+        servico: fallbackService,
+        quantidade: normalizeText(record?.quantidade || record?.Quantidade || '') || '-',
+        material_gravado: normalizeText(record?.material_gravado || record?.MaterialGravado || ''),
+        tempo_bruto: normalizeText(record?.tempo_bruto || record?.TempoBruto || ''),
+        prazo,
+        referencia,
+      },
+    ];
+  }
+
+  return services.map((servico, index) => {
+    const key = normalizeServiceKey(servico);
+    const qtyValue = qtyByService[key] || normalizeText(qtyParts[index] || qtyParts[0] || '');
+    const materialValue = materialByService[key] || normalizeText(materialParts[index] || materialParts[0] || '');
+    const tempoValue = tempoByService[key] || normalizeText(tempoParts[index] || tempoParts[0] || '');
+    return {
+      servico,
+      quantidade: qtyValue || '-',
+      material_gravado: materialValue,
+      tempo_bruto: tempoValue,
+      prazo,
+      referencia,
+    };
+  });
+}
+
+function extractServiceItems(record) {
+  const parsed = parseJsonSafe(record?.detalhes);
+  const defaultData = {
+    prazo: normalizeText(record?.prazo || record?.Prazo || parsed?.prazo || ''),
+    referencia: normalizeText(record?.referencia || record?.Referencia || parsed?.referencia || ''),
+  };
+
+  const directItems = Array.isArray(record?.itens_servico) ? record.itens_servico : null;
+  if (directItems && directItems.length > 0) {
+    return directItems
+      .map((item) => normalizeItemPayload(item, defaultData))
+      .filter(Boolean);
+  }
+
+  const calcItems = parsed?.calculoAutomatico?.itensServico;
+  if (Array.isArray(calcItems) && calcItems.length > 0) {
+    return calcItems
+      .map((item) => normalizeItemPayload(item, defaultData))
+      .filter(Boolean);
+  }
+
+  const answers = parsed?.respostasCompletas || parsed?.answers;
+  if (answers && typeof answers === 'object') {
+    const flow = inferFlow({ ...record, fluxo: record?.fluxo || parsed?.fluxo || record?.Fluxo });
+    const structured = buildStructuredFromAnswers(flow, answers);
+    if (Array.isArray(structured.items) && structured.items.length > 0) {
+      return structured.items
+        .map((item) => normalizeItemPayload(item, defaultData))
+        .filter(Boolean);
+    }
+  }
+
+  return extractItemsFromRecordFields(record)
+    .map((item) => normalizeItemPayload(item, defaultData))
+    .filter(Boolean);
+}
+
+function applyStructuredFallback(record) {
+  const items = extractServiceItems(record);
+  const primary = items[0] || null;
 
   return {
     ...record,
-    servico: normalizeText(record?.servico) || structured.servico,
-    quantidade: normalizeText(record?.quantidade) || structured.quantidade,
-    material_gravado: normalizeText(record?.material_gravado) || structured.material_gravado,
-    tempo_bruto: normalizeText(record?.tempo_bruto) || structured.tempo_bruto,
-    prazo: normalizeText(record?.prazo) || structured.prazo,
-    referencia: normalizeText(record?.referencia) || structured.referencia,
+    servico: normalizeText(record?.servico) || items.map((item) => item.servico).join(' | ') || normalizeText(record?.ServicoOuOperacao),
+    quantidade: normalizeText(record?.quantidade) || summarizeItemsField(items, 'quantidade', primary?.quantidade || normalizeText(record?.Quantidade)),
+    material_gravado: normalizeText(record?.material_gravado) || summarizeItemsField(items, 'material_gravado', primary?.material_gravado || normalizeText(record?.MaterialGravado)),
+    tempo_bruto: normalizeText(record?.tempo_bruto) || summarizeItemsField(items, 'tempo_bruto', primary?.tempo_bruto || normalizeText(record?.TempoBruto)),
+    prazo: normalizeText(record?.prazo) || primary?.prazo || normalizeText(record?.Prazo),
+    referencia: normalizeText(record?.referencia) || primary?.referencia || normalizeText(record?.Referencia),
+    itens_servico: items,
   };
 }
 
@@ -361,55 +530,160 @@ function hasHighValueService(rawService) {
   return HIGH_VALUE_KEYWORDS.some((keyword) => lower.includes(keyword));
 }
 
+function getComplexidadeByMinutes(minutes) {
+  const safeMinutes = Number.isFinite(minutes) ? minutes : 0;
+  const limits = DEFAULT_PRICING_RULES.complexidade;
+  if (safeMinutes <= Number(limits.n1MaxMin || 30)) {
+    return { nivel: 'N1', multiplicador: Number(limits.N1 || 0.7) };
+  }
+  if (safeMinutes <= Number(limits.n2MaxMin || 120)) {
+    return { nivel: 'N2', multiplicador: Number(limits.N2 || 1) };
+  }
+  return { nivel: 'N3', multiplicador: Number(limits.N3 || 1.5) };
+}
+
+function detectMulticamera(text) {
+  const normalized = normalizeServiceKey(text);
+  return /(multicamera|multi camera|3 camera|tres camera|3\+ camera)/.test(normalized);
+}
+
 function computePricingSnapshot(record) {
   const flow = inferFlow(record);
-  const service = normalizeText(record?.servico || record?.ServicoOuOperacao || '');
-  const quantidade = Math.max(1, Math.round(parsePositiveNumber(record?.quantidade || record?.Quantidade || '1') || 1));
-  const serviceKey = mapServiceCatalog(service);
-  const unitPrice = getUnitPriceFromRules(flow, serviceKey);
-  const tempoMinutes = parseHours(record?.tempo_bruto || record?.TempoBruto || '') * 60;
-  const material = inferMaterialState(record?.material_gravado || record?.MaterialGravado || '');
+  const items = extractServiceItems(record);
+  const fallbackPrazo = normalizeText(record?.prazo || record?.Prazo || '');
+  const fallbackReferencia = normalizeText(record?.referencia || record?.Referencia || '');
+  const observacoes = normalizeText(record?.observacoes || record?.Observacoes || '');
+  const multicamera = detectMulticamera(`${observacoes} ${fallbackReferencia}`);
+  const ajusteMulticameraPercent = multicamera ? Number(DEFAULT_PRICING_RULES.ajustes.multicamera || 15) : 0;
 
-  let complexidadeNivel = 'N2';
-  let multiplicadorComplexidade = Number(DEFAULT_PRICING_RULES.complexidade.N2 || 1);
-  if (tempoMinutes > 0 && tempoMinutes <= Number(DEFAULT_PRICING_RULES.complexidade.n1MaxMin || 30)) {
-    complexidadeNivel = 'N1';
-    multiplicadorComplexidade = Number(DEFAULT_PRICING_RULES.complexidade.N1 || 0.7);
-  }
-  if (tempoMinutes > Number(DEFAULT_PRICING_RULES.complexidade.n2MaxMin || 120)) {
-    complexidadeNivel = 'N3';
-    multiplicadorComplexidade = Number(DEFAULT_PRICING_RULES.complexidade.N3 || 1.5);
-  }
-
-  const multiplicadorUrgencia = getUrgencyMultiplier(flow, record?.prazo || record?.Prazo || '', serviceKey);
-  const descontoVolumePercent = getVolumeDiscount(quantidade);
-  const ajusteReferenciaPercent = hasReference(record?.referencia || record?.Referencia || '')
-    ? 0
-    : Number(DEFAULT_PRICING_RULES.ajustes.semReferencia || 10);
-
-  const precoBase = Math.max(1, Math.round(unitPrice * quantidade * 100) / 100);
-  let valorSugerido = precoBase * multiplicadorComplexidade * multiplicadorUrgencia;
-  if (material === 'nao') valorSugerido *= 1.05;
-  if (ajusteReferenciaPercent > 0) valorSugerido *= (1 + ajusteReferenciaPercent / 100);
-  if (descontoVolumePercent > 0) valorSugerido *= (1 - descontoVolumePercent / 100);
-  valorSugerido = Math.max(1, Math.round(valorSugerido * 100) / 100);
-
-  const faixaMin = Math.max(1, Math.round(valorSugerido * 0.9 * 100) / 100);
-  const faixaMax = Math.max(faixaMin, Math.round(valorSugerido * 1.1 * 100) / 100);
-  const faixaSugerida = `R$ ${faixaMin.toFixed(2)} a R$ ${faixaMax.toFixed(2)}`;
+  const itemList = items.length > 0
+    ? items
+    : [{
+      servico: normalizeText(record?.servico || record?.ServicoOuOperacao || 'Servico'),
+      quantidade: normalizeText(record?.quantidade || record?.Quantidade || '1'),
+      material_gravado: normalizeText(record?.material_gravado || record?.MaterialGravado || ''),
+      tempo_bruto: normalizeText(record?.tempo_bruto || record?.TempoBruto || ''),
+      prazo: fallbackPrazo,
+      referencia: fallbackReferencia,
+    }];
 
   const choHora = Number(DEFAULT_PRICING_RULES.margem.choHora || 41.67);
-  const horasEstimadas = parseHours(record?.tempo_bruto || record?.TempoBruto || '') || Math.max(1, quantidade * (flow === 'DR' ? 1.1 : 1.3));
-  const custoEstimado = horasEstimadas * choHora;
+  const itemHoursByService = {
+    reels_shorts_tiktok: 0.9,
+    criativo_trafego_pago: 1.2,
+    corte_podcast: 0.8,
+    video_medio: 2.1,
+    depoimento: 1.6,
+    videoaula_modulo: 2.8,
+    youtube: 4.0,
+    vsl_15: 6.0,
+    vsl_longa: 14.0,
+    motion: 10.0,
+    default: 1.4,
+  };
+
+  let subtotalBase = 0;
+  let subtotalSuggested = 0;
+  let totalQuantidade = 0;
+  let weightedComplexity = 0;
+  let maxUrgenciaMultiplier = 1;
+  let estimatedHours = 0;
+  let hasManualService = false;
+  let hasN3 = false;
+  let hasNoReference = false;
+  let faixaMinTotal = 0;
+  let faixaMaxTotal = 0;
+
+  const itensServico = itemList.map((rawItem) => {
+    const servico = normalizeText(rawItem?.servico || 'Servico');
+    const quantidade = Math.max(1, Math.round(parsePositiveNumber(rawItem?.quantidade || '1') || 1));
+    const material = normalizeText(rawItem?.material_gravado);
+    const tempoBruto = normalizeText(rawItem?.tempo_bruto);
+    const prazo = normalizeText(rawItem?.prazo || fallbackPrazo);
+    const referencia = normalizeText(rawItem?.referencia || fallbackReferencia);
+
+    const serviceKey = mapServiceCatalog(servico);
+    const baseUnit = getUnitPriceFromRules(flow, serviceKey);
+    const complexidade = getComplexidadeByMinutes(parseHours(tempoBruto) * 60);
+    const urgenciaMultiplier = getUrgencyMultiplier(flow, prazo || fallbackPrazo, serviceKey);
+
+    const baseItem = baseUnit * quantidade;
+    let suggestedItem = baseItem * complexidade.multiplicador * urgenciaMultiplier;
+    if (inferMaterialState(material) === 'nao') {
+      suggestedItem *= 1.05;
+    }
+
+    const refMissing = !hasReference(referencia);
+    if (refMissing) {
+      hasNoReference = true;
+      suggestedItem *= (1 + Number(DEFAULT_PRICING_RULES.ajustes.semReferencia || 10) / 100);
+    }
+    if (ajusteMulticameraPercent > 0) {
+      suggestedItem *= (1 + (ajusteMulticameraPercent / 100));
+    }
+
+    subtotalBase += baseItem;
+    subtotalSuggested += suggestedItem;
+    totalQuantidade += quantidade;
+    weightedComplexity += complexidade.multiplicador * quantidade;
+    maxUrgenciaMultiplier = Math.max(maxUrgenciaMultiplier, urgenciaMultiplier);
+
+    const serviceHours = itemHoursByService[serviceKey] || itemHoursByService.default;
+    estimatedHours += (serviceHours * complexidade.multiplicador) * quantidade;
+
+    const spread = serviceKey === 'youtube' || serviceKey === 'vsl_15' || serviceKey === 'vsl_longa' || serviceKey === 'motion' ? 0.2 : 0.1;
+    faixaMinTotal += suggestedItem * (1 - spread);
+    faixaMaxTotal += suggestedItem * (1 + spread);
+
+    hasManualService = hasManualService
+      || serviceKey === 'youtube'
+      || serviceKey === 'vsl_15'
+      || serviceKey === 'vsl_longa'
+      || serviceKey === 'motion';
+    hasN3 = hasN3 || complexidade.nivel === 'N3';
+
+    return {
+      servico,
+      quantidade,
+      material_gravado: material,
+      tempo_bruto: tempoBruto,
+      referencia,
+      prazo,
+      preco_base_item: roundCurrency(baseItem),
+      valor_sugerido_item: roundCurrency(suggestedItem),
+      complexidade_nivel: complexidade.nivel,
+      multiplicador_complexidade: roundCurrency(complexidade.multiplicador),
+      multiplicador_urgencia: roundCurrency(urgenciaMultiplier),
+    };
+  });
+
+  const descontoVolumePercent = getVolumeDiscount(totalQuantidade);
+  if (descontoVolumePercent > 0) {
+    const factor = 1 - (descontoVolumePercent / 100);
+    subtotalSuggested *= factor;
+    faixaMinTotal *= factor;
+    faixaMaxTotal *= factor;
+    for (const item of itensServico) {
+      item.valor_sugerido_item = roundCurrency(item.valor_sugerido_item * factor);
+    }
+  }
+
+  const precoBase = Math.max(1, roundCurrency(subtotalBase));
+  const valorSugerido = Math.max(1, roundCurrency(subtotalSuggested));
+  const faixaMin = Math.max(1, roundCurrency(faixaMinTotal || (valorSugerido * 0.9)));
+  const faixaMax = Math.max(faixaMin, roundCurrency(faixaMaxTotal || (valorSugerido * 1.1)));
+  const faixaSugerida = `R$ ${faixaMin.toFixed(2)} a R$ ${faixaMax.toFixed(2)}`;
+
+  const custoEstimado = roundCurrency(choHora * Math.max(estimatedHours, 0.5));
   const margem = valorSugerido > 0 ? ((valorSugerido - custoEstimado) / valorSugerido) * 100 : 0;
   const margemEstimada = Math.round(Math.min(95, Math.max(0, margem)) * 10) / 10;
 
-  const revisaoManual = quantidade > Number(DEFAULT_PRICING_RULES.pacotes.revisaoCapacidadeAcimaQtd || 30)
-    || complexidadeNivel === 'N3'
-    || serviceKey === 'youtube'
-    || serviceKey === 'vsl_15'
-    || serviceKey === 'vsl_longa'
-    || serviceKey === 'motion';
+  const complexidadeMedia = totalQuantidade > 0 ? weightedComplexity / totalQuantidade : 1;
+  const complexidadeNivel = complexidadeMedia <= 0.8 ? 'N1' : (complexidadeMedia < 1.3 ? 'N2' : 'N3');
+  const revisaoManual = totalQuantidade > Number(DEFAULT_PRICING_RULES.pacotes.revisaoCapacidadeAcimaQtd || 30)
+    || hasManualService
+    || hasN3
+    || margemEstimada < Number(DEFAULT_PRICING_RULES.margem.recusaAbaixo || 55);
 
   return {
     precoBase,
@@ -417,11 +691,14 @@ function computePricingSnapshot(record) {
     margemEstimada,
     faixaSugerida,
     descontoVolumePercent,
-    multiplicadorUrgencia,
-    multiplicadorComplexidade,
+    multiplicadorUrgencia: roundCurrency(maxUrgenciaMultiplier),
+    multiplicadorComplexidade: roundCurrency(complexidadeMedia),
     complexidadeNivel,
-    ajusteReferenciaPercent,
+    ajusteReferenciaPercent: hasNoReference ? Number(DEFAULT_PRICING_RULES.ajustes.semReferencia || 10) : 0,
+    ajusteMulticameraPercent,
     revisaoManual,
+    totalQuantidade,
+    itensServico,
   };
 }
 
@@ -559,13 +836,27 @@ export function enrichOrcamentoRecord(record) {
   const enrichedLead = enrichLeadRecord(normalizedRecord);
   const snapshot = computePricingSnapshot(enrichedLead);
   const margem = estimateMargem(enrichedLead);
+  const itensServico = Array.isArray(snapshot.itensServico) ? snapshot.itensServico : extractServiceItems(enrichedLead);
 
   const incompletoCampos = [];
-  if (!normalizeText(enrichedLead?.servico)) incompletoCampos.push('servico');
-  if (!normalizeText(enrichedLead?.quantidade)) incompletoCampos.push('quantidade');
+  if (!Array.isArray(itensServico) || itensServico.length === 0 || !itensServico.some((item) => normalizeText(item?.servico))) {
+    incompletoCampos.push('servico');
+  }
+  if (!Array.isArray(itensServico) || itensServico.length === 0 || itensServico.some((item) => !normalizeText(item?.quantidade))) {
+    incompletoCampos.push('quantidade');
+  }
   if (!normalizeText(enrichedLead?.prazo)) incompletoCampos.push('prazo');
-  if (!normalizeText(enrichedLead?.material_gravado)) incompletoCampos.push('material_gravado');
-  if (!normalizeText(enrichedLead?.tempo_bruto)) incompletoCampos.push('tempo_bruto');
+  if (!Array.isArray(itensServico) || itensServico.length === 0 || itensServico.some((item) => !normalizeText(item?.material_gravado))) {
+    incompletoCampos.push('material_gravado');
+  }
+  const tempoInvalido = Array.isArray(itensServico)
+    ? itensServico.some((item) => {
+      const material = inferMaterialState(item?.material_gravado);
+      if (material !== 'sim') return false;
+      return !normalizeText(item?.tempo_bruto);
+    })
+    : !normalizeText(enrichedLead?.tempo_bruto);
+  if (tempoInvalido) incompletoCampos.push('tempo_bruto');
 
   const valorPotencial = estimateValorPotencial(enrichedLead);
   const precoBaseRaw = toNumber(enrichedLead?.preco_base, 0);
@@ -594,7 +885,10 @@ export function enrichOrcamentoRecord(record) {
     complexidade_nivel: complexidade,
     revisao_manual: revisaoManual,
     ajuste_referencia_percent: toNumber(enrichedLead?.ajuste_referencia_percent, snapshot.ajusteReferenciaPercent),
+    ajuste_multicamera_percent: toNumber(enrichedLead?.ajuste_multicamera_percent, snapshot.ajusteMulticameraPercent),
     valor_estimado: Math.round((precoFinal || precoBase || valorPotencial) * 100) / 100,
+    itens_servico: itensServico,
+    quantidade_total: Number(snapshot.totalQuantidade || sumQuantidade(enrichedLead?.quantidade || enrichedLead?.Quantidade || '1')),
     incompleto: incompletoCampos.length > 0,
     incompleto_campos: incompletoCampos,
     requer_revisao: ORC_REVISAO.has(enrichedLead?.status_orcamento) || precoFinal <= 0 || revisaoManual,
@@ -685,7 +979,12 @@ export function buildDashboardInsights(rawLeads = [], rawOrcamentos = []) {
   }).sort((a, b) => b.leads - a.leads);
 
   const serviceDemand = groupBy(
-    orcamentos.flatMap((orc) => splitPipeValues(orc.servico).map((servico) => ({ servico }))),
+    orcamentos.flatMap((orc) => {
+      const items = Array.isArray(orc.itens_servico) && orc.itens_servico.length > 0
+        ? orc.itens_servico
+        : [{ servico: orc.servico || 'Nao informado' }];
+      return items.map((item) => ({ servico: normalizeText(item?.servico) || 'Nao informado' }));
+    }),
     (entry) => normalizeText(entry.servico || 'Nao informado')
   ).map(([servico, total]) => ({ servico, total }))
     .sort((a, b) => b.total - a.total)
@@ -693,13 +992,23 @@ export function buildDashboardInsights(rawLeads = [], rawOrcamentos = []) {
 
   const revenueByService = groupBy(
     orcamentos.flatMap((orc) => {
+      const items = Array.isArray(orc.itens_servico) && orc.itens_servico.length > 0
+        ? orc.itens_servico
+        : [];
+      if (items.length > 0) {
+        const fallbackValue = toNumber(orc.preco_final || orc.preco_base || orc.valor_estimado, 0);
+        return items.map((item) => ({
+          servico: normalizeText(item?.servico) || 'Nao informado',
+          valor: toNumber(item?.valor_sugerido_item, 0) || (fallbackValue / items.length),
+        }));
+      }
+
       const servicos = splitPipeValues(orc.servico);
       if (servicos.length === 0) {
         return [{ servico: 'Nao informado', valor: toNumber(orc.preco_final || orc.preco_base || orc.valor_estimado, 0) }];
       }
-
       const valorTotal = toNumber(orc.preco_final || orc.preco_base || orc.valor_estimado, 0);
-      const rateio = servicos.length > 0 ? valorTotal / servicos.length : valorTotal;
+      const rateio = valorTotal / servicos.length;
       return servicos.map((servico) => ({ servico, valor: rateio }));
     }),
     (entry) => normalizeText(entry.servico || 'Nao informado'),

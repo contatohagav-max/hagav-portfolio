@@ -46,6 +46,13 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
   const [error, setError] = useState('');
 
   if (!orc) return null;
+  const itensServico = Array.isArray(orc.itens_servico) ? orc.itens_servico : [];
+  const servicoResumo = itensServico.length > 0
+    ? itensServico.map((item) => item?.servico).filter(Boolean).join(' | ')
+    : (orc.servico || '');
+  const quantidadeResumo = itensServico.length > 0
+    ? itensServico.map((item) => `${item?.servico || 'Servico'}: ${item?.quantidade || '-'}`).join(' | ')
+    : (orc.quantidade || '');
 
   async function handleSave() {
     setSaving(true);
@@ -80,7 +87,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
           <div>
             <p className="text-xs text-hagav-gray uppercase tracking-wider mb-1">Orcamento #{orc.id}</p>
             <h2 className="text-lg font-bold text-hagav-white">{orc.nome || 'Sem nome'}</h2>
-            <p className="text-sm text-hagav-gray">{orc.servico || '—'}</p>
+            <p className="text-sm text-hagav-gray">{servicoResumo || '—'}</p>
           </div>
           <button onClick={onClose} className="text-hagav-gray hover:text-hagav-white p-2 rounded-lg hover:bg-hagav-muted/30 transition-colors">
             <X size={18} />
@@ -153,8 +160,8 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
           <div>
             <p className="text-xs text-hagav-gray uppercase tracking-wider mb-2">Dados para operacao</p>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-              <InfoRow label="Servico/Operacao" value={orc.servico} />
-              <InfoRow label="Quantidade" value={orc.quantidade} />
+              <InfoRow label="Servico/Operacao" value={servicoResumo} />
+              <InfoRow label="Quantidade" value={quantidadeResumo} />
               <InfoRow label="Material gravado" value={orc.material_gravado} />
               <InfoRow label="Tempo bruto" value={orc.tempo_bruto} />
               <InfoRow label="Prazo" value={orc.prazo} />
@@ -163,6 +170,21 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
               <InfoRow label="Origem" value={orc.origem} />
               <InfoRow label="Criado em" value={fmtDateTime(orc.created_at)} />
             </div>
+            {itensServico.length > 1 ? (
+              <div className="mt-3 bg-hagav-surface border border-hagav-border rounded-lg p-3">
+                <p className="text-[10px] text-hagav-gray uppercase tracking-wider mb-2">Itens por servico</p>
+                <div className="space-y-2">
+                  {itensServico.map((item, idx) => (
+                    <div key={`${item?.servico || 'item'}-${idx}`} className="grid grid-cols-12 gap-2 text-xs">
+                      <div className="col-span-4 text-hagav-light">{item?.servico || 'Servico'}</div>
+                      <div className="col-span-2 text-hagav-gray">Qtd: {item?.quantidade || '-'}</div>
+                      <div className="col-span-3 text-hagav-gray">Base: {fmtBRL(item?.preco_base_item || 0)}</div>
+                      <div className="col-span-3 text-hagav-gold">Sug.: {fmtBRL(item?.valor_sugerido_item || 0)}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
           </div>
 
           {orc.observacoes && (

@@ -505,17 +505,36 @@ function extractServiceItems(record) {
 }
 
 function applyStructuredFallback(record) {
+  const parsed = parseJsonSafe(record?.detalhes);
+  const answers = parsed?.respostasCompletas || parsed?.answers;
+  const flow = inferFlow({ ...record, fluxo: record?.fluxo || parsed?.fluxo || record?.Fluxo });
+  const structured = buildStructuredFromAnswers(flow, answers);
   const items = extractServiceItems(record);
   const primary = items[0] || null;
 
   return {
     ...record,
-    servico: normalizeText(record?.servico) || items.map((item) => item.servico).join(' | ') || normalizeText(record?.ServicoOuOperacao),
-    quantidade: normalizeText(record?.quantidade) || summarizeItemsField(items, 'quantidade', primary?.quantidade || normalizeText(record?.Quantidade)),
-    material_gravado: normalizeText(record?.material_gravado) || summarizeItemsField(items, 'material_gravado', primary?.material_gravado || normalizeText(record?.MaterialGravado)),
-    tempo_bruto: normalizeText(record?.tempo_bruto) || summarizeItemsField(items, 'tempo_bruto', primary?.tempo_bruto || normalizeText(record?.TempoBruto)),
-    prazo: normalizeText(record?.prazo) || primary?.prazo || normalizeText(record?.Prazo),
-    referencia: normalizeText(record?.referencia) || primary?.referencia || normalizeText(record?.Referencia),
+    fluxo: normalizeText(record?.fluxo || record?.Fluxo || parsed?.fluxo || flow),
+    origem: normalizeText(record?.origem || record?.Origem || parsed?.origem),
+    pagina: normalizeText(record?.pagina || record?.Pagina || parsed?.pagina),
+    servico: normalizeText(record?.servico)
+      || normalizeText(structured?.servico_resumo)
+      || items.map((item) => item.servico).join(' | ')
+      || normalizeText(parsed?.servico || parsed?.servicoOuOperacao || parsed?.operacao)
+      || normalizeText(record?.ServicoOuOperacao),
+    quantidade: normalizeText(record?.quantidade)
+      || normalizeText(structured?.quantidade_resumo)
+      || summarizeItemsField(items, 'quantidade', primary?.quantidade || normalizeText(parsed?.quantidade || parsed?.Quantidade || record?.Quantidade)),
+    material_gravado: normalizeText(record?.material_gravado)
+      || normalizeText(structured?.material_resumo)
+      || summarizeItemsField(items, 'material_gravado', primary?.material_gravado || normalizeText(parsed?.material_gravado || parsed?.materialGravado || record?.MaterialGravado)),
+    tempo_bruto: normalizeText(record?.tempo_bruto)
+      || normalizeText(structured?.tempo_resumo)
+      || summarizeItemsField(items, 'tempo_bruto', primary?.tempo_bruto || normalizeText(parsed?.tempo_bruto || parsed?.tempoBruto || record?.TempoBruto)),
+    prazo: normalizeText(record?.prazo) || normalizeText(structured?.prazo) || primary?.prazo || normalizeText(parsed?.prazo || record?.Prazo),
+    referencia: normalizeText(record?.referencia) || normalizeText(structured?.referencia) || primary?.referencia || normalizeText(parsed?.referencia || record?.Referencia),
+    observacoes: normalizeText(record?.observacoes || record?.Observacoes)
+      || normalizeText(parsed?.observacoes || parsed?.extras || answers?.extras),
     itens_servico: items,
   };
 }

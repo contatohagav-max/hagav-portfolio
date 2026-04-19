@@ -399,9 +399,9 @@ const DDD_VALIDOS = new Set(['11','12','13','14','15','16','17','18','19','21','
         return;
       }
       try{
-        const saved = await persistLeadSubmission(payload);
-        if(!saved){
-          showSubmitError(errorEl,'Não conseguimos finalizar agora. Tente novamente em alguns instantes.');
+        const submitResult = await persistLeadSubmission(payload);
+        if(!submitResult.ok){
+          showSubmitError(errorEl,submitResult.message||'Não conseguimos finalizar agora. Tente novamente em alguns instantes.');
           return;
         }
         state.lastSubmissionHash=payloadHash;
@@ -443,23 +443,47 @@ const DDD_VALIDOS = new Set(['11','12','13','14','15','16','17','18','19','21','
           body,
           keepalive:true
         });
-        if(!response.ok){
-          console.error('Falha ao salvar lead', response.status);
-          return false;
+        const rawBody = await response.text();
+        let result = null;
+        try{
+          result = rawBody ? JSON.parse(rawBody) : null;
+        }catch(parseError){
+          console.error('[budget-submit] Resposta não-JSON da API', {status:response.status, body:rawBody, parseError});
         }
-        const result = await response.json().catch(()=>({ok:true,saved:true}));
+        if(!response.ok){
+          console.error('[budget-submit] API retornou erro', {status:response.status, body:result||rawBody});
+          const apiMessage = (result && (result.error||result.message||result.reason)) ? String(result.error||result.message||result.reason) : '';
+          return {
+            ok:false,
+            status:response.status,
+            message:apiMessage||'Não conseguimos finalizar agora. Tente novamente em alguns instantes.'
+          };
+        }
         if(result && result.ok === false){
-          console.error('Webhook rejeitou lead', result);
-          return false;
+          console.error('[budget-submit] API rejeitou submit', {status:response.status, body:result});
+          return {
+            ok:false,
+            status:response.status,
+            message:String(result.error||result.message||result.reason||'Não conseguimos finalizar agora. Tente novamente em alguns instantes.')
+          };
         }
         if(result && result.saved === false){
-          console.error('Lead nao salvo na planilha', result);
-          return false;
+          console.error('[budget-submit] API não salvou lead', {status:response.status, body:result});
+          return {
+            ok:false,
+            status:response.status,
+            message:String(result.error||result.message||result.reason||'Não conseguimos finalizar agora. Tente novamente em alguns instantes.')
+          };
         }
-        return true;
+        console.log('[budget-submit] Submit concluído', {status:response.status, body:result||rawBody});
+        return {ok:true,status:response.status,message:''};
       }catch(error){
-        console.error('Erro ao enviar lead', error);
-        return false;
+        console.error('[budget-submit] Falha de rede ao enviar lead', error);
+        return {
+          ok:false,
+          status:0,
+          message:'Falha de conexão no envio. Tente novamente em alguns instantes.'
+        };
       }
     }
     function buildSanitizedAnswers(){

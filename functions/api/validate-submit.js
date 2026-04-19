@@ -131,6 +131,56 @@ function json(data, status = 200) {
   });
 }
 
+function maskPhone(value) {
+  const digits = String(value || "").replace(/\D/g, "");
+  if (!digits) return "";
+  if (digits.length <= 4) return `***${digits}`;
+  return `***${digits.slice(-4)}`;
+}
+
+function summarizePayload(body) {
+  const answers = body?.answers && typeof body.answers === "object" ? body.answers : {};
+  const keys = Object.keys(answers);
+  const services = Array.isArray(answers?.unica_servicos?.selected)
+    ? answers.unica_servicos.selected
+    : (Array.isArray(answers?.rec_operacoes?.selected) ? answers.rec_operacoes.selected : []);
+  return {
+    tipo: stripDangerousText(String(body?.tipo || ""), 40),
+    answersKeys: keys,
+    answerCount: keys.length,
+    nome: stripDangerousText(String(answers?.nome || ""), 80),
+    whatsapp: maskPhone(answers?.whatsapp),
+    serviceCount: services.length,
+    hasOutro: services.includes("Outro"),
+    submissionId: stripDangerousText(String(body?.meta?.submissionId || ""), 90)
+  };
+}
+
+function submitLog(level, traceId, stage, data = null) {
+  const prefix = `[validate-submit][${traceId}] ${stage}`;
+  try {
+    if (level === "error") {
+      console.error(prefix, data ? JSON.stringify(data) : "");
+      return;
+    }
+    if (level === "warn") {
+      console.warn(prefix, data ? JSON.stringify(data) : "");
+      return;
+    }
+    console.log(prefix, data ? JSON.stringify(data) : "");
+  } catch {
+    if (level === "error") {
+      console.error(prefix);
+      return;
+    }
+    if (level === "warn") {
+      console.warn(prefix);
+      return;
+    }
+    console.log(prefix);
+  }
+}
+
 function stripDangerousText(value, maxLen) {
   if (typeof value !== "string") return "";
   const normalized = value.normalize("NFKC").replace(/[\u0000-\u001F\u007F]/g, " ").trim();
@@ -227,67 +277,68 @@ function normalizeIncomingPayload(body) {
 }
 
 function validateTipoPayload(body) {
+  const fail = (stage, error) => ({ ok: false, error, stage });
   const tipo = normalizeTipoValue(body?.tipo, body?.answers || {});
   if (tipo !== "unica" && tipo !== "recorrente") {
-    return { ok: false, error: "Tipo de formulario invalido" };
+    return fail("tipo", "Tipo de formulario invalido");
   }
 
   const answers = body?.answers;
   if (!answers || typeof answers !== "object") {
-    return { ok: false, error: "Respostas ausentes" };
+    return fail("answers", "Respostas ausentes");
   }
 
   const nome = stripDangerousText(answers.nome, LIMITS.nome);
-  if (!nome) return { ok: false, error: "Nome invalido" };
+  if (!nome) return fail("nome", "Nome invalido");
 
   const whatsapp = validateWhatsapp(answers.whatsapp);
-  if (!whatsapp.ok) return whatsapp;
+  if (!whatsapp.ok) return fail("whatsapp", whatsapp.error || "WhatsApp invalido");
 
   const instagram = stripDangerousText(answers.instagram || "", LIMITS.instagram);
   const empresa = stripDangerousText(answers.empresa || "", LIMITS.empresa);
   const extras = stripDangerousText(answers.extras || "", LIMITS.extras);
 
   if (hasDangerousScheme(instagram) || hasDangerousScheme(extras) || hasDangerousScheme(empresa)) {
-    return { ok: false, error: "Conteudo invalido" };
+    return fail("content", "Conteudo invalido");
   }
 
   if (tipo === "unica") {
     const referencia = stripDangerousText(answers.unica_referencia || "", LIMITS.referencia);
-    if (hasDangerousScheme(referencia)) return { ok: false, error: "Referencia invalida" };
+    if (hasDangerousScheme(referencia)) return fail("du.referencia", "Referencia invalida");
 
     const servicos = answers.unica_servicos;
     if (!servicos || !Array.isArray(servicos.selected) || servicos.selected.length === 0) {
-      return { ok: false, error: "Servicos invalidos" };
+      return fail("du.servicos", "Servicos invalidos");
     }
 
     if (servicos.selected.includes("Outro")) {
       const outro = stripDangerousText(servicos.outro || "", LIMITS.outro);
-      if (!outro) return { ok: false, error: "Outro invalido" };
+      if (!outro) return fail("du.outro", "Outro invalido");
     }
 
     const quantidades = answers.unica_quantidades;
     if (!quantidades || typeof quantidades !== "object") {
-      return { ok: false, error: "Quantidades invalidas" };
+      return fail("du.quantidades", "Quantidades invalidas");
     }
 
     for (const service of Object.keys(quantidades)) {
       const safeService = stripDangerousText(service, LIMITS.service);
-      if (!safeService) return { ok: false, error: "Servico invalido" };
+      if (!safeService) return fail("du.quantidades.servico", "Servico invalido");
       const qty = Number(quantidades[service]);
       if (!Number.isInteger(qty) || qty < 1 || qty > 10000) {
-        return { ok: false, error: "Quantidade invalida" };
+        return fail("du.quantidades.valor", "Quantidade invalida");
       }
     }
 
     if (!answers.unica_prazo) {
-      return { ok: false, error: "Prazo invalido" };
+      return fail("du.prazo", "Prazo invalido");
     }
 
     const tempos = answers.unica_tempo_bruto || {};
     if (tempos && typeof tempos === "object") {
       for (const key of Object.keys(tempos)) {
         const val = stripDangerousText(String(tempos[key] || ""), LIMITS.duration);
-        if (!val) return { ok: false, error: "Tempo bruto invalido" };
+        if (!val) return fail("du.tempo_bruto", "Tempo bruto invalido");
       }
     }
   }
@@ -296,10 +347,10 @@ function validateTipoPayload(body) {
     const newFlowOps = answers?.rec_operacoes;
     if (newFlowOps && typeof newFlowOps === "object") {
       const selected = Array.isArray(newFlowOps.selected) ? newFlowOps.selected : [];
-      if (selected.length === 0) return { ok: false, error: "Campo recorrente invalido" };
+      if (selected.length === 0) return fail("dr.operacoes", "Campo recorrente invalido");
       const outroValue = stripDangerousText(newFlowOps.outro || "", LIMITS.outro);
       if (selected.includes("Outro")) {
-        if (!outroValue) return { ok: false, error: "Campo recorrente invalido" };
+        if (!outroValue) return fail("dr.outro", "Campo recorrente invalido");
       }
       const normalizedOps = selected.map((operation) => {
         const safeOp = stripDangerousText(String(operation || ""), LIMITS.service);
@@ -308,44 +359,44 @@ function validateTipoPayload(body) {
       }).filter(Boolean);
       const quantidades = answers?.rec_quantidades;
       if (!quantidades || typeof quantidades !== "object") {
-        return { ok: false, error: "Campo recorrente invalido" };
+        return fail("dr.quantidades", "Campo recorrente invalido");
       }
       for (const operation of normalizedOps) {
         const qty = Number(getMapValueByKey(quantidades, operation));
         if (!Number.isInteger(qty) || qty < 1 || qty > 10000) {
-          return { ok: false, error: "Campo recorrente invalido" };
+          return fail("dr.quantidades.valor", "Campo recorrente invalido");
         }
       }
       const gravado = answers?.rec_gravado_por_tipo;
       if (!gravado || typeof gravado !== "object") {
-        return { ok: false, error: "Campo recorrente invalido" };
+        return fail("dr.gravado", "Campo recorrente invalido");
       }
       const tempoBruto = answers?.rec_tempo_bruto_por_tipo || {};
       for (const operation of normalizedOps) {
         const stateValue = stripDangerousText(String(getMapValueByKey(gravado, operation) || ""), 8);
         if (stateValue !== "Sim" && stateValue !== "Não") {
-          return { ok: false, error: "Campo recorrente invalido" };
+          return fail("dr.gravado.valor", "Campo recorrente invalido");
         }
         if (stateValue === "Sim") {
           const tempo = stripDangerousText(String(getMapValueByKey(tempoBruto, operation) || ""), LIMITS.duration);
-          if (!tempo) return { ok: false, error: "Campo recorrente invalido" };
+          if (!tempo) return fail("dr.tempo_bruto", "Campo recorrente invalido");
         }
       }
       const prazo = stripDangerousText(answers.rec_inicio || "", 120);
       if (!prazo || hasDangerousScheme(prazo)) {
-        return { ok: false, error: "Campo recorrente invalido" };
+        return fail("dr.prazo", "Campo recorrente invalido");
       }
     } else {
       const required = ["rec_tipo_operacao", "rec_volume", "rec_objetivo", "rec_gravado", "rec_inicio"];
       for (const field of required) {
         const v = stripDangerousText(answers[field] || "", 120);
-        if (!v) return { ok: false, error: "Campo recorrente invalido" };
-        if (hasDangerousScheme(v)) return { ok: false, error: "Campo recorrente invalido" };
+        if (!v) return fail(`dr.legacy.${field}`, "Campo recorrente invalido");
+        if (hasDangerousScheme(v)) return fail(`dr.legacy.${field}.scheme`, "Campo recorrente invalido");
       }
       const recTempoBruto = stripDangerousText(answers.rec_tempo_bruto || "", LIMITS.duration);
       const recReferencia = stripDangerousText(answers.rec_referencia || "", LIMITS.referencia);
       if (hasDangerousScheme(recTempoBruto) || hasDangerousScheme(recReferencia)) {
-        return { ok: false, error: "Campo recorrente invalido" };
+        return fail("dr.legacy.content", "Campo recorrente invalido");
       }
     }
   }
@@ -359,7 +410,8 @@ function validateTipoPayload(body) {
       instagram,
       empresa,
       extras
-    }
+    },
+    stage: "ok"
   };
 }
 
@@ -428,13 +480,24 @@ async function postSupabaseRow(config, table, payload) {
     });
     if (!response.ok) {
       const parsed = await parseJsonSafe(response);
+      const reason = String(parsed?.message || parsed?.error_description || `supabase_http_${response.status}`);
+      console.error("[validate-submit][supabase] insert_failed", JSON.stringify({
+        table,
+        status: response.status,
+        reason
+      }));
       return {
         ok: false,
-        reason: String(parsed?.message || parsed?.error_description || `supabase_http_${response.status}`)
+        reason
       };
     }
     return { ok: true };
-  } catch {
+  } catch (error) {
+    console.error("[validate-submit][supabase] request_exception", JSON.stringify({
+      table,
+      message: String(error?.message || "unknown"),
+      stack: String(error?.stack || "").slice(0, 1200)
+    }));
     return { ok: false, reason: "supabase_request_failed" };
   } finally {
     if (timeoutId) clearTimeout(timeoutId);
@@ -704,6 +767,11 @@ function buildResumoComercial(row, pricing, score, urgencia, prioridade) {
 async function saveLeadToSupabase(env, lead) {
   const config = getSupabaseConfig(env);
   if (!config.url || !config.writeKey || config.missing.length > 0) {
+    console.warn("[validate-submit][supabase] config_missing", JSON.stringify({
+      missing: config.missing,
+      hasUrl: Boolean(config.url),
+      keyType: config.keyType || ""
+    }));
     return {
       ok: false,
       reason: `supabase_not_configured:${config.missing.join(", ")}`
@@ -769,7 +837,10 @@ async function saveLeadToSupabase(env, lead) {
   };
 
   const orcamentoResult = await postSupabaseRow(config, "orcamentos", orcamentoInsert);
-  if (!orcamentoResult.ok) return orcamentoResult;
+  if (!orcamentoResult.ok) {
+    console.warn("[validate-submit][supabase] orcamentos_insert_failed", JSON.stringify({ reason: orcamentoResult.reason || "" }));
+    return orcamentoResult;
+  }
 
   const leadInsert = {
     fluxo: row.Fluxo || "",
@@ -799,7 +870,10 @@ async function saveLeadToSupabase(env, lead) {
     resumo_comercial: resumoComercial
   };
   const leadResult = await postSupabaseRow(config, "leads", leadInsert);
-  if (!leadResult.ok) return leadResult;
+  if (!leadResult.ok) {
+    console.warn("[validate-submit][supabase] leads_insert_failed", JSON.stringify({ reason: leadResult.reason || "" }));
+    return leadResult;
+  }
 
   return { ok: true };
 }
@@ -822,7 +896,10 @@ function getSheetsWebhookUrl(env, tipo) {
 async function saveLeadToSheetsWebhook(env, lead) {
   const tipo = normalizeTipoValue(lead?.raw?.tipo, lead?.raw?.answers || {});
   const webhookUrl = getSheetsWebhookUrl(env, tipo);
-  if (!webhookUrl) return { ok: false, reason: "webhook_not_configured" };
+  if (!webhookUrl) {
+    console.warn("[validate-submit][webhook] missing_url", JSON.stringify({ tipo }));
+    return { ok: false, reason: "webhook_not_configured" };
+  }
 
   const secret = firstEnvValue(env, ["GOOGLE_SHEETS_WEBHOOK_SECRET", "WEBHOOK_SECRET"]);
   const payload = {
@@ -844,14 +921,27 @@ async function saveLeadToSheetsWebhook(env, lead) {
     });
 
     if (!response.ok) {
+      console.error("[validate-submit][webhook] http_error", JSON.stringify({
+        tipo,
+        status: response.status
+      }));
       return { ok: false, reason: `webhook_http_${response.status}` };
     }
     const parsed = await parseJsonSafe(response);
     if (parsed && (parsed.ok === false || parsed.saved === false)) {
+      console.warn("[validate-submit][webhook] rejected", JSON.stringify({
+        tipo,
+        reason: String(parsed.error || parsed.reason || "webhook_rejected")
+      }));
       return { ok: false, reason: String(parsed.error || parsed.reason || "webhook_rejected") };
     }
     return { ok: true };
-  } catch {
+  } catch (error) {
+    console.error("[validate-submit][webhook] request_exception", JSON.stringify({
+      tipo,
+      message: String(error?.message || "unknown"),
+      stack: String(error?.stack || "").slice(0, 1200)
+    }));
     return { ok: false, reason: "webhook_request_failed" };
   }
 }
@@ -860,6 +950,9 @@ async function saveLead(env, lead) {
   const supabaseResult = await saveLeadToSupabase(env, lead);
   if (supabaseResult.ok) return supabaseResult;
 
+  console.warn("[validate-submit] supabase_failed_trying_webhook", JSON.stringify({
+    reason: supabaseResult.reason || ""
+  }));
   const webhookResult = await saveLeadToSheetsWebhook(env, lead);
   if (webhookResult.ok) {
     return { ok: true, reason: "saved_via_webhook_fallback" };
@@ -1581,86 +1674,137 @@ function buildLeadRow(body, request, ip, nowIso) {
 
 export async function onRequestPost(context) {
   const { request } = context;
+  const startedAt = Date.now();
+  let traceId = `req_${startedAt.toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+  const respond = (payload, status = 200) => {
+    const responsePayload = { ...payload, traceId };
+    submitLog(status >= 500 ? "error" : (status >= 400 ? "warn" : "info"), traceId, "response", {
+      status,
+      ok: Boolean(responsePayload.ok),
+      error: responsePayload.error || "",
+      stage: responsePayload.stage || "",
+      saveReason: responsePayload.saveReason || "",
+      durationMs: Date.now() - startedAt
+    });
+    return json(responsePayload, status);
+  };
 
   const contentType = request.headers.get("content-type") || "";
   if (!contentType.includes("application/json")) {
-    return json({ ok: false, error: "Invalid content type" }, 415);
+    submitLog("warn", traceId, "invalid_content_type", { contentType });
+    return respond({ ok: false, error: "Invalid content type" }, 415);
   }
 
   let body;
   try {
     body = await request.json();
-  } catch {
-    return json({ ok: false, error: "JSON invalido" }, 400);
+  } catch (error) {
+    submitLog("error", traceId, "json_parse_failed", {
+      message: String(error?.message || "invalid_json"),
+      stack: String(error?.stack || "").slice(0, 1000)
+    });
+    return respond({ ok: false, error: "JSON invalido" }, 400);
   }
+  const rawTraceId = stripDangerousText(String(body?.meta?.submissionId || ""), 90);
+  if (rawTraceId) traceId = rawTraceId;
+  submitLog("info", traceId, "request_received", {
+    ip: String(request.headers.get("CF-Connecting-IP") || "unknown"),
+    userAgent: stripDangerousText(String(request.headers.get("user-agent") || ""), 140),
+    host: stripDangerousText(String(request.headers.get("host") || ""), 120)
+  });
+
   body = normalizeIncomingPayload(body);
+  const normalizedTipo = normalizeTipoValue(body?.tipo, body?.answers || {});
+  submitLog("info", traceId, "payload_normalized", {
+    normalizedTipo,
+    payload: summarizePayload(body)
+  });
 
-  const honeypot = stripDangerousText(body?.honeypot || "", 120);
-  if (honeypot) {
-    return json({ ok: false, error: "Spam detectado" }, 403);
-  }
-
-  const elapsedMs = Number(body?.meta?.elapsedMs || 0);
-  if (!Number.isFinite(elapsedMs) || elapsedMs < 3500) {
-    return json({ ok: false, error: "Envio muito rapido" }, 429);
-  }
-  const submissionId = stripDangerousText(String(body?.meta?.submissionId || ""), 90);
-  if (submissionId) {
-    const nowCheck = Date.now();
-    const lockedSubmissionUntil = Number(recentSubmissionIds.get(submissionId) || 0);
-    if (lockedSubmissionUntil > nowCheck) {
-      return json({ ok: true, saved: true, duplicate: true, saveReason: "" });
+  try {
+    const honeypot = stripDangerousText(body?.honeypot || "", 120);
+    if (honeypot) {
+      submitLog("warn", traceId, "blocked_honeypot", {});
+      return respond({ ok: false, error: "Spam detectado" }, 403);
     }
-  }
 
-  const ip = String(request.headers.get("CF-Connecting-IP") || "unknown");
-  const now = Date.now();
-  const lockedUntil = Number(lastSubmitByIp.get(ip) || 0);
-  if (now < lockedUntil) {
-    return json({ ok: false, error: "Cooldown ativo" }, 429);
-  }
-
-  const payloadValidation = validateTipoPayload(body);
-  if (!payloadValidation.ok) {
-    return json({ ok: false, error: payloadValidation.error }, 400);
-  }
-
-  const nowIso = new Date(now).toISOString();
-  const leadPayload = {
-    row: buildLeadRow(body, request, ip, nowIso),
-    raw: {
-      tipo: body.tipo,
-      answers: body.answers || {},
-      meta: {
-        elapsedMs,
-        ip,
-        userAgent: String(request.headers.get("user-agent") || ""),
-        host: String(request.headers.get("host") || "")
-      }
-    },
-    destination: {
-      spreadsheetName: String(context.env.GOOGLE_SHEETS_SPREADSHEET_NAME || "").trim(),
-      sheetName: String(context.env.GOOGLE_SHEETS_SHEET_NAME || "").trim()
+    const elapsedMs = Number(body?.meta?.elapsedMs || 0);
+    if (!Number.isFinite(elapsedMs) || elapsedMs < 3500) {
+      submitLog("warn", traceId, "blocked_fast_submit", { elapsedMs });
+      return respond({ ok: false, error: "Envio muito rapido" }, 429);
     }
-  };
-  const saveResult = await saveLead(context.env, leadPayload);
-  if (submissionId && saveResult.ok) {
-    recentSubmissionIds.set(submissionId, now + SUBMISSION_ID_TTL_MS);
-    if (recentSubmissionIds.size > 5000) {
-      for (const [key, value] of recentSubmissionIds.entries()) {
-        if (Number(value) <= now) recentSubmissionIds.delete(key);
+    const submissionId = stripDangerousText(String(body?.meta?.submissionId || ""), 90);
+    if (submissionId) {
+      const nowCheck = Date.now();
+      const lockedSubmissionUntil = Number(recentSubmissionIds.get(submissionId) || 0);
+      if (lockedSubmissionUntil > nowCheck) {
+        submitLog("info", traceId, "duplicate_submission_id", { submissionId });
+        return respond({ ok: true, saved: true, duplicate: true, saveReason: "" });
       }
     }
-  }
 
-  lastSubmitByIp.set(ip, now + SUBMIT_COOLDOWN_MS);
-  if (lastSubmitByIp.size > 5000) {
-    for (const [key, value] of lastSubmitByIp.entries()) {
-      if (Number(value) <= now) lastSubmitByIp.delete(key);
+    const ip = String(request.headers.get("CF-Connecting-IP") || "unknown");
+    const now = Date.now();
+    const lockedUntil = Number(lastSubmitByIp.get(ip) || 0);
+    if (now < lockedUntil) {
+      submitLog("warn", traceId, "blocked_ip_cooldown", { ip });
+      return respond({ ok: false, error: "Cooldown ativo" }, 429);
     }
-  }
 
-  return json({ ok: saveResult.ok, saved: saveResult.ok, saveReason: saveResult.reason || "" }, saveResult.ok ? 200 : 502);
+    const payloadValidation = validateTipoPayload(body);
+    if (!payloadValidation.ok) {
+      submitLog("warn", traceId, "validation_failed", {
+        stage: payloadValidation.stage || "",
+        error: payloadValidation.error || ""
+      });
+      return respond({ ok: false, error: payloadValidation.error, stage: payloadValidation.stage || "" }, 400);
+    }
+
+    const nowIso = new Date(now).toISOString();
+    const leadPayload = {
+      row: buildLeadRow(body, request, ip, nowIso),
+      raw: {
+        tipo: body.tipo,
+        answers: body.answers || {},
+        meta: {
+          elapsedMs,
+          ip,
+          userAgent: String(request.headers.get("user-agent") || ""),
+          host: String(request.headers.get("host") || "")
+        }
+      },
+      destination: {
+        spreadsheetName: String(context.env.GOOGLE_SHEETS_SPREADSHEET_NAME || "").trim(),
+        sheetName: String(context.env.GOOGLE_SHEETS_SHEET_NAME || "").trim()
+      }
+    };
+    const saveResult = await saveLead(context.env, leadPayload);
+    if (!saveResult.ok) {
+      submitLog("error", traceId, "save_failed", { reason: saveResult.reason || "" });
+    }
+    if (submissionId && saveResult.ok) {
+      recentSubmissionIds.set(submissionId, now + SUBMISSION_ID_TTL_MS);
+      if (recentSubmissionIds.size > 5000) {
+        for (const [key, value] of recentSubmissionIds.entries()) {
+          if (Number(value) <= now) recentSubmissionIds.delete(key);
+        }
+      }
+    }
+
+    lastSubmitByIp.set(ip, now + SUBMIT_COOLDOWN_MS);
+    if (lastSubmitByIp.size > 5000) {
+      for (const [key, value] of lastSubmitByIp.entries()) {
+        if (Number(value) <= now) lastSubmitByIp.delete(key);
+      }
+    }
+
+    return respond({ ok: saveResult.ok, saved: saveResult.ok, saveReason: saveResult.reason || "" }, saveResult.ok ? 200 : 502);
+  } catch (error) {
+    submitLog("error", traceId, "unhandled_exception", {
+      message: String(error?.message || "unknown_error"),
+      stack: String(error?.stack || "").slice(0, 1200)
+    });
+    return respond({ ok: false, error: "Erro interno ao processar envio" }, 500);
+  }
 }
 
 export async function onRequest(context) {

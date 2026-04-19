@@ -176,8 +176,58 @@ function validateWhatsapp(raw) {
   return { ok: true, value: digits };
 }
 
+function normalizeTipoValue(rawTipo, answers = {}) {
+  const tipoRaw = stripDangerousText(String(rawTipo || ""), 40).toLowerCase();
+  if (tipoRaw === "unica" || tipoRaw === "du" || tipoRaw.includes("pontual")) return "unica";
+  if (tipoRaw === "recorrente" || tipoRaw === "dr" || tipoRaw.includes("mensal")) return "recorrente";
+
+  const contratacao = stripDangerousText(String(answers?.flow_tipo_contratacao || ""), 60).toLowerCase();
+  if (contratacao.includes("pontual")) return "unica";
+  if (contratacao.includes("mensal")) return "recorrente";
+  return "";
+}
+
+function firstPositiveMapValue(rawMap) {
+  if (!rawMap || typeof rawMap !== "object") return "";
+  for (const value of Object.values(rawMap)) {
+    const qty = Number(value);
+    if (Number.isInteger(qty) && qty > 0) return String(qty);
+  }
+  return "";
+}
+
+function normalizeIncomingPayload(body) {
+  const answers = body?.answers && typeof body.answers === "object" ? { ...body.answers } : {};
+  const tipo = normalizeTipoValue(body?.tipo, answers);
+  const normalized = {
+    ...body,
+    tipo: tipo || body?.tipo,
+    answers
+  };
+
+  if (tipo === "unica") {
+    if (!answers.unica_servicos && answers.flow_servicos) answers.unica_servicos = answers.flow_servicos;
+    if (!answers.unica_quantidades && answers.flow_quantidades) answers.unica_quantidades = answers.flow_quantidades;
+    if (!answers.unica_referencia && answers.flow_referencia) answers.unica_referencia = answers.flow_referencia;
+    if (!answers.unica_prazo && answers.flow_prazo) answers.unica_prazo = answers.flow_prazo;
+  } else if (tipo === "recorrente") {
+    if (!answers.rec_operacoes && answers.flow_servicos) answers.rec_operacoes = answers.flow_servicos;
+    if (!answers.rec_quantidades && answers.flow_quantidades) answers.rec_quantidades = answers.flow_quantidades;
+    if (!answers.rec_inicio && answers.flow_inicio) answers.rec_inicio = answers.flow_inicio;
+
+    if (!answers.rec_tipo_operacao && answers.rec_operacoes?.selected?.length) {
+      answers.rec_tipo_operacao = String(answers.rec_operacoes.selected[0] || "");
+    }
+    if (!answers.rec_volume) {
+      answers.rec_volume = firstPositiveMapValue(answers.rec_quantidades);
+    }
+  }
+
+  return normalized;
+}
+
 function validateTipoPayload(body) {
-  const tipo = body?.tipo;
+  const tipo = normalizeTipoValue(body?.tipo, body?.answers || {});
   if (tipo !== "unica" && tipo !== "recorrente") {
     return { ok: false, error: "Tipo de formulario invalido" };
   }
@@ -774,9 +824,13 @@ function getMapValueByKey(value, targetKey, keyLimit = LIMITS.service) {
   if (!value || typeof value !== "object") return undefined;
   const safeTarget = stripDangerousText(String(targetKey || ""), keyLimit);
   if (!safeTarget) return undefined;
+  const normalizedTarget = normalizeServiceKey(safeTarget);
   for (const [rawKey, rawVal] of Object.entries(value)) {
     const safeKey = stripDangerousText(String(rawKey || ""), keyLimit);
     if (safeKey === safeTarget) return rawVal;
+    const normalizedKey = normalizeServiceKey(safeKey);
+    if (normalizedKey && normalizedKey === normalizedTarget) return rawVal;
+    if (normalizedTarget.startsWith("outro") && normalizedKey === "outro") return rawVal;
   }
   return undefined;
 }
@@ -1476,6 +1530,7 @@ export async function onRequestPost(context) {
   } catch {
     return json({ ok: false, error: "JSON invalido" }, 400);
   }
+  body = normalizeIncomingPayload(body);
 
   const honeypot = stripDangerousText(body?.honeypot || "", 120);
   if (honeypot) {

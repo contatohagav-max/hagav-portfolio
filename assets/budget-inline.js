@@ -452,7 +452,7 @@ const DDD_VALIDOS = new Set(['11','12','13','14','15','16','17','18','19','21','
         }
         if(!response.ok){
           console.error('[budget-submit] API retornou erro', {status:response.status, body:result||rawBody});
-          const apiMessage = (result && (result.error||result.message||result.reason)) ? String(result.error||result.message||result.reason) : '';
+          const apiMessage = (result && (result.error||result.message||result.reason||result.saveReason)) ? String(result.error||result.message||result.reason||result.saveReason) : '';
           return {
             ok:false,
             status:response.status,
@@ -464,7 +464,7 @@ const DDD_VALIDOS = new Set(['11','12','13','14','15','16','17','18','19','21','
           return {
             ok:false,
             status:response.status,
-            message:String(result.error||result.message||result.reason||'Não conseguimos finalizar agora. Tente novamente em alguns instantes.')
+            message:String(result.error||result.message||result.reason||result.saveReason||'Não conseguimos finalizar agora. Tente novamente em alguns instantes.')
           };
         }
         if(result && result.saved === false){
@@ -472,7 +472,7 @@ const DDD_VALIDOS = new Set(['11','12','13','14','15','16','17','18','19','21','
           return {
             ok:false,
             status:response.status,
-            message:String(result.error||result.message||result.reason||'Não conseguimos finalizar agora. Tente novamente em alguns instantes.')
+            message:String(result.error||result.message||result.reason||result.saveReason||'Não conseguimos finalizar agora. Tente novamente em alguns instantes.')
           };
         }
         console.log('[budget-submit] Submit concluído', {status:response.status, body:result||rawBody});

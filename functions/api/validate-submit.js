@@ -1797,7 +1797,12 @@ export async function onRequestPost(context) {
       }
     }
 
-    return respond({ ok: saveResult.ok, saved: saveResult.ok, saveReason: saveResult.reason || "" }, saveResult.ok ? 200 : 502);
+    return respond({
+      ok: saveResult.ok,
+      saved: saveResult.ok,
+      saveReason: saveResult.reason || "",
+      error: saveResult.ok ? "" : (saveResult.reason || "save_failed")
+    }, saveResult.ok ? 200 : 409);
   } catch (error) {
     submitLog("error", traceId, "unhandled_exception", {
       message: String(error?.message || "unknown_error"),

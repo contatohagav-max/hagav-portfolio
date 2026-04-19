@@ -215,6 +215,117 @@ function getVolumeDiscount(totalQty) {
   return Number(tier?.percent || 0);
 }
 
+function parseJsonSafe(value) {
+  if (!value) return null;
+  if (typeof value === 'object') return value;
+  try {
+    return JSON.parse(String(value));
+  } catch {
+    return null;
+  }
+}
+
+function extractMultiSelection(rawField) {
+  if (Array.isArray(rawField)) return rawField;
+  if (rawField && Array.isArray(rawField.selected)) return rawField.selected;
+  return [];
+}
+
+function mapSelectionWithOutro(rawList, outroValue) {
+  return extractMultiSelection(rawList)
+    .map((item) => {
+      const safe = normalizeText(item);
+      if (safe !== 'Outro') return safe;
+      const extra = normalizeText(outroValue);
+      return extra ? `Outro: ${extra}` : 'Outro';
+    })
+    .filter(Boolean);
+}
+
+function toLooseMapEntries(rawMap) {
+  if (!rawMap || typeof rawMap !== 'object') return [];
+  return Object.entries(rawMap)
+    .map(([rawKey, rawVal]) => ({
+      label: normalizeText(rawKey),
+      normalized: normalizeServiceKey(rawKey),
+      value: normalizeText(rawVal),
+    }))
+    .filter((entry) => entry.label);
+}
+
+function getLooseMapValue(entries, targetLabel) {
+  const target = normalizeServiceKey(targetLabel);
+  if (!target) return '';
+  const found = entries.find((entry) => entry.normalized === target);
+  return found?.value || '';
+}
+
+function buildStructuredFromAnswers(flow, answers) {
+  const empty = {
+    servico: '',
+    quantidade: '',
+    material_gravado: '',
+    tempo_bruto: '',
+    prazo: '',
+    referencia: '',
+  };
+  if (!answers || typeof answers !== 'object') return empty;
+
+  if (flow === 'DU') {
+    const services = mapSelectionWithOutro(answers.unica_servicos, answers?.unica_servicos?.outro);
+    const qtyEntries = toLooseMapEntries(answers.unica_quantidades);
+    const materialEntries = toLooseMapEntries(answers.unica_gravado);
+    const tempoEntries = toLooseMapEntries(answers.unica_tempo_bruto);
+    const resolvedServices = services.length > 0 ? services : qtyEntries.map((entry) => entry.label).filter(Boolean);
+    const primaryService = resolvedServices[0] || qtyEntries[0]?.label || '';
+
+    return {
+      servico: primaryService,
+      quantidade: getLooseMapValue(qtyEntries, primaryService) || qtyEntries[0]?.value || '',
+      material_gravado: getLooseMapValue(materialEntries, primaryService) || materialEntries[0]?.value || '',
+      tempo_bruto: getLooseMapValue(tempoEntries, primaryService) || tempoEntries[0]?.value || '',
+      prazo: normalizeText(answers.unica_prazo),
+      referencia: normalizeText(answers.unica_referencia),
+    };
+  }
+
+  const operations = mapSelectionWithOutro(answers.rec_operacoes, answers?.rec_operacoes?.outro);
+  const qtyEntries = toLooseMapEntries(answers.rec_quantidades);
+  const materialEntries = toLooseMapEntries(answers.rec_gravado_por_tipo);
+  const tempoEntries = toLooseMapEntries(answers.rec_tempo_bruto_por_tipo);
+  const resolvedOperations = operations.length > 0 ? operations : qtyEntries.map((entry) => entry.label).filter(Boolean);
+  const primaryOperation = resolvedOperations[0] || qtyEntries[0]?.label || normalizeText(answers.rec_tipo_operacao);
+
+  return {
+    servico: primaryOperation,
+    quantidade: getLooseMapValue(qtyEntries, primaryOperation) || qtyEntries[0]?.value || normalizeText(answers.rec_volume),
+    material_gravado: getLooseMapValue(materialEntries, primaryOperation) || materialEntries[0]?.value || normalizeText(answers.rec_gravado),
+    tempo_bruto: getLooseMapValue(tempoEntries, primaryOperation) || tempoEntries[0]?.value || normalizeText(answers.rec_tempo_bruto),
+    prazo: normalizeText(answers.rec_inicio || answers.recorrente_prazo),
+    referencia: normalizeText(answers.rec_referencia || answers.referencia),
+  };
+}
+
+function applyStructuredFallback(record) {
+  const parsed = parseJsonSafe(record?.detalhes);
+  const answers = parsed?.respostasCompletas || parsed?.answers || null;
+  if (!answers || typeof answers !== 'object') return record;
+
+  const flowRaw = normalizeText(record?.fluxo || record?.Fluxo || parsed?.fluxo || '');
+  const flow = flowRaw.toUpperCase() === 'DR' ? 'DR' : 'DU';
+  const structured = buildStructuredFromAnswers(flow, answers);
+
+  return {
+    ...record,
+    servico: normalizeText(record?.servico) || structured.servico,
+    quantidade: normalizeText(record?.quantidade) || structured.quantidade,
+    material_gravado: normalizeText(record?.material_gravado) || structured.material_gravado,
+    tempo_bruto: normalizeText(record?.tempo_bruto) || structured.tempo_bruto,
+    prazo: normalizeText(record?.prazo) || structured.prazo,
+    referencia: normalizeText(record?.referencia) || structured.referencia,
+  };
+}
+
 function inferFlow(record) {
   const flow = normalizeText(record?.fluxo || record?.Fluxo || '').toUpperCase();
   if (flow === 'DR') return 'DR';
@@ -250,6 +361,70 @@ function hasHighValueService(rawService) {
   return HIGH_VALUE_KEYWORDS.some((keyword) => lower.includes(keyword));
 }
 
+function computePricingSnapshot(record) {
+  const flow = inferFlow(record);
+  const service = normalizeText(record?.servico || record?.ServicoOuOperacao || '');
+  const quantidade = Math.max(1, Math.round(parsePositiveNumber(record?.quantidade || record?.Quantidade || '1') || 1));
+  const serviceKey = mapServiceCatalog(service);
+  const unitPrice = getUnitPriceFromRules(flow, serviceKey);
+  const tempoMinutes = parseHours(record?.tempo_bruto || record?.TempoBruto || '') * 60;
+  const material = inferMaterialState(record?.material_gravado || record?.MaterialGravado || '');
+
+  let complexidadeNivel = 'N2';
+  let multiplicadorComplexidade = Number(DEFAULT_PRICING_RULES.complexidade.N2 || 1);
+  if (tempoMinutes > 0 && tempoMinutes <= Number(DEFAULT_PRICING_RULES.complexidade.n1MaxMin || 30)) {
+    complexidadeNivel = 'N1';
+    multiplicadorComplexidade = Number(DEFAULT_PRICING_RULES.complexidade.N1 || 0.7);
+  }
+  if (tempoMinutes > Number(DEFAULT_PRICING_RULES.complexidade.n2MaxMin || 120)) {
+    complexidadeNivel = 'N3';
+    multiplicadorComplexidade = Number(DEFAULT_PRICING_RULES.complexidade.N3 || 1.5);
+  }
+
+  const multiplicadorUrgencia = getUrgencyMultiplier(flow, record?.prazo || record?.Prazo || '', serviceKey);
+  const descontoVolumePercent = getVolumeDiscount(quantidade);
+  const ajusteReferenciaPercent = hasReference(record?.referencia || record?.Referencia || '')
+    ? 0
+    : Number(DEFAULT_PRICING_RULES.ajustes.semReferencia || 10);
+
+  const precoBase = Math.max(1, Math.round(unitPrice * quantidade * 100) / 100);
+  let valorSugerido = precoBase * multiplicadorComplexidade * multiplicadorUrgencia;
+  if (material === 'nao') valorSugerido *= 1.05;
+  if (ajusteReferenciaPercent > 0) valorSugerido *= (1 + ajusteReferenciaPercent / 100);
+  if (descontoVolumePercent > 0) valorSugerido *= (1 - descontoVolumePercent / 100);
+  valorSugerido = Math.max(1, Math.round(valorSugerido * 100) / 100);
+
+  const faixaMin = Math.max(1, Math.round(valorSugerido * 0.9 * 100) / 100);
+  const faixaMax = Math.max(faixaMin, Math.round(valorSugerido * 1.1 * 100) / 100);
+  const faixaSugerida = `R$ ${faixaMin.toFixed(2)} a R$ ${faixaMax.toFixed(2)}`;
+
+  const choHora = Number(DEFAULT_PRICING_RULES.margem.choHora || 41.67);
+  const horasEstimadas = parseHours(record?.tempo_bruto || record?.TempoBruto || '') || Math.max(1, quantidade * (flow === 'DR' ? 1.1 : 1.3));
+  const custoEstimado = horasEstimadas * choHora;
+  const margem = valorSugerido > 0 ? ((valorSugerido - custoEstimado) / valorSugerido) * 100 : 0;
+  const margemEstimada = Math.round(Math.min(95, Math.max(0, margem)) * 10) / 10;
+
+  const revisaoManual = quantidade > Number(DEFAULT_PRICING_RULES.pacotes.revisaoCapacidadeAcimaQtd || 30)
+    || complexidadeNivel === 'N3'
+    || serviceKey === 'youtube'
+    || serviceKey === 'vsl_15'
+    || serviceKey === 'vsl_longa'
+    || serviceKey === 'motion';
+
+  return {
+    precoBase,
+    valorSugerido,
+    margemEstimada,
+    faixaSugerida,
+    descontoVolumePercent,
+    multiplicadorUrgencia,
+    multiplicadorComplexidade,
+    complexidadeNivel,
+    ajusteReferenciaPercent,
+    revisaoManual,
+  };
+}
+
 export function estimateValorPotencial(record) {
   const valorSugerido = toNumber(record?.valor_sugerido, 0);
   const precoFinal = toNumber(record?.preco_final, 0);
@@ -260,70 +435,14 @@ export function estimateValorPotencial(record) {
   if (savedEstimate > 0) return savedEstimate;
   if (precoBase > 0) return precoBase;
 
-  const flow = inferFlow(record);
-  const services = splitPipeValues(record?.servico || record?.ServicoOuOperacao || '');
-  const quantities = splitPipeValues(record?.quantidade || record?.Quantidade || '');
-  const materialMap = parseLabeledMap(record?.material_gravado || record?.MaterialGravado || '');
-  const tempoMap = parseLabeledMap(record?.tempo_bruto || record?.TempoBruto || '');
-
-  if (services.length === 0) {
-    return sumQuantidade(record?.quantidade || record?.Quantidade || '1') * (flow === 'DR' ? 170 : 190);
-  }
-
-  let subtotal = 0;
-  let totalQty = 0;
-
-  for (let idx = 0; idx < services.length; idx += 1) {
-    const service = services[idx];
-    const serviceKey = mapServiceCatalog(service);
-    const key = normalizeServiceKey(service);
-    const qty = Math.max(1, Math.round(parsePositiveNumber(quantities[idx] || '') || 1));
-    const material = inferMaterialState(materialMap[key] || record?.material_gravado || '');
-    const tempoMinutes = parseHours(tempoMap[key] || record?.tempo_bruto || '') * 60;
-    const unitPrice = getUnitPriceFromRules(flow, serviceKey);
-
-    let complexity = DEFAULT_PRICING_RULES.complexidade.N2;
-    if (tempoMinutes <= DEFAULT_PRICING_RULES.complexidade.n1MaxMin) complexity = DEFAULT_PRICING_RULES.complexidade.N1;
-    if (tempoMinutes > DEFAULT_PRICING_RULES.complexidade.n2MaxMin) complexity = DEFAULT_PRICING_RULES.complexidade.N3;
-
-    let itemTotal = qty * unitPrice * complexity;
-    itemTotal *= getUrgencyMultiplier(flow, record?.prazo || record?.Prazo || '', serviceKey);
-    if (material === 'nao') itemTotal *= 1.05;
-
-    subtotal += itemTotal;
-    totalQty += qty;
-  }
-
-  if (!hasReference(record?.referencia || record?.Referencia || '')) {
-    subtotal *= 1 + (Number(DEFAULT_PRICING_RULES.ajustes.semReferencia || 10) / 100);
-  }
-
-  const volumeDiscount = getVolumeDiscount(totalQty);
-  subtotal *= (1 - (volumeDiscount / 100));
-
-  return Math.max(150, Math.round(subtotal * 100) / 100);
+  const snapshot = computePricingSnapshot(record);
+  return Math.max(150, snapshot.valorSugerido || 0);
 }
 
 export function estimateMargem(record) {
-  const valor = estimateValorPotencial(record);
-  if (!valor) return 0;
-
   const storedMargin = toNumber(record?.margem_estimada, NaN);
   if (Number.isFinite(storedMargin) && storedMargin > 0) return Math.min(95, Math.max(0, storedMargin));
-
-  const urgencia = inferUrgencia(record?.prazo || record?.Prazo || '');
-  const material = inferMaterialState(record?.material_gravado || record?.MaterialGravado || '');
-  const tempoHours = parseHours(record?.tempo_bruto || record?.TempoBruto || '');
-  const flow = inferFlow(record);
-
-  const choHora = Number(DEFAULT_PRICING_RULES.margem.choHora || 41.67);
-  const horasBase = tempoHours > 0 ? tempoHours : Math.max(1, sumQuantidade(record?.quantidade || record?.Quantidade || '1') * (flow === 'DR' ? 1.1 : 1.3));
-  let custoEstimado = horasBase * choHora;
-  if (material === 'nao') custoEstimado *= 1.1;
-  if (urgencia === 'alta') custoEstimado *= 1.08;
-
-  const margem = ((valor - custoEstimado) / valor) * 100;
-  return Math.round(Math.min(95, Math.max(0, margem)) * 10) / 10;
+  return computePricingSnapshot(record).margemEstimada;
 }
 
 export function estimateLeadScore(record) {
@@ -414,48 +533,71 @@ function isLateFollowup(lead, nowDate) {
 }
 
 export function enrichLeadRecord(record) {
-  const score = toNumber(record?.score_lead, NaN);
-  const computedScore = Number.isFinite(score) && score > 0 ? Math.round(score) : estimateLeadScore(record);
-  const urgencia = normalizeText(record?.urgencia || '').toLowerCase() || inferUrgencia(record?.prazo || record?.Prazo || '');
-  const prioridade = normalizeText(record?.prioridade || '').toLowerCase() || priorityByScore(computedScore, urgencia);
-  const temperatura = normalizeText(record?.temperatura || '') || temperatureByScore(computedScore);
-  const valorEstimado = toNumber(record?.valor_estimado, 0) || estimateValorPotencial(record);
+  const normalizedRecord = applyStructuredFallback(record);
+  const score = toNumber(normalizedRecord?.score_lead, NaN);
+  const computedScore = Number.isFinite(score) && score > 0 ? Math.round(score) : estimateLeadScore(normalizedRecord);
+  const urgencia = normalizeText(normalizedRecord?.urgencia || '').toLowerCase() || inferUrgencia(normalizedRecord?.prazo || normalizedRecord?.Prazo || '');
+  const prioridade = normalizeText(normalizedRecord?.prioridade || '').toLowerCase() || priorityByScore(computedScore, urgencia);
+  const temperatura = normalizeText(normalizedRecord?.temperatura || '') || temperatureByScore(computedScore);
+  const valorEstimado = toNumber(normalizedRecord?.valor_estimado, 0) || estimateValorPotencial(normalizedRecord);
 
   const enriched = {
-    ...record,
+    ...normalizedRecord,
     score_lead: computedScore,
     urgencia,
     prioridade,
     temperatura,
     valor_estimado: Math.round(valorEstimado * 100) / 100,
-    resumo_comercial: normalizeText(record?.resumo_comercial) || buildResumoComercial(record, { score: computedScore }),
+    resumo_comercial: normalizeText(normalizedRecord?.resumo_comercial) || buildResumoComercial(normalizedRecord, { score: computedScore }),
   };
 
   return enriched;
 }
 
 export function enrichOrcamentoRecord(record) {
-  const enrichedLead = enrichLeadRecord(record);
-  const margem = estimateMargem(record);
+  const normalizedRecord = applyStructuredFallback(record);
+  const enrichedLead = enrichLeadRecord(normalizedRecord);
+  const snapshot = computePricingSnapshot(enrichedLead);
+  const margem = estimateMargem(enrichedLead);
 
   const incompletoCampos = [];
-  if (!normalizeText(record?.servico)) incompletoCampos.push('servico');
-  if (!normalizeText(record?.quantidade)) incompletoCampos.push('quantidade');
-  if (!normalizeText(record?.prazo)) incompletoCampos.push('prazo');
-  if (!normalizeText(record?.material_gravado)) incompletoCampos.push('material_gravado');
+  if (!normalizeText(enrichedLead?.servico)) incompletoCampos.push('servico');
+  if (!normalizeText(enrichedLead?.quantidade)) incompletoCampos.push('quantidade');
+  if (!normalizeText(enrichedLead?.prazo)) incompletoCampos.push('prazo');
+  if (!normalizeText(enrichedLead?.material_gravado)) incompletoCampos.push('material_gravado');
+  if (!normalizeText(enrichedLead?.tempo_bruto)) incompletoCampos.push('tempo_bruto');
 
-  const valorPotencial = estimateValorPotencial(record);
-  const precoBase = toNumber(record?.preco_base, 0);
-  const precoFinal = toNumber(record?.preco_final, 0);
+  const valorPotencial = estimateValorPotencial(enrichedLead);
+  const precoBaseRaw = toNumber(enrichedLead?.preco_base, 0);
+  const precoFinalRaw = toNumber(enrichedLead?.preco_final, 0);
+  const valorSugeridoRaw = toNumber(enrichedLead?.valor_sugerido, 0);
+  const precoBase = precoBaseRaw > 0 ? precoBaseRaw : snapshot.precoBase;
+  const valorSugerido = valorSugeridoRaw > 0 ? valorSugeridoRaw : snapshot.valorSugerido;
+  const precoFinal = precoFinalRaw > 0 ? precoFinalRaw : valorSugerido;
+  const faixaSugerida = normalizeText(enrichedLead?.faixa_sugerida) || snapshot.faixaSugerida;
+  const descontoVolumePercent = toNumber(enrichedLead?.desconto_volume_percent, NaN);
+  const multipUrg = toNumber(enrichedLead?.multiplicador_urgencia, NaN);
+  const multipComp = toNumber(enrichedLead?.multiplicador_complexidade, NaN);
+  const complexidade = normalizeText(enrichedLead?.complexidade_nivel) || snapshot.complexidadeNivel;
+  const revisaoManual = typeof enrichedLead?.revisao_manual === 'boolean' ? enrichedLead.revisao_manual : snapshot.revisaoManual;
 
   return {
-    ...record,
     ...enrichedLead,
     margem_estimada: Math.round(margem * 10) / 10,
+    preco_base: Math.round((precoBase || 0) * 100) / 100,
+    valor_sugerido: Math.round((valorSugerido || 0) * 100) / 100,
+    preco_final: Math.round((precoFinal || 0) * 100) / 100,
+    faixa_sugerida: faixaSugerida,
+    desconto_volume_percent: Number.isFinite(descontoVolumePercent) ? descontoVolumePercent : snapshot.descontoVolumePercent,
+    multiplicador_urgencia: Number.isFinite(multipUrg) ? multipUrg : snapshot.multiplicadorUrgencia,
+    multiplicador_complexidade: Number.isFinite(multipComp) ? multipComp : snapshot.multiplicadorComplexidade,
+    complexidade_nivel: complexidade,
+    revisao_manual: revisaoManual,
+    ajuste_referencia_percent: toNumber(enrichedLead?.ajuste_referencia_percent, snapshot.ajusteReferenciaPercent),
     valor_estimado: Math.round((precoFinal || precoBase || valorPotencial) * 100) / 100,
     incompleto: incompletoCampos.length > 0,
     incompleto_campos: incompletoCampos,
-    requer_revisao: ORC_REVISAO.has(record?.status_orcamento) || precoFinal <= 0,
+    requer_revisao: ORC_REVISAO.has(enrichedLead?.status_orcamento) || precoFinal <= 0 || revisaoManual,
   };
 }
 

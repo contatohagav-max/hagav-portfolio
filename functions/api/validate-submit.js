@@ -644,7 +644,7 @@ async function saveLeadToSupabase(env, lead) {
 
   const row = lead?.row || {};
   const { pricingRules, scoreWeights } = await loadPricingContext(config);
-  const pricing = calculateOrcamentoPricing(row, pricingRules);
+  const pricing = calculateOrcamentoPricing(row, pricingRules, lead?.raw?.answers || {});
   const urgencia = inferUrgenciaFromPrazo(row?.Fluxo, row?.Prazo);
   const scoreLead = estimateLeadScoreFromRow(row, pricing, scoreWeights);
   const prioridade = inferPrioridadeByScore(scoreLead, urgencia);
@@ -974,15 +974,123 @@ function getPackageSuggestion(flow, totalQty, value, pricingRules) {
   return "Pacote Plus DU";
 }
 
-function calculateOrcamentoPricing(row, pricingRules) {
+function extractMultiSelection(rawField) {
+  if (Array.isArray(rawField)) return rawField;
+  if (rawField && Array.isArray(rawField.selected)) return rawField.selected;
+  return [];
+}
+
+function mapSelectionWithOutro(rawList, outroValue) {
+  return extractMultiSelection(rawList).map((item) => {
+    const safe = stripDangerousText(String(item || ""), LIMITS.service);
+    if (safe !== "Outro") return safe;
+    const outro = stripDangerousText(String(outroValue || ""), LIMITS.outro);
+    return outro ? `Outro: ${outro}` : "Outro";
+  }).filter(Boolean);
+}
+
+function toLooseMapEntries(rawMap, keyLimit, valLimit) {
+  if (!rawMap || typeof rawMap !== "object") return [];
+  return Object.entries(rawMap).map(([rawKey, rawVal]) => ({
+    label: stripDangerousText(String(rawKey || ""), keyLimit),
+    normalized: normalizeServiceKey(rawKey),
+    value: stripDangerousText(String(rawVal ?? ""), valLimit)
+  })).filter((entry) => entry.label);
+}
+
+function getLooseMapValue(entries, targetLabel) {
+  const normalizedTarget = normalizeServiceKey(targetLabel);
+  if (!normalizedTarget) return "";
+  const found = entries.find((entry) => entry.normalized === normalizedTarget);
+  return found?.value || "";
+}
+
+function entriesToLookup(entries) {
+  const map = {};
+  for (const entry of entries) {
+    if (!entry?.normalized) continue;
+    map[entry.normalized] = entry.value || "";
+  }
+  return map;
+}
+
+function buildStructuredDataFromAnswers(tipo, answers) {
+  const data = {
+    servicePrimary: "",
+    quantityPrimary: "",
+    materialPrimary: "",
+    tempoPrimary: "",
+    prazo: "",
+    referencia: "",
+    objetivo: "",
+    services: [],
+    quantities: [],
+    materialLookup: {},
+    tempoLookup: {}
+  };
+
+  if (tipo === "unica") {
+    const services = mapSelectionWithOutro(answers?.unica_servicos, answers?.unica_servicos?.outro);
+    const qtyEntries = toLooseMapEntries(answers?.unica_quantidades, LIMITS.service, 16);
+    const materialEntries = toLooseMapEntries(answers?.unica_gravado, LIMITS.service, 16);
+    const tempoEntries = toLooseMapEntries(answers?.unica_tempo_bruto, LIMITS.service, LIMITS.duration);
+    const fallbackServices = qtyEntries.map((entry) => entry.label).filter(Boolean);
+    const resolvedServices = services.length > 0 ? services : fallbackServices;
+    const primaryService = resolvedServices[0] || qtyEntries[0]?.label || "";
+    const resolvedQuantities = resolvedServices.map((service) => getLooseMapValue(qtyEntries, service) || "-");
+
+    data.servicePrimary = primaryService;
+    data.quantityPrimary = getLooseMapValue(qtyEntries, primaryService) || resolvedQuantities[0] || "";
+    data.materialPrimary = getLooseMapValue(materialEntries, primaryService) || materialEntries[0]?.value || "";
+    data.tempoPrimary = getLooseMapValue(tempoEntries, primaryService) || tempoEntries[0]?.value || "";
+    data.prazo = stripDangerousText(String(answers?.unica_prazo || ""), 60);
+    data.referencia = stripDangerousText(String(answers?.unica_referencia || ""), LIMITS.referencia);
+    data.services = resolvedServices;
+    data.quantities = resolvedQuantities;
+    data.materialLookup = entriesToLookup(materialEntries);
+    data.tempoLookup = entriesToLookup(tempoEntries);
+    return data;
+  }
+
+  const operations = mapSelectionWithOutro(answers?.rec_operacoes, answers?.rec_operacoes?.outro);
+  const qtyEntries = toLooseMapEntries(answers?.rec_quantidades, LIMITS.service, 16);
+  const materialEntries = toLooseMapEntries(answers?.rec_gravado_por_tipo, LIMITS.service, 16);
+  const tempoEntries = toLooseMapEntries(answers?.rec_tempo_bruto_por_tipo, LIMITS.service, LIMITS.duration);
+  const fallbackOperations = qtyEntries.map((entry) => entry.label).filter(Boolean);
+  const resolvedOperations = operations.length > 0 ? operations : fallbackOperations;
+  const primaryOperation = resolvedOperations[0] || qtyEntries[0]?.label || "";
+  const resolvedQuantities = resolvedOperations.map((operation) => getLooseMapValue(qtyEntries, operation) || "-");
+
+  data.servicePrimary = primaryOperation || composeWithOutro(answers?.rec_tipo_operacao, answers?.rec_tipo_operacao_outro, 120);
+  data.quantityPrimary = getLooseMapValue(qtyEntries, primaryOperation) || resolvedQuantities[0] || stripDangerousText(String(answers?.rec_volume || ""), 60);
+  data.materialPrimary = getLooseMapValue(materialEntries, primaryOperation) || materialEntries[0]?.value || stripDangerousText(String(answers?.rec_gravado || ""), 40);
+  data.tempoPrimary = getLooseMapValue(tempoEntries, primaryOperation) || tempoEntries[0]?.value || stripDangerousText(String(answers?.rec_tempo_bruto || ""), LIMITS.duration);
+  data.prazo = stripDangerousText(String(answers?.rec_inicio || answers?.recorrente_prazo || ""), 60);
+  data.referencia = stripDangerousText(String(answers?.rec_referencia || answers?.referencia || ""), LIMITS.referencia);
+  data.objetivo = stripDangerousText(String(answers?.rec_objetivo || answers?.objetivo || ""), 120);
+  data.services = resolvedOperations.length > 0 ? resolvedOperations : (data.servicePrimary ? [data.servicePrimary] : []);
+  data.quantities = resolvedQuantities.length > 0 ? resolvedQuantities : [data.quantityPrimary || "-"];
+  data.materialLookup = entriesToLookup(materialEntries);
+  data.tempoLookup = entriesToLookup(tempoEntries);
+  return data;
+}
+
+function calculateOrcamentoPricing(row, pricingRules, rawAnswers) {
   const flow = row?.Fluxo === "DR" ? "DR" : "DU";
-  const services = splitPipeValues(row?.ServicoOuOperacao);
-  const qtyParts = splitPipeValues(row?.Quantidade);
-  const tempoMap = parseLabeledMap(row?.TempoBruto, 180, 60);
-  const materialMap = parseLabeledMap(row?.MaterialGravado, 180, 40);
-  const prazoKey = canonicalPrazoKey(row?.Prazo);
+  const structured = buildStructuredDataFromAnswers(flow === "DU" ? "unica" : "recorrente", rawAnswers || {});
+  const services = structured.services.length > 0 ? structured.services : splitPipeValues(row?.ServicoOuOperacao);
+  const qtyParts = structured.quantities.length > 0 ? structured.quantities : splitPipeValues(row?.Quantidade);
+  const tempoMap = Object.keys(structured.tempoLookup).length > 0
+    ? structured.tempoLookup
+    : parseLabeledMap(row?.TempoBruto, 180, 60);
+  const materialMap = Object.keys(structured.materialLookup).length > 0
+    ? structured.materialLookup
+    : parseLabeledMap(row?.MaterialGravado, 180, 40);
+  const prazoBase = structured.prazo || row?.Prazo;
+  const referenciaBase = structured.referencia || row?.Referencia;
+  const prazoKey = canonicalPrazoKey(prazoBase);
   const observacoes = String(row?.Observacoes || "");
-  const referencia = String(row?.Referencia || "");
+  const referencia = String(referenciaBase || "");
 
   const adjustments = pricingRules?.ajustes || DEFAULT_PRICING_RULES.ajustes;
   const marginRules = pricingRules?.margem || DEFAULT_PRICING_RULES.margem;
@@ -1169,83 +1277,7 @@ function buildLeadRow(body, request, ip, nowIso) {
   const fluxo = body?.tipo === "unica" ? "DU" : "DR";
   const tipo = body?.tipo === "unica" ? "Demanda Única" : "Demanda Recorrente";
   const origem = "hagav.com.br";
-
-  let servicoOuOperacao = "";
-  let quantidade = "";
-  let materialGravado = "";
-  let tempoBruto = "";
-  let prazo = "";
-  let referencia = "";
-  let objetivo = "";
-
-  if (body?.tipo === "unica") {
-    const selected = Array.isArray(answers?.unica_servicos?.selected)
-      ? answers.unica_servicos.selected
-      : [];
-    const outro = stripDangerousText(String(answers?.unica_servicos?.outro || ""), LIMITS.outro);
-    const services = selected.map((item) => {
-      const safe = stripDangerousText(String(item || ""), LIMITS.service);
-      if (safe !== "Outro") return safe;
-      return outro ? `Outro: ${outro}` : "Outro";
-    }).filter(Boolean);
-
-    servicoOuOperacao = services.join(" | ");
-    const qtyMap = answers?.unica_quantidades && typeof answers.unica_quantidades === "object"
-      ? answers.unica_quantidades
-      : {};
-    const qtyByService = services.map((service) => {
-      const qtyRaw = getMapValueByKey(qtyMap, service);
-      const qtyValue = stripDangerousText(String(qtyRaw ?? ""), 16);
-      return qtyValue || "-";
-    });
-    quantidade = qtyByService.join(" | ");
-    materialGravado = toFlatMap(answers?.unica_gravado, LIMITS.service, 16);
-    tempoBruto = toFlatMap(answers?.unica_tempo_bruto, LIMITS.service, LIMITS.duration);
-    prazo = stripDangerousText(String(answers?.unica_prazo || ""), 60);
-    referencia = stripDangerousText(String(answers?.unica_referencia || ""), LIMITS.referencia);
-  } else {
-    const recOpsRaw = answers?.rec_operacoes;
-    if (recOpsRaw && typeof recOpsRaw === "object") {
-      const selected = Array.isArray(recOpsRaw.selected) ? recOpsRaw.selected : [];
-      const outro = stripDangerousText(String(recOpsRaw.outro || ""), LIMITS.outro);
-      const operations = selected.map((item) => {
-        const safe = stripDangerousText(String(item || ""), LIMITS.service);
-        if (safe !== "Outro") return safe;
-        return outro ? `Outro: ${outro}` : "Outro";
-      }).filter(Boolean);
-      servicoOuOperacao = operations.join(" | ");
-      const qtyMap = answers?.rec_quantidades && typeof answers.rec_quantidades === "object"
-        ? answers.rec_quantidades
-        : {};
-      const qtyByOperation = operations.map((operation) => {
-        const qtyRaw = getMapValueByKey(qtyMap, operation);
-        const qtyValue = stripDangerousText(String(qtyRaw ?? ""), 16);
-        return qtyValue || "-";
-      });
-      quantidade = qtyByOperation.join(" | ");
-      materialGravado = toFlatMap(answers?.rec_gravado_por_tipo, LIMITS.service, 16);
-      tempoBruto = toFlatMap(answers?.rec_tempo_bruto_por_tipo, LIMITS.service, LIMITS.duration);
-      prazo = stripDangerousText(String(answers?.rec_inicio || ""), 60);
-      referencia = stripDangerousText(String(answers?.rec_referencia || ""), LIMITS.referencia);
-      objetivo = stripDangerousText(String(answers?.rec_objetivo || ""), 120);
-    } else {
-      servicoOuOperacao = composeWithOutro(
-        answers?.rec_tipo_operacao,
-        answers?.rec_tipo_operacao_outro,
-        120
-      );
-      quantidade = stripDangerousText(String(answers?.rec_volume || ""), 60);
-      materialGravado = stripDangerousText(String(answers?.rec_gravado || ""), 40);
-      tempoBruto = stripDangerousText(String(answers?.rec_tempo_bruto || ""), LIMITS.duration);
-      prazo = stripDangerousText(String(answers?.rec_inicio || ""), 60);
-      referencia = stripDangerousText(String(answers?.rec_referencia || ""), LIMITS.referencia);
-      objetivo = composeWithOutro(
-        answers?.rec_objetivo,
-        answers?.rec_objetivo_outro,
-        120
-      );
-    }
-  }
+  const structured = buildStructuredDataFromAnswers(body?.tipo === "unica" ? "unica" : "recorrente", answers);
 
   return {
     DataHora: nowIso,
@@ -1256,13 +1288,13 @@ function buildLeadRow(body, request, ip, nowIso) {
     WhatsApp: stripDangerousText(String(answers?.whatsapp || ""), 16),
     Instagram: stripDangerousText(String(answers?.instagram || ""), LIMITS.instagram),
     Empresa: stripDangerousText(String(answers?.empresa || ""), LIMITS.empresa),
-    ServicoOuOperacao: stripDangerousText(servicoOuOperacao, 600),
-    Quantidade: stripDangerousText(quantidade, 600),
-    MaterialGravado: stripDangerousText(materialGravado, 600),
-    TempoBruto: stripDangerousText(tempoBruto, 600),
-    Prazo: stripDangerousText(prazo, 120),
-    Referencia: stripDangerousText(referencia, LIMITS.referencia),
-    Objetivo: stripDangerousText(objetivo, 300),
+    ServicoOuOperacao: stripDangerousText(structured.servicePrimary, 600),
+    Quantidade: stripDangerousText(structured.quantityPrimary, 600),
+    MaterialGravado: stripDangerousText(structured.materialPrimary, 600),
+    TempoBruto: stripDangerousText(structured.tempoPrimary, 600),
+    Prazo: stripDangerousText(structured.prazo, 120),
+    Referencia: stripDangerousText(structured.referencia, LIMITS.referencia),
+    Objetivo: stripDangerousText(structured.objetivo, 300),
     Observacoes: stripDangerousText(String(answers?.extras || ""), LIMITS.extras),
     Origem: stripDangerousText(origem, 180),
     Status: STATUS_PADRAO,

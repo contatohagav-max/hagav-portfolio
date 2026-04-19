@@ -104,6 +104,23 @@ const DEFAULT_PRICING_RULES = {
   }
 };
 
+const DR_OFFICIAL_ITEM_TOTALS = {
+  reels_shorts_tiktok: {
+    8: 1320,
+    16: 2560
+  },
+  criativo_trafego_pago: {
+    30: 5520
+  },
+  corte_podcast: {
+    16: 1472
+  },
+  youtube: {
+    2: 1012,
+    4: 1820
+  }
+};
+
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
@@ -861,7 +878,7 @@ function mapServiceCatalog(serviceLabel) {
   if (/(videoaula|modulo)/.test(normalized)) return "videoaula_modulo";
   if (/(youtube|youtube recorrente)/.test(normalized)) return "youtube";
   if (/lancamento/.test(normalized)) return "video_medio";
-  if (/vsl/.test(normalized) && /(longa|30|min|45|min|60|min)/.test(normalized)) return "vsl_longa";
+  if (/vsl/.test(normalized) && /(longa|30 ?min|45 ?min|60 ?min|acima de 15|mais de 15)/.test(normalized)) return "vsl_longa";
   if (/vsl/.test(normalized)) return "vsl_15";
   if (/(motion|vinheta)/.test(normalized)) return "motion";
   return "default";
@@ -935,6 +952,14 @@ function getUrgencyMultiplier(flow, prazoKey, serviceKey, pricingRules) {
     forcedManual,
     reasons
   };
+}
+
+function getDrOfficialItemTotal(serviceKey, qty) {
+  const byService = DR_OFFICIAL_ITEM_TOTALS[serviceKey];
+  if (!byService) return null;
+  const total = Number(byService[Math.max(1, Math.round(Number(qty || 0) || 0))]);
+  if (!Number.isFinite(total) || total <= 0) return null;
+  return total;
 }
 
 function getVolumeDiscount(totalQty, pricingRules) {
@@ -1189,6 +1214,7 @@ function calculateOrcamentoPricing(row, pricingRules, rawAnswers) {
   let prazoBloqueado = false;
   let estimatedHours = 0;
   let globalSuggestedFactor = 1;
+  let maxItemDiscountPercent = 0;
   const itensServico = [];
   const reasons = [];
 
@@ -1230,9 +1256,18 @@ function calculateOrcamentoPricing(row, pricingRules, rawAnswers) {
     const urg = getUrgencyMultiplier(flow, prazoKey, serviceKey, pricingRules);
     const materialRaw = String(item?.material_gravado || materialMap[normalizeServiceKey(serviceLabel)] || row?.MaterialGravado || "").toLowerCase();
     const materialPronto = materialRaw.includes("sim");
+    const drOfficialTotal = flow === "DR" ? getDrOfficialItemTotal(serviceKey, qty) : null;
 
-    let itemBase = unit.value * qty;
+    let itemBase = drOfficialTotal ?? (unit.value * qty);
     let itemSuggested = itemBase * complexity.multiplicador * urg.multiplier;
+
+    if (flow === "DR" && drOfficialTotal === null) {
+      const itemDiscountPercent = getVolumeDiscount(qty, pricingRules);
+      maxItemDiscountPercent = Math.max(maxItemDiscountPercent, itemDiscountPercent);
+      if (itemDiscountPercent > 0) {
+        itemSuggested *= (1 - (itemDiscountPercent / 100));
+      }
+    }
 
     if (!materialPronto && materialRaw.trim()) {
       itemSuggested *= 1.05;
@@ -1330,12 +1365,7 @@ function calculateOrcamentoPricing(row, pricingRules, rawAnswers) {
     reasons.push("Operacao especial detectada: revisao manual obrigatoria.");
   }
 
-  const discountPercent = getVolumeDiscount(totalQty, pricingRules);
-  const discountFactor = 1 - (discountPercent / 100);
-  globalSuggestedFactor *= discountFactor;
-  subtotalSuggested *= discountFactor;
-  faixaMinTotal *= discountFactor;
-  faixaMaxTotal *= discountFactor;
+  const discountPercent = maxItemDiscountPercent;
 
   const pacote = getPackageSuggestion(flow, totalQty, subtotalSuggested, pricingRules);
   if (totalQty > Number((pricingRules?.pacotes || DEFAULT_PRICING_RULES.pacotes).revisaoCapacidadeAcimaQtd || 30)) {

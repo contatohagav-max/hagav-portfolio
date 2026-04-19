@@ -85,6 +85,23 @@ const DEFAULT_PRICING_RULES = {
   },
 };
 
+const DR_OFFICIAL_ITEM_TOTALS = {
+  reels_shorts_tiktok: {
+    8: 1320,
+    16: 2560,
+  },
+  criativo_trafego_pago: {
+    30: 5520,
+  },
+  corte_podcast: {
+    16: 1472,
+  },
+  youtube: {
+    2: 1012,
+    4: 1820,
+  },
+};
+
 function toNumber(value, fallback = 0) {
   const num = Number(value);
   return Number.isFinite(num) ? num : fallback;
@@ -200,7 +217,7 @@ function mapServiceCatalog(serviceLabel) {
   if (/depoimento/.test(normalized)) return 'depoimento';
   if (/(videoaula|modulo)/.test(normalized)) return 'videoaula_modulo';
   if (/(youtube|youtube recorrente)/.test(normalized)) return 'youtube';
-  if (/vsl/.test(normalized) && /(longa|30|min|45|min|60|min)/.test(normalized)) return 'vsl_longa';
+  if (/vsl/.test(normalized) && /(longa|30 ?min|45 ?min|60 ?min|acima de 15|mais de 15)/.test(normalized)) return 'vsl_longa';
   if (/vsl/.test(normalized)) return 'vsl_15';
   if (/(motion|vinheta)/.test(normalized)) return 'motion';
   return 'default';
@@ -214,6 +231,14 @@ function getUnitPriceFromRules(flow, serviceKey, pricingRules = DEFAULT_PRICING_
   return flow === 'DR'
     ? Number(base.default_dr || DEFAULT_PRICING_RULES.serviceBase.default_dr)
     : Number(base.default_du || DEFAULT_PRICING_RULES.serviceBase.default_du);
+}
+
+function getDrOfficialItemTotal(serviceKey, qty) {
+  const byService = DR_OFFICIAL_ITEM_TOTALS[serviceKey];
+  if (!byService) return null;
+  const total = Number(byService[Math.max(1, Math.round(Number(qty || 0) || 0))]);
+  if (!Number.isFinite(total) || total <= 0) return null;
+  return total;
 }
 
 function getUrgencyMultiplier(flow, prazo, serviceKey) {
@@ -593,6 +618,7 @@ function computePricingSnapshot(record) {
   let hasNoReference = false;
   let faixaMinTotal = 0;
   let faixaMaxTotal = 0;
+  let maxItemDiscountPercent = 0;
 
   const itensServico = itemList.map((rawItem) => {
     const servico = normalizeText(rawItem?.servico || 'Servico');
@@ -606,9 +632,17 @@ function computePricingSnapshot(record) {
     const baseUnit = getUnitPriceFromRules(flow, serviceKey);
     const complexidade = getComplexidadeByMinutes(parseHours(tempoBruto) * 60);
     const urgenciaMultiplier = getUrgencyMultiplier(flow, prazo || fallbackPrazo, serviceKey);
+    const drOfficialTotal = flow === 'DR' ? getDrOfficialItemTotal(serviceKey, quantidade) : null;
 
-    const baseItem = baseUnit * quantidade;
+    const baseItem = drOfficialTotal ?? (baseUnit * quantidade);
     let suggestedItem = baseItem * complexidade.multiplicador * urgenciaMultiplier;
+    if (flow === 'DR' && drOfficialTotal === null) {
+      const itemDiscountPercent = getVolumeDiscount(quantidade);
+      maxItemDiscountPercent = Math.max(maxItemDiscountPercent, itemDiscountPercent);
+      if (itemDiscountPercent > 0) {
+        suggestedItem *= (1 - (itemDiscountPercent / 100));
+      }
+    }
     if (inferMaterialState(material) === 'nao') {
       suggestedItem *= 1.05;
     }
@@ -657,16 +691,7 @@ function computePricingSnapshot(record) {
     };
   });
 
-  const descontoVolumePercent = getVolumeDiscount(totalQuantidade);
-  if (descontoVolumePercent > 0) {
-    const factor = 1 - (descontoVolumePercent / 100);
-    subtotalSuggested *= factor;
-    faixaMinTotal *= factor;
-    faixaMaxTotal *= factor;
-    for (const item of itensServico) {
-      item.valor_sugerido_item = roundCurrency(item.valor_sugerido_item * factor);
-    }
-  }
+  const descontoVolumePercent = maxItemDiscountPercent;
 
   const precoBase = Math.max(1, roundCurrency(subtotalBase));
   const valorSugerido = Math.max(1, roundCurrency(subtotalSuggested));

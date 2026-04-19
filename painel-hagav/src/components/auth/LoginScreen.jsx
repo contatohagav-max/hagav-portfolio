@@ -44,7 +44,7 @@ export default function LoginScreen() {
             src="/admin/hagav-logo.png"
             alt="HAGAV Studio"
             className="h-20 w-auto object-contain drop-shadow-lg"
-            onError={(e) => { e.currentTarget.src = '/hagav-logo.png'; }}
+            onError={(e) => { e.currentTarget.src = '/admin/hagav-logo.png'; }}
           />
           <p className="text-xs text-hagav-gray mt-3 tracking-wider uppercase">Painel Interno</p>
         </div>

@@ -23,37 +23,96 @@ const DDD_VALIDOS = new Set(['11','12','13','14','15','16','17','18','19','21','
       const tipo=new URLSearchParams(window.location.search).get('tipo');
       return (tipo==='unica'||tipo==='recorrente')?tipo:'';
     }
-    function getSteps(){if(state.tipo==='unica') return getStepsUnica(); if(state.tipo==='recorrente') return getStepsRecorrente(); return []}
-    function getSelectedServices(){
-      const raw=state.answers.unica_servicos;
-      if(!raw||!Array.isArray(raw.selected)) return [];
-      return raw.selected.map((item)=>{
+    const UNIFIED_SERVICE_OPTIONS=[
+      'Reels / Shorts / TikTok',
+      'Criativo para Ads',
+      'Corte Podcast / Clipe',
+      'Vídeo médio',
+      'Depoimento',
+      'Videoaula / Módulo',
+      'YouTube',
+      'VSL até 15 min',
+      'VSL longa (15-30 min)',
+      'Motion / Vinheta',
+      'Outro'
+    ];
+    const CONTRATACAO_OPTIONS=['Projeto pontual','Produção mensal'];
+    function mapTipoContratacaoToInternal(value){
+      if(value==='Projeto pontual') return 'unica';
+      if(value==='Produção mensal') return 'recorrente';
+      return '';
+    }
+    function mapTipoContratacaoLabel(tipo){
+      if(tipo==='unica') return 'Projeto pontual';
+      if(tipo==='recorrente') return 'Produção mensal';
+      return '';
+    }
+    if(state.tipo&&!state.answers.flow_tipo_contratacao){
+      state.answers.flow_tipo_contratacao=mapTipoContratacaoLabel(state.tipo);
+    }
+    function getFlowServiceSelectionRaw(){
+      if(state.answers.flow_servicos&&Array.isArray(state.answers.flow_servicos.selected)) return state.answers.flow_servicos;
+      if(state.tipo==='unica'&&state.answers.unica_servicos&&Array.isArray(state.answers.unica_servicos.selected)) return state.answers.unica_servicos;
+      if(state.tipo==='recorrente'&&state.answers.rec_operacoes&&Array.isArray(state.answers.rec_operacoes.selected)) return state.answers.rec_operacoes;
+      return {selected:[],outro:''};
+    }
+    function getFlowSelectedServices(){
+      const raw=getFlowServiceSelectionRaw();
+      const selected=Array.isArray(raw.selected)?raw.selected:[];
+      return selected.map((item)=>{
         if(item!=='Outro') return sanitizeText(item,FIELD_LIMITS.service||80);
         const extra=sanitizeText(raw.outro||'',FIELD_LIMITS.outro);
         return extra?('Outro: '+extra):'Outro';
       });
     }
+    function clearTipoSpecificAnswers(nextTipo){
+      const current={...(state.answers||{})};
+      if(nextTipo==='unica'){
+        delete current.rec_operacoes;
+        delete current.rec_quantidades;
+        delete current.rec_gravado_por_tipo;
+        delete current.rec_tempo_bruto_por_tipo;
+        delete current.rec_inicio;
+        delete current.rec_tipo_operacao;
+        delete current.rec_tipo_operacao_outro;
+        delete current.rec_volume;
+        delete current.rec_gravado;
+        delete current.rec_tempo_bruto;
+        delete current.rec_referencia;
+        delete current.rec_objetivo;
+        delete current.rec_objetivo_outro;
+      }else if(nextTipo==='recorrente'){
+        delete current.unica_servicos;
+        delete current.unica_quantidades;
+        delete current.unica_gravado;
+        delete current.unica_tempo_bruto;
+        delete current.unica_referencia;
+        delete current.unica_prazo;
+      }
+      state.answers=current;
+    }
+    function getSelectedServices(){
+      return getFlowSelectedServices();
+    }
     function getRecordedYesServices(){const selected=getSelectedServices();const map=state.answers.unica_gravado||{};return selected.filter((service)=>map[service]==='Sim')}
     function getSelectedRecurringOperations(){
-      const raw=state.answers.rec_operacoes;
-      if(!raw||!Array.isArray(raw.selected)) return [];
-      return raw.selected.map((item)=>{
-        if(item!=='Outro') return sanitizeText(item,FIELD_LIMITS.service||80);
-        const extra=sanitizeText(raw.outro||'',FIELD_LIMITS.outro);
-        return extra?('Outro: '+extra):'Outro';
-      });
+      return getFlowSelectedServices();
     }
     function getRecordedYesRecurringOperations(){
       const selected=getSelectedRecurringOperations();
       const map=state.answers.rec_gravado_por_tipo||{};
       return selected.filter((service)=>map[service]==='Sim');
     }
-    function getStepsUnica(){
-      const selected=getSelectedServices();
-      const withYes=getRecordedYesServices();
+    function getUnifiedBaseSteps(selected){
+      const stepServices=Array.isArray(selected)?selected:[];
       return [
-        {id:'unica_servicos',label:'Serviço necessário',title:'Qual serviço você precisa?',type:'multi',required:true,options:['Reels, TikTok e Shorts','Corte estratégico','Criativo para Ads','Outro'],outro:true},
-        {id:'unica_quantidades',label:'Quantidade por serviço',title:'Quantidade por serviço selecionado',hint:'Preencha uma quantidade para cada serviço escolhido.',type:'quantityByService',required:true,services:selected},
+        {id:'flow_servicos',label:'Serviços',title:'Qual tipo de conteúdo você precisa?',hint:'Selecione todos os formatos que fazem sentido para o seu pedido.',type:'multi',required:true,options:UNIFIED_SERVICE_OPTIONS,outro:true},
+        {id:'flow_quantidades',label:'Quantidade',title:'Quantos vídeos/peças você precisa?',hint:'Preencha a quantidade para cada serviço selecionado.',type:'quantityByService',required:true,services:stepServices},
+        {id:'flow_tipo_contratacao',label:'Tipo de contratação',title:'Como você quer contratar?',hint:'Escolha o formato para seguirmos com as próximas perguntas.',type:'single',required:true,options:CONTRATACAO_OPTIONS}
+      ];
+    }
+    function getStepsUnicaTail(selected,withYes){
+      return [
         {id:'unica_gravado',label:'Material gravado',title:'O material já está gravado?',hint:'Responda para cada serviço selecionado.',type:'yesNoByService',required:true,services:selected},
         {id:'unica_tempo_bruto',label:'Tempo de material bruto',title:'Quanto tempo de material bruto para edição?',hint:'Somente para serviços com material gravado.',type:'durationByService',required:withYes.length>0,optionalWhenEmpty:true,services:withYes},
         {id:'unica_referencia',label:'Referência visual',title:'Tem referência visual?',hint:'Envie link de referência do Instagram, YouTube, TikTok ou Meta Ads. Ou pule.',type:'textarea',required:false,placeholder:'Cole links ou descreva referências...'},
@@ -63,24 +122,33 @@ const DDD_VALIDOS = new Set(['11','12','13','14','15','16','17','18','19','21','
         {id:'whatsapp',label:'WhatsApp',title:'Qual o seu WhatsApp?',type:'phone',required:true,placeholder:'(00) 00000-0000'}
       ].filter((step)=>!(step.optionalWhenEmpty&&(!step.services||step.services.length===0)));
     }
-    function getStepsRecorrente(){
-      const selected=getSelectedRecurringOperations();
-      const withYes=getRecordedYesRecurringOperations();
+    function getStepsRecorrenteTail(selected,withYes){
       return [
-        {id:'rec_operacoes',label:'Tipo de operação',title:'Qual tipo de operação você precisa?',type:'multi',required:true,options:['Conteúdo para redes sociais','Criativos para anúncios','Lançamentos','YouTube recorrente','Outro'],outro:true},
-        {id:'rec_quantidades',label:'Quantidade por tipo',title:'Quantidade por tipo selecionado',hint:'Preencha uma quantidade para cada tipo escolhido.',type:'quantityByService',required:true,services:selected},
-        {id:'rec_gravado_por_tipo',label:'Material gravado',title:'O material já está gravado?',hint:'Responda para cada tipo selecionado.',type:'yesNoByService',required:true,services:selected},
-        {id:'rec_tempo_bruto_por_tipo',label:'Tempo bruto',title:'Quanto tempo de material bruto para edição?',hint:'Somente para tipos com material gravado.',type:'durationByService',required:withYes.length>0,optionalWhenEmpty:true,services:withYes},
-        {id:'rec_inicio',label:'Prazo para começar',title:'Qual o prazo para começar?',type:'single',required:true,options:['Imediato','Essa semana','Esse mês','Estou analisando']},
+        {id:'rec_gravado_por_tipo',label:'Material gravado',title:'O material já está gravado?',hint:'Responda para cada serviço selecionado.',type:'yesNoByService',required:true,services:selected},
+        {id:'rec_tempo_bruto_por_tipo',label:'Tempo bruto',title:'Quanto tempo de material bruto para edição?',hint:'Somente para serviços com material gravado.',type:'durationByService',required:withYes.length>0,optionalWhenEmpty:true,services:withYes},
+        {id:'rec_inicio',label:'Prazo para começar',title:'Quando você deseja começar?',type:'single',required:true,options:['Imediato','Essa semana','Esse mês','Estou analisando']},
         {id:'extras',label:'Observações extras',title:'Observações extras',type:'textarea',required:false,placeholder:'Algo que você queira complementar...'},
         {id:'nome',label:'Nome',title:'Qual é o seu nome?',type:'text',required:true,placeholder:'Digite seu nome'},
         {id:'whatsapp',label:'WhatsApp',title:'Qual o seu WhatsApp?',type:'phone',required:true,placeholder:'(00) 00000-0000'}
       ].filter((step)=>!(step.optionalWhenEmpty&&(!step.services||step.services.length===0)));
     }
+    function getSteps(){
+      const selected=getFlowSelectedServices();
+      const baseSteps=getUnifiedBaseSteps(selected);
+      const tipoEscolhido=mapTipoContratacaoToInternal(state.answers.flow_tipo_contratacao||'')||state.tipo;
+      if(tipoEscolhido==='unica'){
+        const withYes=getRecordedYesServices();
+        return baseSteps.concat(getStepsUnicaTail(selected,withYes));
+      }
+      if(tipoEscolhido==='recorrente'){
+        const withYes=getRecordedYesRecurringOperations();
+        return baseSteps.concat(getStepsRecorrenteTail(selected,withYes));
+      }
+      return baseSteps;
+    }
     function render(){
-      if(!state.tipo){renderTypePicker();updateProgress(0,0);return}
       const steps=getSteps();
-      if(steps.length===0){renderTypePicker();updateProgress(0,0);return}
+      if(steps.length===0){stepsEl.innerHTML='';updateProgress(0,0);return}
       if(state.submittedSuccess){
         renderSuccessView(steps.length);
         return;
@@ -130,16 +198,6 @@ const DDD_VALIDOS = new Set(['11','12','13','14','15','16','17','18','19','21','
       if(btn){btn.addEventListener('click',goHomeAndReset);}
       launchConfettiBurst();
       updateProgress(totalSteps,totalSteps);
-    }
-    function renderTypePicker(){
-      stepsEl.innerHTML='';
-      const picker=document.createElement('article');
-      picker.className='type-picker';
-      picker.innerHTML='<h2>Escolha o tipo de orçamento</h2>'+
-        '<button class="opt" data-set-tipo="unica"><span class="opt-row"><span>Demanda Única</span><span class="opt-check">→</span></span></button>'+
-        '<button class="opt" data-set-tipo="recorrente"><span class="opt-row"><span>Demanda Recorrente</span><span class="opt-check">→</span></span></button>';
-      picker.querySelectorAll('[data-set-tipo]').forEach((btn)=>{btn.addEventListener('click',()=>{setTipo(btn.getAttribute('data-set-tipo'));})});
-      stepsEl.appendChild(picker);
     }
     function buildActiveStepMarkup(step,canGoBack){
       const hint=step.hint?'<p class="step-hint">'+escapeHtml(step.hint)+'</p>':'';
@@ -206,7 +264,22 @@ const DDD_VALIDOS = new Set(['11','12','13','14','15','16','17','18','19','21','
         quicks.forEach((btn)=>{btn.addEventListener('click',()=>{const parts=btn.getAttribute('data-time').split('|');const service=parts[0];const val=parts[1];const input=container.querySelector('[data-time-input="'+cssEscape(service)+'"]');if(input)input.value=val;errorEl.style.display='none';});});
       }
       if(skipBtn){skipBtn.addEventListener('click',()=>{state.answers[step.id]='';if(step.outro) state.answers[step.id+'_outro']='';goToNext();});}
-      nextBtn.addEventListener('click',()=>{const result=collectAndValidate(step,container);if(!result.ok){errorEl.textContent=result.error;errorEl.style.display='block';return;}state.answers[step.id]=result.value;if(result.extra){Object.keys(result.extra).forEach((key)=>{state.answers[key]=result.extra[key];});}goToNext();});
+      nextBtn.addEventListener('click',()=>{
+        const result=collectAndValidate(step,container);
+        if(!result.ok){errorEl.textContent=result.error;errorEl.style.display='block';return;}
+        state.answers[step.id]=result.value;
+        if(result.extra){Object.keys(result.extra).forEach((key)=>{state.answers[key]=result.extra[key];});}
+        if(step.id==='flow_tipo_contratacao'){
+          const mappedTipo=mapTipoContratacaoToInternal(result.value);
+          if(mappedTipo&&mappedTipo!==state.tipo){
+            clearTipoSpecificAnswers(mappedTipo);
+          }
+          if(mappedTipo){
+            state.tipo=mappedTipo;
+          }
+        }
+        goToNext();
+      });
       container.addEventListener('keydown',(event)=>{if(event.key==='Enter'&&event.target.tagName!=='TEXTAREA'){event.preventDefault();nextBtn.click();}});
     }
     function collectAndValidate(step,container){
@@ -345,12 +418,13 @@ const DDD_VALIDOS = new Set(['11','12','13','14','15','16','17','18','19','21','
     }
     function buildSubmissionPayload(honeypotValue){
       const answers=buildSanitizedAnswers();
+      const tipoInterno=state.tipo||mapTipoContratacaoToInternal(state.answers.flow_tipo_contratacao||'')||'unica';
       const safeLocation=(typeof window!=='undefined'&&window.location)?(window.location.origin+window.location.pathname):'';
       if(!state.submissionId){
         state.submissionId='lead_'+Date.now()+'_'+Math.random().toString(36).slice(2,10);
       }
       return {
-        tipo: state.tipo,
+        tipo: tipoInterno,
         answers,
         honeypot: sanitizeText(honeypotValue,120),
         meta: {
@@ -390,33 +464,56 @@ const DDD_VALIDOS = new Set(['11','12','13','14','15','16','17','18','19','21','
     }
     function buildSanitizedAnswers(){
       const raw=state.answers||{};
+      const tipoInterno=state.tipo||mapTipoContratacaoToInternal(raw.flow_tipo_contratacao||'')||'unica';
+      const flowSelection=raw.flow_servicos&&Array.isArray(raw.flow_servicos.selected)
+        ? raw.flow_servicos
+        : (tipoInterno==='unica'&&raw.unica_servicos&&Array.isArray(raw.unica_servicos.selected)
+          ? raw.unica_servicos
+          : (tipoInterno==='recorrente'&&raw.rec_operacoes&&Array.isArray(raw.rec_operacoes.selected)
+            ? raw.rec_operacoes
+            : {selected:[],outro:''}));
+      const flowServices=Array.isArray(flowSelection.selected)?flowSelection.selected:[];
+      const flowOutro=sanitizeText(flowSelection.outro||'',FIELD_LIMITS.outro);
+      const rawQuantidades=raw.flow_quantidades&&typeof raw.flow_quantidades==='object'
+        ? raw.flow_quantidades
+        : (tipoInterno==='unica'
+          ? (raw.unica_quantidades&&typeof raw.unica_quantidades==='object'?raw.unica_quantidades:{})
+          : (raw.rec_quantidades&&typeof raw.rec_quantidades==='object'?raw.rec_quantidades:{}));
+      const normalizedQuantidades={};
+      flowServices.forEach((service)=>{
+        if(!Object.prototype.hasOwnProperty.call(rawQuantidades,service)) return;
+        const value=Number(rawQuantidades[service]);
+        if(Number.isInteger(value)&&value>0){
+          normalizedQuantidades[service]=value;
+        }
+      });
+      const firstService=flowServices[0]||'';
+      const firstQuantity=firstService&&normalizedQuantidades[firstService]?String(normalizedQuantidades[firstService]):'';
       const result={
         nome: sanitizeText(raw.nome||'',FIELD_LIMITS.nome),
         whatsapp: onlyDigits(raw.whatsapp||'').slice(0,11),
         instagram: sanitizeText(raw.instagram||'',FIELD_LIMITS.instagram),
         extras: sanitizeText(raw.extras||'',FIELD_LIMITS.extras)
       };
-      if(state.tipo==='unica'){
-        const servicos=raw.unica_servicos&&Array.isArray(raw.unica_servicos.selected)?raw.unica_servicos.selected:[];
-        result.unica_servicos={selected:servicos,outro:sanitizeText((raw.unica_servicos&&raw.unica_servicos.outro)||'',FIELD_LIMITS.outro)};
-        result.unica_quantidades=raw.unica_quantidades&&typeof raw.unica_quantidades==='object'?raw.unica_quantidades:{};
+      if(tipoInterno==='unica'){
+        result.unica_servicos={selected:flowServices,outro:flowOutro};
+        result.unica_quantidades=normalizedQuantidades;
         result.unica_gravado=raw.unica_gravado&&typeof raw.unica_gravado==='object'?raw.unica_gravado:{};
         result.unica_tempo_bruto=raw.unica_tempo_bruto&&typeof raw.unica_tempo_bruto==='object'?raw.unica_tempo_bruto:{};
         result.unica_referencia=sanitizeText(raw.unica_referencia||'',FIELD_LIMITS.referencia);
         result.unica_prazo=sanitizeText(raw.unica_prazo||'',40);
       }else{
-        const operacoes=raw.rec_operacoes&&Array.isArray(raw.rec_operacoes.selected)?raw.rec_operacoes.selected:[];
-        result.rec_operacoes={selected:operacoes,outro:sanitizeText((raw.rec_operacoes&&raw.rec_operacoes.outro)||'',FIELD_LIMITS.outro)};
-        result.rec_quantidades=raw.rec_quantidades&&typeof raw.rec_quantidades==='object'?raw.rec_quantidades:{};
+        result.rec_operacoes={selected:flowServices,outro:flowOutro};
+        result.rec_quantidades=normalizedQuantidades;
         result.rec_gravado_por_tipo=raw.rec_gravado_por_tipo&&typeof raw.rec_gravado_por_tipo==='object'?raw.rec_gravado_por_tipo:{};
         result.rec_tempo_bruto_por_tipo=raw.rec_tempo_bruto_por_tipo&&typeof raw.rec_tempo_bruto_por_tipo==='object'?raw.rec_tempo_bruto_por_tipo:{};
         result.rec_inicio=sanitizeText(raw.rec_inicio||'',50);
         // Compatibilidade com integrações legadas que ainda leem estes campos.
-        result.rec_tipo_operacao=sanitizeText(raw.rec_tipo_operacao||'',120);
-        result.rec_tipo_operacao_outro=sanitizeText(raw.rec_tipo_operacao_outro||'',FIELD_LIMITS.outro);
-        result.rec_volume=sanitizeText(raw.rec_volume||'',60);
-        result.rec_gravado=sanitizeText(raw.rec_gravado||'',40);
-        result.rec_tempo_bruto=sanitizeText(raw.rec_tempo_bruto||'',FIELD_LIMITS.duration);
+        result.rec_tipo_operacao=sanitizeText(raw.rec_tipo_operacao||firstService,120);
+        result.rec_tipo_operacao_outro=sanitizeText(raw.rec_tipo_operacao_outro||flowOutro,FIELD_LIMITS.outro);
+        result.rec_volume=sanitizeText(raw.rec_volume||firstQuantity,60);
+        result.rec_gravado=sanitizeText(raw.rec_gravado||(firstService?String(result.rec_gravado_por_tipo[firstService]||''):''),40);
+        result.rec_tempo_bruto=sanitizeText(raw.rec_tempo_bruto||(firstService?String(result.rec_tempo_bruto_por_tipo[firstService]||''):''),FIELD_LIMITS.duration);
         result.rec_referencia=sanitizeText(raw.rec_referencia||'',FIELD_LIMITS.referencia);
         result.rec_objetivo=sanitizeText(raw.rec_objetivo||'',120);
         result.rec_objetivo_outro=sanitizeText(raw.rec_objetivo_outro||'',FIELD_LIMITS.outro);
@@ -477,11 +574,11 @@ const DDD_VALIDOS = new Set(['11','12','13','14','15','16','17','18','19','21','
     }
     function goHomeAndReset(){
       const paneActions=document.getElementById('pane-actions');
-      const paneModes=document.getElementById('pane-modes');
       const paneBudget=document.getElementById('pane-budget');
       clearWizard();
-      if(paneActions&&paneModes&&paneBudget){
-        paneModes.classList.add('hidden');
+      if(paneActions&&paneBudget){
+        const paneModes=document.getElementById('pane-modes');
+        if(paneModes){paneModes.classList.add('hidden');}
         paneBudget.classList.add('hidden');
         paneActions.classList.remove('hidden');
         const hero=document.getElementById('hero-card');
@@ -531,7 +628,7 @@ const DDD_VALIDOS = new Set(['11','12','13','14','15','16','17','18','19','21','
       state.currentIndex=0;
       state.readyToSubmit=false;
       state.submittedSuccess=false;
-      state.answers={};
+      state.answers={flow_tipo_contratacao: mapTipoContratacaoLabel(state.tipo)};
       state.startedAt=Date.now();
       state.isSubmitting=false;
       state.submissionId='';
@@ -546,7 +643,11 @@ const DDD_VALIDOS = new Set(['11','12','13','14','15','16','17','18','19','21','
       state.readyToSubmit=false;
       state.submittedSuccess=false;
       state.answers={};
+      state.startedAt=Date.now();
+      state.isSubmitting=false;
       state.submissionId='';
+      state.submitLockedUntil=0;
+      state.lastSubmissionHash='';
       state.finalError='';
       render();
     }

@@ -296,7 +296,7 @@
   <div class="page">
     <div class="logo">
       <button class="logo-link" id="logo-home-link" type="button" aria-label="Voltar ao início">
-        <img src="./assets/logo-3d-hagav.png" alt="HAGAV Studio" decoding="async" />
+        <img src="./assets/hagav-master-horizontal-transparente-4000.png" alt="HAGAV Studio" decoding="async" />
       </button>
     </div>
 
@@ -333,21 +333,6 @@
           <span class="btn-arrow">→</span>
         </a>
       </div>
-      <div class="pane hidden" id="pane-modes" aria-live="polite">
-        <article class="mode-card">
-          <h2 class="mode-title">Demanda Única</h2>
-          <p class="mode-text">Para projetos pontuais, urgentes ou pedidos avulsos.</p>
-          <button class="mode-go" type="button" data-budget-tipo="unica">Continuar</button>
-        </article>
-
-        <article class="mode-card">
-          <h2 class="mode-title">Demanda Recorrente</h2>
-          <p class="mode-text">Para empresas e criadores que precisam de conteúdo constante.</p>
-          <button class="mode-go" type="button" data-budget-tipo="recorrente">Continuar</button>
-        </article>
-
-        <button class="mode-back" id="back-to-actions" type="button">Voltar</button>
-      </div>
       <section class="pane hidden" id="pane-budget" aria-live="polite">
         <div class="budget-shell">
           <section class="progress-wrap" aria-live="polite">
@@ -364,7 +349,6 @@
   <script src="./assets/whatsapp-tracking.js"></script>
   <script>
     const paneActions = document.getElementById('pane-actions');
-    const paneModes = document.getElementById('pane-modes');
     const paneBudget = document.getElementById('pane-budget');
     const heroCard = document.getElementById('hero-card');
     function setBudgetFocus(isBudget){
@@ -372,7 +356,6 @@
     }
     function switchPane(target){
       paneActions.classList.add('hidden');
-      paneModes.classList.add('hidden');
       paneBudget.classList.add('hidden');
       target.classList.remove('hidden');
       setBudgetFocus(target === paneBudget);
@@ -389,21 +372,11 @@
       window.scrollTo({top:0,behavior:'smooth'});
     });
     document.getElementById('open-budget-modes').addEventListener('click',()=>{
-      switchPane(paneModes);
-      scrollToElement(heroCard);
-    });
-    document.getElementById('back-to-actions').addEventListener('click',()=>{
-      switchPane(paneActions);
-      scrollToElement(heroCard);
-    });
-    document.querySelectorAll('[data-budget-tipo]').forEach((btn)=>{
-      btn.addEventListener('click',()=>{
-        if(window.HagavBudget&&typeof window.HagavBudget.setTipo==='function'){
-          window.HagavBudget.setTipo(btn.getAttribute('data-budget-tipo'));
-        }
-        switchPane(paneBudget);
-        scrollToElement(paneBudget);
-      });
+      if(window.HagavBudget&&typeof window.HagavBudget.clearWizard==='function'){
+        window.HagavBudget.clearWizard();
+      }
+      switchPane(paneBudget);
+      scrollToElement(paneBudget);
     });
     document.querySelectorAll('[data-footer-year]').forEach((el)=>{
       el.textContent = String(new Date().getFullYear());

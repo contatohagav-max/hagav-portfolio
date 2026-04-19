@@ -1,42 +1,40 @@
 'use client';
 
+// Using img instead of next/image to avoid basePath prefix on static asset
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
-  LayoutDashboard, Users, FileText, Kanban, Settings, X, Zap,
+  LayoutDashboard, Users, FileText, Kanban, Settings, X,
 } from 'lucide-react';
 import { classNames } from '@/lib/utils';
 
 const NAV = [
-  { href: '/',               label: 'Dashboard',    icon: LayoutDashboard },
-  { href: '/leads',          label: 'Leads',        icon: Users },
-  { href: '/orcamentos',     label: 'Orçamentos',   icon: FileText },
-  { href: '/pipeline',       label: 'Pipeline',     icon: Kanban },
-  { href: '/configuracoes',  label: 'Configurações', icon: Settings },
+  { href: '/',              label: 'Dashboard',     icon: LayoutDashboard },
+  { href: '/leads',         label: 'Leads',         icon: Users },
+  { href: '/orcamentos',    label: 'Orçamentos',    icon: FileText },
+  { href: '/pipeline',      label: 'Pipeline',      icon: Kanban },
+  { href: '/configuracoes', label: 'Configurações', icon: Settings },
 ];
 
 export default function Sidebar({ open, onClose }) {
   const pathname = usePathname();
 
   return (
-    <aside
-      className={classNames(
-        'fixed lg:static inset-y-0 left-0 z-30 flex flex-col',
-        'w-60 bg-hagav-dark border-r border-hagav-border',
-        'transition-transform duration-200 ease-in-out',
-        open ? 'translate-x-0' : '-translate-x-full lg:translate-x-0',
-      )}
-    >
+    <aside className={classNames(
+      'fixed lg:static inset-y-0 left-0 z-30 flex flex-col',
+      'w-60 bg-hagav-dark border-r border-hagav-border',
+      'transition-transform duration-200 ease-in-out',
+      open ? 'translate-x-0' : '-translate-x-full lg:translate-x-0',
+    )}>
       {/* Logo */}
-      <div className="flex items-center justify-between px-5 py-5 border-b border-hagav-border">
-        <div className="flex items-center gap-2.5">
-          <div className="w-7 h-7 rounded-md bg-gold-gradient flex items-center justify-center">
-            <Zap size={14} className="text-hagav-black" fill="currentColor" />
-          </div>
-          <div>
-            <p className="text-sm font-bold tracking-widest text-hagav-gold uppercase">HAGAV</p>
-            <p className="text-[10px] text-hagav-gray leading-none">Painel Interno</p>
-          </div>
+      <div className="flex items-center justify-between px-4 py-4 border-b border-hagav-border">
+        <div className="flex items-center gap-3">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/admin/hagav-logo.png"
+            alt="HAGAV Studio"
+            className="h-10 w-auto object-contain"
+          />
         </div>
         <button
           onClick={onClose}

@@ -13,6 +13,7 @@ const NAV = [
   { href: '/',              label: 'Dashboard',     icon: LayoutDashboard },
   { href: '/leads',         label: 'Leads',         icon: Users },
   { href: '/orcamentos',    label: 'Orçamentos',    icon: FileText },
+  { href: '/clientes',      label: 'Clientes',      icon: Users },
   { href: '/pipeline',      label: 'Pipeline',      icon: Kanban },
   { href: '/configuracoes', label: 'Configurações', icon: Settings },
 ];
@@ -35,6 +36,12 @@ const NAV_TOOLTIPS = {
     whatIs: 'Etapa comercial de proposta, ajuste e fechamento.',
     purpose: 'Precificar, negociar e fechar contrato.',
     observe: 'Mantenha foco em proposta_enviada, ajustando e aprovado.',
+  },
+  '/clientes': {
+    title: 'Clientes',
+    whatIs: 'Carteira de contratos fechados e pos-venda.',
+    purpose: 'Acompanhar vigencia, renovacao e reenvio de documentos.',
+    observe: 'Priorize contratos com renovacao proxima.',
   },
   '/pipeline': {
     title: 'Pipeline',

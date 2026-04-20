@@ -40,6 +40,24 @@ function deepMerge(base, override) {
   return merged;
 }
 
+function safeParseJsonObject(value) {
+  if (!value) return {};
+  if (typeof value === 'object' && !Array.isArray(value)) return { ...value };
+  if (typeof value !== 'string') return {};
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function parseDateSafe(value) {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
 function normalizeDealRecord(raw) {
   const statusDeal = normalizeDealStatus(raw?.status, DEAL_STATUS.NOVO);
   return {
@@ -64,6 +82,58 @@ function mapDealToOrcamentoRecord(raw) {
     status_deal: deal.status,
     status: mapDealStatusToLegacyLead(deal.status),
     status_orcamento: mapDealStatusToLegacyOrcamento(deal.status),
+  };
+}
+
+function mapDealToContratoRecord(raw) {
+  const deal = normalizeDealRecord(raw);
+  const detalhes = safeParseJsonObject(deal?.detalhes);
+  const contrato = safeParseJsonObject(detalhes?.contrato);
+  const vencimento = contrato?.vencimento || deal?.validade_ate || null;
+  const renovacaoEm = contrato?.renovacao_alerta_em || deal?.proximo_followup_em || null;
+  const valorContrato = Number(
+    contrato?.valor_final
+      ?? deal?.valor_fechado
+      ?? deal?.preco_final
+      ?? deal?.valor_sugerido
+      ?? 0
+  ) || 0;
+
+  const now = new Date();
+  const vencimentoDate = parseDateSafe(vencimento ? `${vencimento}T23:59:59` : null);
+  const statusRaw = String(contrato?.status || '').toLowerCase();
+
+  let statusContrato = statusRaw;
+  if (!statusContrato) {
+    if (vencimentoDate && vencimentoDate.getTime() < now.getTime()) {
+      statusContrato = 'vencido';
+    } else {
+      statusContrato = 'ativo';
+    }
+  }
+
+  const diasParaVencimento = vencimentoDate
+    ? Math.ceil((vencimentoDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+    : null;
+  const renovacaoProxima = statusContrato !== 'encerrado'
+    && (Number.isFinite(diasParaVencimento) && diasParaVencimento <= 15);
+
+  return {
+    ...deal,
+    status_deal: deal.status,
+    contrato,
+    status_contrato: statusContrato,
+    valor_contrato: valorContrato,
+    vencimento_contrato: vencimento,
+    inicio_contrato: contrato?.data_inicio || null,
+    recorrente_contrato: typeof contrato?.recorrente === 'boolean' ? contrato.recorrente : false,
+    responsavel_contrato: contrato?.responsavel || deal?.responsavel || '',
+    forma_pagamento_contrato: contrato?.forma_pagamento || '',
+    renovacao_alerta_em: renovacaoEm,
+    renovacao_proxima: renovacaoProxima,
+    dias_para_vencimento: Number.isFinite(diasParaVencimento) ? diasParaVencimento : null,
+    plano_servico: deal?.pacote_sugerido || deal?.servico || '',
+    link_pdf: deal?.link_pdf || '',
   };
 }
 
@@ -291,6 +361,108 @@ export async function updateOrcamento(id, patch) {
 
   if (error) throw error;
   return enrichOrcamentoRecord(mapDealToOrcamentoRecord(data));
+}
+
+function getAdminApiKey(explicitKey) {
+  const direct = String(explicitKey || '').trim();
+  if (direct) return direct;
+
+  const fromEnv = String(
+    process.env.NEXT_PUBLIC_ADMIN_DASHBOARD_KEY
+      || process.env.NEXT_PUBLIC_ORCAMENTO_ADMIN_KEY
+      || process.env.NEXT_PUBLIC_HAGAV_ADMIN_KEY
+      || ''
+  ).trim();
+  if (fromEnv) return fromEnv;
+
+  if (typeof window === 'undefined') return '';
+  try {
+    return String(window.sessionStorage.getItem('hagav_admin_key') || '').trim();
+  } catch {
+    return '';
+  }
+}
+
+export async function generateDealPdf(id, { adminKey } = {}) {
+  const key = getAdminApiKey(adminKey);
+  if (!key) {
+    throw new Error('Chave admin nao configurada para gerar PDF.');
+  }
+
+  const response = await fetch('/api/admin-orcamentos-pdf', {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json; charset=utf-8',
+      'x-admin-key': key,
+    },
+    body: JSON.stringify({ id }),
+  });
+  const parsed = await response.json().catch(() => ({}));
+
+  if (!response.ok || parsed?.ok === false) {
+    throw new Error(parsed?.error || `Falha ao gerar PDF (${response.status})`);
+  }
+
+  return parsed;
+}
+
+export async function fetchClientesContratos({
+  search,
+  responsavel,
+  statusContrato,
+  recorrente,
+  onlyRenovacaoProxima,
+  limit = 600,
+} = {}) {
+  const client = getSupabase();
+  if (!client) return [];
+
+  let query = client
+    .from('deals')
+    .select('*')
+    .eq('status', DEAL_STATUS.FECHADO)
+    .order('updated_at', { ascending: false })
+    .limit(limit);
+
+  if (search) {
+    query = query.or(`nome.ilike.%${search}%,whatsapp.ilike.%${search}%,servico.ilike.%${search}%,observacoes.ilike.%${search}%`);
+  }
+  if (responsavel) query = query.eq('responsavel', responsavel);
+
+  const { data, error } = await query;
+  if (error) throw error;
+
+  let contratos = (data ?? []).map(mapDealToContratoRecord);
+
+  if (statusContrato) {
+    const expected = String(statusContrato || '').toLowerCase();
+    contratos = contratos.filter((item) => String(item.status_contrato || '').toLowerCase() === expected);
+  }
+
+  if (typeof recorrente === 'boolean') {
+    contratos = contratos.filter((item) => Boolean(item.recorrente_contrato) === recorrente);
+  }
+
+  if (onlyRenovacaoProxima) {
+    contratos = contratos.filter((item) => item.renovacao_proxima);
+  }
+
+  return contratos;
+}
+
+export async function updateDeal(id, patch) {
+  const client = getSupabase();
+  if (!client) throw new Error('Supabase nao configurado');
+
+  const { data, error } = await client
+    .from('deals')
+    .update({ ...(patch || {}) })
+    .eq('id', id)
+    .select('*')
+    .single();
+
+  if (error) throw error;
+  return mapDealToContratoRecord(data);
 }
 
 // Contatos

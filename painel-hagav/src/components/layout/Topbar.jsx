@@ -29,7 +29,11 @@ export default function Topbar({ onMenuClick }) {
     const query = searchVal.trim();
     if (!query) return;
 
-    const targetBase = pathname?.startsWith('/orcamentos') ? '/orcamentos' : '/leads';
+    const targetBase = pathname?.startsWith('/orcamentos')
+      ? '/orcamentos'
+      : pathname?.startsWith('/clientes')
+        ? '/clientes'
+        : '/leads';
     router.push(`${targetBase}?search=${encodeURIComponent(query)}`);
   }
 
@@ -48,7 +52,7 @@ export default function Topbar({ onMenuClick }) {
         <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-hagav-gray pointer-events-none" />
         <input
           type="text"
-          placeholder="Buscar lead ou orcamento e pressionar Enter"
+          placeholder="Buscar lead, orcamento ou cliente e pressionar Enter"
           value={searchVal}
           onChange={e => setSearchVal(e.target.value)}
           className="hinput w-full pl-8 py-1.5 text-sm"

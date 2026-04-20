@@ -5,7 +5,7 @@ import { X, Save, Loader2, MessageCircle, ExternalLink, AlertTriangle, CheckCirc
 import { OrcStatusBadge, PrioridadeBadge, UrgenciaBadge, TemperaturaBadge } from '@/components/ui/StatusBadge';
 import EduTooltip from '@/components/ui/EduTooltip';
 import Modal from '@/components/ui/Modal';
-import { updateOrcamento } from '@/lib/supabase';
+import { generateDealPdf, updateOrcamento } from '@/lib/supabase';
 import { fmtDateTime, fmtBRL, whatsappLink, ORC_STATUS_LABELS } from '@/lib/utils';
 
 const ORC_STATUSES = ['orcamento', 'proposta_enviada', 'ajustando', 'aprovado', 'perdido'];
@@ -83,6 +83,22 @@ function parseDetalhes(value) {
   }
 }
 
+function downloadPdfFromBase64(base64, fileName) {
+  if (!base64) return;
+  const bytes = atob(base64);
+  const arr = new Uint8Array(bytes.length);
+  for (let i = 0; i < bytes.length; i += 1) arr[i] = bytes.charCodeAt(i);
+  const blob = new Blob([arr], { type: 'application/pdf' });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = fileName || 'proposta-hagav.pdf';
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
 export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
   const [statusOrc, setStatusOrc] = useState(orc?.status_orcamento ?? 'orcamento');
   const [precoFinal, setPrecoFinal] = useState(orc?.preco_final ?? 0);
@@ -103,7 +119,9 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
   const [contratoFormaPagamento, setContratoFormaPagamento] = useState('');
   const [contratoRecorrente, setContratoRecorrente] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [pdfLoading, setPdfLoading] = useState(false);
   const [error, setError] = useState('');
+  const [info, setInfo] = useState('');
 
   if (!orc) return null;
   const itensServico = Array.isArray(orc.itens_servico) ? orc.itens_servico : [];
@@ -156,6 +174,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
   async function handleSave() {
     setSaving(true);
     setError('');
+    setInfo('');
     try {
       const updated = await updateOrcamento(orc.id, {
         status_orcamento: statusOrc,
@@ -180,6 +199,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
     setStatusOrc(nextStatus);
     setSaving(true);
     setError('');
+    setInfo('');
     try {
       const updated = await updateOrcamento(orc.id, {
         status_orcamento: nextStatus,
@@ -200,10 +220,40 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
     }
   }
 
+  async function handleGeneratePdf() {
+    setPdfLoading(true);
+    setError('');
+    setInfo('');
+    try {
+      const result = await generateDealPdf(orc.id);
+      if (result?.pdf_base64) {
+        downloadPdfFromBase64(result.pdf_base64, result.fileName || `proposta-${orc.id}.pdf`);
+      }
+
+      const nextLink = String(result?.link_pdf || '').trim();
+      if (nextLink) {
+        onUpdated?.({
+          ...orc,
+          link_pdf: nextLink,
+        });
+      }
+
+      setInfo(nextLink ? 'PDF gerado e link atualizado.' : 'PDF gerado para download local.');
+    } catch (err) {
+      setError(err.message || 'Falha ao gerar PDF.');
+    } finally {
+      setPdfLoading(false);
+    }
+  }
+
   async function handleCloseContract() {
     const valorFinal = Number(contratoValorFinal);
     if (!Number.isFinite(valorFinal) || valorFinal <= 0) {
       setError('Informe um valor final valido para fechar o contrato.');
+      return;
+    }
+    if (!contratoInicio || !contratoDuracao || !contratoVencimento || !responsavel || !contratoFormaPagamento || !contratoObs.trim()) {
+      setError('Preencha todos os campos obrigatorios para fechar o contrato.');
       return;
     }
 
@@ -220,6 +270,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
 
     setSaving(true);
     setError('');
+    setInfo('');
     try {
       const updated = await updateOrcamento(orc.id, {
         status_orcamento: 'fechado',
@@ -234,19 +285,40 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
           ...detalhesAtual,
           contrato: {
             valor_final: valorFinal,
-            data_inicio: contratoInicio || null,
+            data_inicio: contratoInicio,
             duracao_meses: Number(contratoDuracao || 0) || null,
-            vencimento: contratoVencimento || null,
-            observacoes: contratoObs || '',
-            responsavel: responsavel || '',
-            forma_pagamento: contratoFormaPagamento || '',
+            vencimento: contratoVencimento,
+            observacoes: contratoObs.trim(),
+            responsavel: responsavel.trim(),
+            forma_pagamento: contratoFormaPagamento.trim(),
             recorrente: Boolean(contratoRecorrente),
+            status: 'ativo',
             gerado_em: nowIso,
+            atualizado_em: nowIso,
             renovacao_alerta_em: renovacaoDate,
           },
         },
       });
-      onUpdated?.(updated);
+
+      let mergedUpdated = updated;
+      try {
+        const pdfResult = await generateDealPdf(orc.id);
+        if (pdfResult?.pdf_base64) {
+          downloadPdfFromBase64(pdfResult.pdf_base64, pdfResult.fileName || `contrato-${orc.id}.pdf`);
+        }
+        const nextLink = String(pdfResult?.link_pdf || '').trim();
+        if (nextLink) {
+          mergedUpdated = {
+            ...updated,
+            link_pdf: nextLink,
+          };
+        }
+      } catch (pdfError) {
+        setInfo('Contrato fechado. PDF nao foi gerado automaticamente; gere manualmente no botao PDF.');
+        console.error('[OrcamentoDrawer][PDF]', pdfError);
+      }
+
+      onUpdated?.(mergedUpdated);
       setCloseModalOpen(false);
       onClose();
     } catch (err) {
@@ -490,13 +562,16 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
           {error && (
             <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{error}</p>
           )}
+          {info && (
+            <p className="text-xs text-hagav-light bg-hagav-surface border border-hagav-border rounded-lg px-3 py-2">{info}</p>
+          )}
         </div>
 
         <div className="px-6 py-4 border-t border-hagav-border shrink-0 flex items-center gap-2 flex-wrap">
           <button
             type="button"
             onClick={() => handleQuickStatus('proposta_enviada')}
-            disabled={saving}
+            disabled={saving || pdfLoading}
             className="btn-ghost btn-sm"
           >
             <Send size={13} />
@@ -505,17 +580,26 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
           <button
             type="button"
             onClick={() => handleQuickStatus('perdido')}
-            disabled={saving}
+            disabled={saving || pdfLoading}
             className="btn-ghost btn-sm"
           >
             <Ban size={13} />
             Marcar perdido
           </button>
+          <button
+            type="button"
+            onClick={handleGeneratePdf}
+            disabled={saving || pdfLoading}
+            className="btn-ghost btn-sm"
+          >
+            {pdfLoading ? <Loader2 size={13} className="animate-spin" /> : <ExternalLink size={13} />}
+            Gerar proposta PDF
+          </button>
           {canCloseContract && (
             <button
               type="button"
               onClick={() => setCloseModalOpen(true)}
-              disabled={saving}
+              disabled={saving || pdfLoading}
               className="btn-gold btn-sm"
             >
               <CheckCircle2 size={13} />
@@ -529,7 +613,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
               <ExternalLink size={11} className="opacity-50" />
             </a>
           </EduTooltip>
-          <button onClick={handleSave} disabled={saving} className="btn-gold flex-1 justify-center">
+          <button onClick={handleSave} disabled={saving || pdfLoading} className="btn-gold flex-1 justify-center">
             {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
             Salvar
           </button>

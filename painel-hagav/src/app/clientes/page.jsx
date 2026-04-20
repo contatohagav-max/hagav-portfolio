@@ -11,6 +11,7 @@ import {
   RotateCw,
   Search,
   Users,
+  Undo2,
 } from 'lucide-react';
 import Modal from '@/components/ui/Modal';
 import EmptyState from '@/components/ui/EmptyState';
@@ -31,12 +32,14 @@ import {
 
 const STATUS_CONTRATO_LABELS = {
   ativo: 'Ativo',
+  vencendo: 'Vencendo',
   vencido: 'Vencido',
   encerrado: 'Encerrado',
 };
 
 const STATUS_CONTRATO_COLORS = {
   ativo: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30',
+  vencendo: 'bg-hagav-gold/20 text-hagav-gold border-hagav-gold/35',
   vencido: 'bg-amber-500/15 text-amber-300 border-amber-500/30',
   encerrado: 'bg-zinc-500/20 text-zinc-300 border-zinc-500/30',
 };
@@ -89,6 +92,17 @@ function BadgeContrato({ status }) {
   const label = STATUS_CONTRATO_LABELS[key] || 'Ativo';
   const color = STATUS_CONTRATO_COLORS[key] || STATUS_CONTRATO_COLORS.ativo;
   return <span className={classNames('badge', color)}>{label}</span>;
+}
+
+function resolveDisplayStatusContrato(row) {
+  if (!row) return 'ativo';
+  const base = String(row.status_contrato || '').toLowerCase();
+  if (base === 'ativo' && Number.isFinite(row.dias_para_vencimento) && row.dias_para_vencimento >= 0 && row.dias_para_vencimento <= 15) {
+    return 'vencendo';
+  }
+  if (base === 'vencido') return 'vencido';
+  if (base === 'encerrado') return 'encerrado';
+  return 'ativo';
 }
 
 export default function ClientesPage() {
@@ -154,7 +168,8 @@ export default function ClientesPage() {
   }, [selected]);
 
   const metrics = useMemo(() => {
-    const ativos = rows.filter((item) => item.status_contrato === 'ativo').length;
+    const ativos = rows.filter((item) => resolveDisplayStatusContrato(item) === 'ativo').length;
+    const vencendo = rows.filter((item) => resolveDisplayStatusContrato(item) === 'vencendo').length;
     const vencidos = rows.filter((item) => item.status_contrato === 'vencido').length;
     const encerrados = rows.filter((item) => item.status_contrato === 'encerrado').length;
     const renovacaoProxima = rows.filter((item) => item.renovacao_proxima).length;
@@ -164,6 +179,7 @@ export default function ClientesPage() {
 
     return {
       ativos,
+      vencendo,
       vencidos,
       encerrados,
       renovacaoProxima,
@@ -255,6 +271,41 @@ export default function ClientesPage() {
     }
   }
 
+  async function handleReabrirNegociacao() {
+    if (!selected) return;
+
+    setSaving(true);
+    try {
+      const nowIso = new Date().toISOString();
+      const detalhesAtual = parseDetalhes(selected?.detalhes);
+      const contratoAtual = parseDetalhes(detalhesAtual?.contrato);
+
+      await updateDeal(selected.id, {
+        status: 'orcamento',
+        detalhes: {
+          ...detalhesAtual,
+          contrato: {
+            ...contratoAtual,
+            status: 'encerrado',
+            encerrado_em: nowIso,
+            atualizado_em: nowIso,
+          },
+        },
+      });
+
+      setRows((prev) => prev.filter((item) => item.id !== selected.id));
+      setSelected(null);
+      setFeedback('Negociacao reaberta: deal movido para Orcamentos.');
+      setTimeout(() => setFeedback(''), 3200);
+    } catch (err) {
+      console.error('[Clientes][Reabrir]', err);
+      setFeedback(err.message || 'Falha ao reabrir negociacao.');
+      setTimeout(() => setFeedback(''), 3200);
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
     <div className="space-y-5 animate-fade-in">
       <div className="flex items-center justify-between">
@@ -272,10 +323,14 @@ export default function ClientesPage() {
         </EduTooltip>
       </div>
 
-      <div className="grid grid-cols-2 xl:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 xl:grid-cols-6 gap-3">
         <div className="hcard p-4 text-center">
           <p className="text-[10px] text-hagav-gray uppercase tracking-wider mb-1">Ativos</p>
           <p className="text-lg font-bold text-emerald-300">{metrics.ativos}</p>
+        </div>
+        <div className="hcard p-4 text-center">
+          <p className="text-[10px] text-hagav-gray uppercase tracking-wider mb-1">Vencendo</p>
+          <p className="text-lg font-bold text-hagav-gold">{metrics.vencendo}</p>
         </div>
         <div className="hcard p-4 text-center">
           <p className="text-[10px] text-hagav-gray uppercase tracking-wider mb-1">Vencidos</p>
@@ -310,6 +365,7 @@ export default function ClientesPage() {
         <select value={statusContrato} onChange={(e) => setStatusContrato(e.target.value)} className="hselect">
           <option value="">Status contrato</option>
           <option value="ativo">Ativo</option>
+          <option value="vencendo">Vencendo</option>
           <option value="vencido">Vencido</option>
           <option value="encerrado">Encerrado</option>
         </select>
@@ -385,7 +441,7 @@ export default function ClientesPage() {
                     )}
                   </td>
                   <td className="text-xs text-hagav-light">{row.recorrente_contrato ? 'Sim' : 'Nao'}</td>
-                  <td><BadgeContrato status={row.status_contrato} /></td>
+                  <td><BadgeContrato status={resolveDisplayStatusContrato(row)} /></td>
                   <td className="text-xs text-hagav-light">{row.responsavel_contrato || row.responsavel || '—'}</td>
                   <td>
                     {row.renovacao_alerta_em ? (
@@ -480,6 +536,9 @@ export default function ClientesPage() {
               </button>
               <button type="button" className="btn-ghost btn-sm" onClick={() => handleSaveContrato('encerrado')} disabled={saving}>
                 <Power size={12} /> Encerrar contrato
+              </button>
+              <button type="button" className="btn-ghost btn-sm" onClick={handleReabrirNegociacao} disabled={saving}>
+                <Undo2 size={12} /> Reabrir negociacao
               </button>
               <button type="button" className="btn-ghost btn-sm" onClick={() => handleGeneratePdf(selected)} disabled={saving}>
                 <Download size={12} /> Gerar PDF novamente

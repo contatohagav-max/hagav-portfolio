@@ -266,6 +266,7 @@ export async function fetchPipelineDeals({ search, limit = 1200 } = {}) {
     DEAL_STATUS.NOVO,
     DEAL_STATUS.CONTATADO,
     DEAL_STATUS.QUALIFICADO,
+    DEAL_STATUS.DESCARTADO,
     DEAL_STATUS.ORCAMENTO,
     DEAL_STATUS.PROPOSTA_ENVIADA,
     DEAL_STATUS.AJUSTANDO,
@@ -436,7 +437,16 @@ export async function fetchClientesContratos({
 
   if (statusContrato) {
     const expected = String(statusContrato || '').toLowerCase();
-    contratos = contratos.filter((item) => String(item.status_contrato || '').toLowerCase() === expected);
+    if (expected === 'vencendo') {
+      contratos = contratos.filter((item) => (
+        String(item.status_contrato || '').toLowerCase() === 'ativo'
+        && Number.isFinite(item.dias_para_vencimento)
+        && item.dias_para_vencimento >= 0
+        && item.dias_para_vencimento <= 15
+      ));
+    } else {
+      contratos = contratos.filter((item) => String(item.status_contrato || '').toLowerCase() === expected);
+    }
   }
 
   if (typeof recorrente === 'boolean') {

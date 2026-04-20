@@ -133,6 +133,9 @@ function createPdfFromLines(lines) {
 }
 
 function readDetalhes(row) {
+  if (row?.detalhes && typeof row.detalhes === "object" && !Array.isArray(row.detalhes)) {
+    return row.detalhes;
+  }
   try {
     const parsed = JSON.parse(String(row?.detalhes || "{}"));
     if (parsed && typeof parsed === "object") return parsed;
@@ -254,7 +257,7 @@ export async function onRequestPost(context) {
 
   const getResult = await fetchSupabase(
     config,
-    `/rest/v1/orcamentos?id=eq.${encodeURIComponent(id)}&select=id,created_at,nome,whatsapp,servico,resumo_orcamento,preco_base,preco_final,pacote_sugerido,status_orcamento,observacoes_internas,link_pdf,detalhes,origem&limit=1`
+    `/rest/v1/deals?id=eq.${encodeURIComponent(id)}&select=id,created_at,nome,whatsapp,servico,resumo_orcamento,preco_base,preco_final,pacote_sugerido,status,observacoes_internas,link_pdf,detalhes,origem&limit=1`
   );
   if (!getResult.ok) return json({ ok: false, error: getResult.reason }, 502);
   const row = Array.isArray(getResult.data) ? (getResult.data[0] || null) : null;

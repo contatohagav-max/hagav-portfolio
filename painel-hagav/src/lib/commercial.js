@@ -101,7 +101,7 @@ const DEAL_TO_ORC_STATUS = Object.freeze({
   [DEAL_STATUS.PROPOSTA_ENVIADA]: 'proposta_enviada',
   [DEAL_STATUS.AJUSTANDO]: 'ajustando',
   [DEAL_STATUS.APROVADO]: 'aprovado',
-  [DEAL_STATUS.FECHADO]: 'aprovado',
+  [DEAL_STATUS.FECHADO]: 'fechado',
   [DEAL_STATUS.PERDIDO]: 'perdido',
 });
 
@@ -387,8 +387,19 @@ function isOrcamentoAberto(orcamento) {
 }
 
 function resolveOrcamentoKpiStatus(orcamento) {
+  const statusDeal = normalizeDealStatus(
+    orcamento?.status_deal || orcamento?.status,
+    ''
+  );
   const rawStatus = normalizeStatusKey(orcamento?.status_orcamento);
   const lead = normalizeLeadStatus(orcamento?.status);
+
+  // Prioriza status canonico do deal para evitar divergencia quando
+  // o campo legado status_orcamento ainda estiver em "aprovado".
+  if (statusDeal === DEAL_STATUS.FECHADO) return 'fechado';
+  if (statusDeal === DEAL_STATUS.PERDIDO || statusDeal === DEAL_STATUS.DESCARTADO) return 'perdido';
+  if (DEAL_STATUS_GROUPS.aberto.includes(statusDeal)) return 'aberto';
+  if (statusDeal === DEAL_STATUS.APROVADO) return 'aprovado';
 
   if (rawStatus && ORCAMENTO_KPI_STATUS_FECHADO.has(rawStatus)) return 'fechado';
   if (rawStatus && ORCAMENTO_KPI_STATUS_EXCLUIDO.has(rawStatus)) return 'perdido';
@@ -1493,7 +1504,7 @@ export function buildDashboardInsights(rawLeads = [], rawOrcamentos = []) {
     { status: 'novo', label: 'Novo' },
     { status: 'contatado', label: 'Contatado' },
     { status: 'qualificado', label: 'Qualificado' },
-    { status: 'proposta_enviada', label: 'Proposta enviada' },
+    { status: 'proposta_enviada', label: 'Proposta' },
     { status: 'fechado', label: 'Fechado' },
     { status: 'perdido', label: 'Perdido' },
   ].map((step) => ({

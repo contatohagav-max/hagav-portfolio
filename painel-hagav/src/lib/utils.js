@@ -151,7 +151,7 @@ export const KANBAN_COLUMNS = [
   { id: 'novo', label: 'Novo', color: 'border-blue-500' },
   { id: 'contatado', label: 'Contatado', color: 'border-violet-500' },
   { id: 'qualificado', label: 'Qualificado', color: 'border-cyan-500' },
-  { id: 'proposta_enviada', label: 'Proposta enviada', color: 'border-yellow-500' },
+  { id: 'proposta_enviada', label: 'Proposta', color: 'border-yellow-500' },
   { id: 'fechado', label: 'Fechado', color: 'border-green-500' },
   { id: 'perdido', label: 'Perdido', color: 'border-red-500' },
 ];

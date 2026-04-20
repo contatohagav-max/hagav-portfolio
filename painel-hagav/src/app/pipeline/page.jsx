@@ -95,7 +95,7 @@ export default function PipelinePage() {
       )}
 
       <p className="text-xs text-hagav-gray shrink-0">
-        Arraste os cards para mover o deal no funil comercial (Novo &gt; Contatado &gt; Qualificado &gt; Proposta enviada &gt; Fechado &gt; Perdido).
+        Arraste os cards para mover o deal no funil comercial (Novo &gt; Contatado &gt; Qualificado &gt; Proposta &gt; Fechado &gt; Perdido).
       </p>
 
       {loadError && (

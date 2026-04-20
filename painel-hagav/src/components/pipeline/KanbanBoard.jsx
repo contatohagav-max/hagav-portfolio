@@ -41,7 +41,7 @@ const PIPELINE_STAGE_TOOLTIPS = {
     observe: 'Acao ideal nesta etapa e gerar orcamento rapidamente.',
   },
   proposta_enviada: {
-    title: 'Proposta enviada',
+    title: 'Proposta',
     whatIs: 'Lead em fase comercial de proposta e negociacao.',
     purpose: 'Acompanhar negociacoes em fase de decisao.',
     observe: 'Monitore prazo de retorno, ajustes e fechamento.',
@@ -64,6 +64,7 @@ function resolvePipelineColumnStatus(status) {
   const normalized = String(status || '').toLowerCase();
   if (normalized === 'chamado' || normalized === 'em_contato') return 'contatado';
   if (normalized === 'proposta enviada') return 'proposta_enviada';
+  if (normalized === 'descartado') return 'perdido';
   if (normalized === 'orcamento' || normalized === 'ajustando' || normalized === 'aprovado') {
     return 'proposta_enviada';
   }

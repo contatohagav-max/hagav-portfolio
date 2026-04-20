@@ -138,7 +138,7 @@ const PIPELINE_TOOLTIPS = {
     observe: 'Use esta etapa para acionar o botao Gerar orcamento.',
   },
   proposta_enviada: {
-    title: 'Proposta enviada',
+    title: 'Proposta',
     whatIs: 'Lead que ja recebeu proposta comercial.',
     purpose: 'Monitorar etapa de decisao do cliente.',
     observe: 'Foque em follow-up e prazo de retorno.',
@@ -262,7 +262,7 @@ export default function DashboardPage() {
     novo: 'Novo',
     contatado: 'Contatado',
     qualificado: 'Qualificado',
-    proposta_enviada: 'Proposta enviada',
+    proposta_enviada: 'Proposta',
     fechado: 'Fechado',
     perdido: 'Perdido',
   };

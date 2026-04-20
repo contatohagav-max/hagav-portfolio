@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { X, Save, Loader2, MessageCircle, ExternalLink, AlertTriangle, CheckCircle2, Send, Ban } from 'lucide-react';
+import { X, Save, Loader2, MessageCircle, ExternalLink, AlertTriangle, CheckCircle2, Send, Ban, RotateCw } from 'lucide-react';
 import { OrcStatusBadge, PrioridadeBadge, UrgenciaBadge, TemperaturaBadge } from '@/components/ui/StatusBadge';
 import EduTooltip from '@/components/ui/EduTooltip';
 import Modal from '@/components/ui/Modal';
@@ -243,6 +243,37 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
       setError(err.message || 'Falha ao gerar PDF.');
     } finally {
       setPdfLoading(false);
+    }
+  }
+
+  async function handleRecalculateValues() {
+    const nextPrecoFinal = Number(orc?.valor_sugerido || orc?.preco_base || precoFinal || 0);
+    if (!Number.isFinite(nextPrecoFinal) || nextPrecoFinal <= 0) {
+      setError('Nao foi possivel recalcular: valor sugerido indisponivel.');
+      return;
+    }
+
+    setSaving(true);
+    setError('');
+    setInfo('');
+    try {
+      const updated = await updateOrcamento(orc.id, {
+        status_orcamento: statusOrc,
+        preco_final: nextPrecoFinal,
+        observacoes_internas: obsInternas,
+        urgencia,
+        prioridade,
+        proxima_acao: proximaAcao,
+        responsavel,
+        proximo_followup_em: fromDateTimeLocal(followup),
+      });
+      setPrecoFinal(nextPrecoFinal);
+      onUpdated?.(updated);
+      setInfo('Valores recalculados e sincronizados.');
+    } catch (err) {
+      setError(err.message || 'Falha ao recalcular valores.');
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -594,6 +625,15 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
           >
             {pdfLoading ? <Loader2 size={13} className="animate-spin" /> : <ExternalLink size={13} />}
             Gerar proposta PDF
+          </button>
+          <button
+            type="button"
+            onClick={handleRecalculateValues}
+            disabled={saving || pdfLoading}
+            className="btn-ghost btn-sm"
+          >
+            {saving ? <Loader2 size={13} className="animate-spin" /> : <RotateCw size={13} />}
+            Recalcular valores
           </button>
           {canCloseContract && (
             <button

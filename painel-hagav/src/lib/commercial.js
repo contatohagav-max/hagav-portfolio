@@ -192,7 +192,12 @@ function toNumber(value, fallback = 0) {
     } else if (commaIdx > -1) {
       normalized = sanitized.replace(/\./g, '').replace(',', '.');
     } else {
-      normalized = sanitized.replace(/,/g, '');
+      // Ex.: "7.250" (pt-BR sem casas) deve virar 7250, nao 7.25.
+      if (/^-?\d{1,3}(?:\.\d{3})+$/.test(sanitized)) {
+        normalized = sanitized.replace(/\./g, '');
+      } else {
+        normalized = sanitized.replace(/,/g, '');
+      }
     }
 
     const parsed = Number(normalized);
@@ -437,6 +442,37 @@ function parseJsonSafe(value) {
   }
 }
 
+function extractNumericHint(sources, patterns) {
+  const list = Array.isArray(sources) ? sources : [sources];
+  for (const source of list) {
+    const text = String(source || '');
+    if (!text) continue;
+    for (const pattern of patterns) {
+      const match = text.match(pattern);
+      if (!match || !match[1]) continue;
+      const raw = String(match[1]).replace(/^["']|["']$/g, '').trim();
+      const value = toNumber(raw, 0);
+      if (value > 0) return value;
+    }
+  }
+  return 0;
+}
+
+function extractStatusHint(sources, patterns) {
+  const list = Array.isArray(sources) ? sources : [sources];
+  for (const source of list) {
+    const text = String(source || '');
+    if (!text) continue;
+    for (const pattern of patterns) {
+      const match = text.match(pattern);
+      if (!match || !match[1]) continue;
+      const value = normalizeText(match[1]).replace(/^["']|["']$/g, '').trim();
+      if (value) return value;
+    }
+  }
+  return '';
+}
+
 function extractMultiSelection(rawField) {
   if (Array.isArray(rawField)) return rawField;
   if (rawField && Array.isArray(rawField.selected)) return rawField.selected;
@@ -675,14 +711,47 @@ function extractServiceItems(record) {
 function applyStructuredFallback(record) {
   const parsed = parseJsonSafe(record?.detalhes);
   const answers = parsed?.respostasCompletas || parsed?.answers;
+  const legacySources = [
+    record?.detalhes,
+    record?.resumo_comercial,
+    record?.resumo_orcamento,
+    record?.motivo_calculo,
+    record?.observacoes_internas,
+  ];
   const calculo = parsed?.calculoAutomatico && typeof parsed.calculoAutomatico === 'object'
     ? parsed.calculoAutomatico
     : {};
-  const precoBaseParsed = toNumber(calculo.precoBase ?? parsed?.preco_base, 0);
-  const precoFinalParsed = toNumber(calculo.precoFinal ?? parsed?.preco_final, 0);
-  const valorSugeridoParsed = toNumber(calculo.valorSugerido ?? parsed?.valor_sugerido, 0);
-  const valorEstimadoParsed = toNumber(parsed?.valor_estimado, 0) || valorSugeridoParsed || precoFinalParsed || precoBaseParsed;
-  const statusOrcParsed = normalizeText(record?.status_orcamento || parsed?.status_orcamento || parsed?.statusOrcamento);
+  const precoBaseHint = extractNumericHint(legacySources, [
+    /"precoBase"\s*:\s*("?[^",}\n]+")/i,
+    /"preco_base"\s*:\s*("?[^",}\n]+")/i,
+    /\bpreco\s*base\b\s*[:=]\s*([^\|\n}]+)/i,
+  ]);
+  const precoFinalHint = extractNumericHint(legacySources, [
+    /"precoFinal"\s*:\s*("?[^",}\n]+")/i,
+    /"preco_final"\s*:\s*("?[^",}\n]+")/i,
+    /\bpreco\s*final\b\s*[:=]\s*([^\|\n}]+)/i,
+  ]);
+  const valorSugeridoHint = extractNumericHint(legacySources, [
+    /"valorSugerido"\s*:\s*("?[^",}\n]+")/i,
+    /"valor_sugerido"\s*:\s*("?[^",}\n]+")/i,
+    /\bvalor\s*sugerido\b\s*[:=]\s*([^\|\n}]+)/i,
+  ]);
+  const valorEstimadoHint = extractNumericHint(legacySources, [
+    /"valorEstimado"\s*:\s*("?[^",}\n]+")/i,
+    /"valor_estimado"\s*:\s*("?[^",}\n]+")/i,
+    /\bvalor\s*estimado\b\s*[:=]\s*([^\|\n}]+)/i,
+  ]);
+  const statusOrcHint = extractStatusHint(legacySources, [
+    /"statusOrcamento"\s*:\s*("?[^",}\n]+")/i,
+    /"status_orcamento"\s*:\s*("?[^",}\n]+")/i,
+    /\bstatus[\s_]*orcamento\b\s*[:=]\s*([^\|,\n}]+)/i,
+  ]);
+
+  const precoBaseParsed = toNumber(calculo.precoBase ?? parsed?.preco_base, 0) || precoBaseHint;
+  const precoFinalParsed = toNumber(calculo.precoFinal ?? parsed?.preco_final, 0) || precoFinalHint;
+  const valorSugeridoParsed = toNumber(calculo.valorSugerido ?? parsed?.valor_sugerido, 0) || valorSugeridoHint;
+  const valorEstimadoParsed = toNumber(parsed?.valor_estimado, 0) || valorEstimadoHint || valorSugeridoParsed || precoFinalParsed || precoBaseParsed;
+  const statusOrcParsed = normalizeText(record?.status_orcamento || parsed?.status_orcamento || parsed?.statusOrcamento || statusOrcHint);
   const flow = inferFlow({ ...record, fluxo: record?.fluxo || parsed?.fluxo || record?.Fluxo });
   const structured = buildStructuredFromAnswers(flow, answers);
   const items = extractServiceItems(record);

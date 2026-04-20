@@ -3,10 +3,17 @@
 import { useState } from 'react';
 import { X, Save, Loader2, MessageCircle, ExternalLink, AlertTriangle } from 'lucide-react';
 import { OrcStatusBadge, PrioridadeBadge, UrgenciaBadge, TemperaturaBadge } from '@/components/ui/StatusBadge';
+import EduTooltip from '@/components/ui/EduTooltip';
 import { updateOrcamento } from '@/lib/supabase';
 import { fmtDateTime, fmtBRL, whatsappLink, ORC_STATUS_LABELS } from '@/lib/utils';
 
 const ORC_STATUSES = Object.keys(ORC_STATUS_LABELS);
+const WHATSAPP_TOOLTIP = {
+  title: 'WhatsApp',
+  whatIs: 'Abre o contato direto do cliente no WhatsApp.',
+  purpose: 'Acelerar negociacao e confirmacoes de proposta.',
+  observe: 'Use mensagem objetiva com proximo passo claro.',
+};
 
 function InfoRow({ label, value }) {
   return (
@@ -33,6 +40,36 @@ function fromDateTimeLocal(value) {
   return date.toISOString();
 }
 
+function normalizeText(value) {
+  if (value === null || value === undefined) return '';
+  return String(value).trim();
+}
+
+function escapeRegExp(value) {
+  return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function removeServicePrefix(rawValue, serviceNames = []) {
+  const raw = normalizeText(rawValue);
+  if (!raw || serviceNames.length === 0) return raw;
+
+  let cleaned = raw;
+  serviceNames.forEach((service) => {
+    const name = normalizeText(service);
+    if (!name) return;
+    const prefixRegex = new RegExp(`^${escapeRegExp(name)}\\s*:\\s*`, 'i');
+    cleaned = cleaned.replace(prefixRegex, '');
+  });
+
+  return cleaned.trim();
+}
+
+function extractReferenceUrl(value) {
+  const match = String(value || '').match(/https?:\/\/\S+/i);
+  if (!match) return '';
+  return match[0].replace(/[),.;]+$/, '');
+}
+
 export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
   const [statusOrc, setStatusOrc] = useState(orc?.status_orcamento ?? 'pendente_revisao');
   const [precoFinal, setPrecoFinal] = useState(orc?.preco_final ?? 0);
@@ -42,17 +79,50 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
   const [proximaAcao, setProximaAcao] = useState(orc?.proxima_acao ?? '');
   const [responsavel, setResponsavel] = useState(orc?.responsavel ?? '');
   const [followup, setFollowup] = useState(toDateTimeLocal(orc?.proximo_followup_em));
+  const [referenceExpanded, setReferenceExpanded] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
   if (!orc) return null;
   const itensServico = Array.isArray(orc.itens_servico) ? orc.itens_servico : [];
+  const serviceNames = [
+    ...new Set(
+      [
+        ...itensServico.map((item) => normalizeText(item?.servico)),
+        ...normalizeText(orc.servico)
+          .split('|')
+          .map((part) => normalizeText(part))
+      ].filter(Boolean)
+    )
+  ];
+  const hasMultipleServices = serviceNames.length > 1;
+
+  const cleanSingleServiceField = (value) => {
+    const raw = normalizeText(value);
+    if (!raw) return '';
+    if (hasMultipleServices) return raw;
+    return removeServicePrefix(raw, serviceNames);
+  };
+
   const servicoResumo = itensServico.length > 0
     ? itensServico.map((item) => item?.servico).filter(Boolean).join(' | ')
     : (orc.servico || '');
   const quantidadeResumo = itensServico.length > 0
-    ? itensServico.map((item) => `${item?.servico || 'Servico'}: ${item?.quantidade || '-'}`).join(' | ')
-    : (orc.quantidade || '');
+    ? (
+      itensServico.length === 1
+        ? normalizeText(itensServico[0]?.quantidade || '-')
+        : itensServico.map((item) => `${item?.servico || 'Servico'}: ${item?.quantidade || '-'}`).join(' | ')
+    )
+    : cleanSingleServiceField(orc.quantidade || '');
+  const materialResumo = cleanSingleServiceField(orc.material_gravado);
+  const tempoResumo = cleanSingleServiceField(orc.tempo_bruto);
+  const referenciaResumo = cleanSingleServiceField(orc.referencia);
+  const referenceText = referenciaResumo || '—';
+  const referenceUrl = extractReferenceUrl(referenceText);
+  const canExpandReference = referenceText.length > 84 || Boolean(referenceUrl);
+  const referencePreview = !referenceExpanded && referenceText.length > 84
+    ? `${referenceText.slice(0, 84)}...`
+    : referenceText;
 
   async function handleSave() {
     setSaving(true);
@@ -162,10 +232,42 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
             <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
               <InfoRow label="Servico/Operacao" value={servicoResumo} />
               <InfoRow label="Quantidade" value={quantidadeResumo} />
-              <InfoRow label="Material gravado" value={orc.material_gravado} />
-              <InfoRow label="Tempo bruto" value={orc.tempo_bruto} />
+              <InfoRow label="Material gravado" value={materialResumo} />
+              <InfoRow label="Tempo bruto" value={tempoResumo} />
               <InfoRow label="Prazo" value={orc.prazo} />
-              <InfoRow label="Referencia" value={orc.referencia} />
+              <div className="bg-hagav-surface border border-hagav-border rounded-lg p-3 md:col-span-2">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-[10px] text-hagav-gray uppercase tracking-wider mb-0.5">Referencia</p>
+                    <p className="text-sm text-hagav-light font-medium break-all whitespace-pre-wrap">{referencePreview}</p>
+                  </div>
+                  {canExpandReference && (
+                    <button
+                      type="button"
+                      onClick={() => setReferenceExpanded((prev) => !prev)}
+                      className="text-[11px] px-2 py-1 rounded-md border border-hagav-border text-hagav-gold hover:text-hagav-gold-light hover:border-hagav-gold/30 transition-colors shrink-0"
+                    >
+                      {referenceExpanded ? 'Ocultar' : 'Ver referencia'}
+                    </button>
+                  )}
+                </div>
+                {referenceExpanded && (
+                  <div className="mt-2 pt-2 border-t border-hagav-border/70">
+                    <p className="text-xs text-hagav-light whitespace-pre-wrap break-all">{referenceText}</p>
+                    {referenceUrl && (
+                      <a
+                        href={referenceUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1.5 mt-2 text-xs text-hagav-gold hover:text-hagav-gold-light"
+                      >
+                        Abrir link
+                        <ExternalLink size={11} className="opacity-70" />
+                      </a>
+                    )}
+                  </div>
+                )}
+              </div>
               <InfoRow label="Fluxo" value={orc.fluxo} />
               <InfoRow label="Origem" value={orc.origem} />
               <InfoRow label="Criado em" value={fmtDateTime(orc.created_at)} />
@@ -192,15 +294,6 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
               <p className="text-xs text-hagav-gray uppercase tracking-wider mb-2">Observacoes do cliente</p>
               <div className="bg-hagav-surface border border-hagav-border rounded-lg p-3 text-sm text-hagav-light whitespace-pre-wrap">
                 {orc.observacoes}
-              </div>
-            </div>
-          )}
-
-          {orc.detalhes && (
-            <div>
-              <p className="text-xs text-hagav-gray uppercase tracking-wider mb-2">JSON tecnico (backup)</p>
-              <div className="bg-hagav-surface border border-hagav-border rounded-lg p-3 text-xs text-hagav-gray whitespace-pre-wrap max-h-[220px] overflow-y-auto">
-                {orc.detalhes}
               </div>
             </div>
           )}
@@ -307,11 +400,13 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
           >
             Gerar proposta (em breve)
           </button>
-          <a href={waLink} target="_blank" rel="noreferrer" className="btn-ghost btn-sm">
-            <MessageCircle size={13} />
-            WhatsApp
-            <ExternalLink size={11} className="opacity-50" />
-          </a>
+          <EduTooltip {...WHATSAPP_TOOLTIP} className="w-auto">
+            <a href={waLink} target="_blank" rel="noreferrer" className="btn-ghost btn-sm">
+              <MessageCircle size={13} />
+              WhatsApp
+              <ExternalLink size={11} className="opacity-50" />
+            </a>
+          </EduTooltip>
           <button onClick={handleSave} disabled={saving} className="btn-gold flex-1 justify-center">
             {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
             Salvar

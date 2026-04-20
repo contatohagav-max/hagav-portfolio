@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, Users, FileText, Kanban, Settings, X,
 } from 'lucide-react';
+import EduTooltip from '@/components/ui/EduTooltip';
 import { classNames } from '@/lib/utils';
 
 const NAV = [
@@ -15,6 +16,33 @@ const NAV = [
   { href: '/pipeline',      label: 'Pipeline',      icon: Kanban },
   { href: '/configuracoes', label: 'Configurações', icon: Settings },
 ];
+
+const NAV_TOOLTIPS = {
+  '/': {
+    title: 'Dashboard',
+    whatIs: 'Visao executiva dos indicadores comerciais.',
+    purpose: 'Acompanhar performance diaria e prioridades do funil.',
+    observe: 'Foque em conversao, urgencias e follow-up atrasado.',
+  },
+  '/leads': {
+    title: 'Leads',
+    whatIs: 'Lista de oportunidades recebidas.',
+    purpose: 'Qualificar contatos e definir proxima acao comercial.',
+    observe: 'Revise urgencia, prioridade e tempo sem contato.',
+  },
+  '/orcamentos': {
+    title: 'Orçamentos',
+    whatIs: 'Painel de propostas e valores em negociacao.',
+    purpose: 'Acompanhar revisao, fechamento e pendencias de cada proposta.',
+    observe: 'Monitore status, urgencia e campos incompletos.',
+  },
+  '/pipeline': {
+    title: 'Pipeline',
+    whatIs: 'Quadro visual das etapas do processo comercial.',
+    purpose: 'Mover oportunidades com clareza de status.',
+    observe: 'Evite acúmulo em Novo e Proposta enviada.',
+  },
+};
 
 export default function Sidebar({ open, onClose }) {
   const pathname = usePathname();
@@ -48,13 +76,23 @@ export default function Sidebar({ open, onClose }) {
       <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
         {NAV.map(({ href, label, icon: Icon }) => {
           const active = pathname === href || (href !== '/' && pathname.startsWith(href));
+          const tooltip = NAV_TOOLTIPS[href];
           return (
-            <Link key={href} href={href} onClick={onClose}>
-              <span className={classNames('nav-item', active && 'active')}>
-                <Icon size={16} strokeWidth={active ? 2.5 : 1.8} />
-                {label}
-              </span>
-            </Link>
+            <EduTooltip
+              key={href}
+              enabled={Boolean(tooltip)}
+              side="right"
+              className="w-full"
+              panelClassName="w-[230px]"
+              {...tooltip}
+            >
+              <Link href={href} onClick={onClose}>
+                <span className={classNames('nav-item', active && 'active')}>
+                  <Icon size={16} strokeWidth={active ? 2.5 : 1.8} />
+                  {label}
+                </span>
+              </Link>
+            </EduTooltip>
           );
         })}
       </nav>

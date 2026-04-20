@@ -35,6 +35,7 @@ import {
 } from 'recharts';
 import MetricCard from '@/components/dashboard/MetricCard';
 import RecentLeads from '@/components/dashboard/RecentLeads';
+import EduTooltip from '@/components/ui/EduTooltip';
 import { fetchDashboardMetrics } from '@/lib/supabase';
 import { fmtBRL, fmtPercent, fmtHours } from '@/lib/utils';
 
@@ -66,15 +67,135 @@ const EMPTY_INSIGHTS = {
   },
 };
 
-function ChartCard({ title, icon: Icon, description, children, empty, loading }) {
+const KPI_TOOLTIPS = {
+  leads_mes: {
+    title: 'Leads no mes',
+    whatIs: 'Total de leads criados no mes atual.',
+    purpose: 'Medir entrada de oportunidades comerciais.',
+    observe: 'Compare com os dias anteriores e a origem dos leads.',
+  },
+  orcamentos_aberto: {
+    title: 'Orcamentos em aberto',
+    whatIs: 'Soma dos orcamentos ainda em negociacao.',
+    purpose: 'Priorizar fechamento e previsao de curto prazo.',
+    observe: 'Valor alto com baixa conversao indica gargalo comercial.',
+  },
+  receita_fechada_mes: {
+    title: 'Receita fechada no mes',
+    whatIs: 'Valor total de orcamentos fechados no mes corrente.',
+    purpose: 'Acompanhar faturamento efetivamente convertido.',
+    observe: 'Se cair, revise volume de propostas e taxa de fechamento.',
+  },
+  ticket_medio: {
+    title: 'Ticket medio',
+    whatIs: 'Media de valor por orcamento fechado no mes.',
+    purpose: 'Entender qualidade financeira das vendas.',
+    observe: 'Queda constante pode sinalizar desconto excessivo.',
+  },
+  taxa_conversao: {
+    title: 'Taxa de conversao',
+    whatIs: 'Percentual de leads do mes que viraram fechado.',
+    purpose: 'Medir eficiencia do funil comercial.',
+    observe: 'Cruze com origem, urgencia e tempo de resposta.',
+  },
+  leads_urgentes: {
+    title: 'Leads urgentes',
+    whatIs: 'Quantidade de leads abertos com urgencia alta.',
+    purpose: 'Indicar demandas que exigem acao imediata.',
+    observe: 'Priorize contato rapido para evitar perda de oportunidade.',
+  },
+  followup_atrasado: {
+    title: 'Follow-up atrasado',
+    whatIs: 'Leads abertos sem retorno dentro da janela esperada.',
+    purpose: 'Evitar oportunidades esquecidas no funil.',
+    observe: 'Mantenha esse numero baixo com rotina diaria.',
+  },
+  tempo_resposta_medio: {
+    title: 'Tempo medio de resposta',
+    whatIs: 'Tempo medio entre entrada e primeiro retorno ao lead.',
+    purpose: 'Medir velocidade operacional do comercial.',
+    observe: 'Quanto menor, maior chance de conversao.',
+  },
+};
+
+const PIPELINE_TOOLTIPS = {
+  novo: {
+    title: 'Novo',
+    whatIs: 'Lead recem-entrado, sem atendimento completo.',
+    purpose: 'Identificar o que precisa do primeiro contato.',
+    observe: 'Nao deixe acumular por muito tempo.',
+  },
+  chamado: {
+    title: 'Chamado',
+    whatIs: 'Lead em contato ativo com o time comercial.',
+    purpose: 'Acompanhar negociacoes em andamento.',
+    observe: 'Valide se ha proxima acao definida para cada lead.',
+  },
+  'proposta enviada': {
+    title: 'Proposta enviada',
+    whatIs: 'Lead que ja recebeu proposta comercial.',
+    purpose: 'Monitorar etapa de decisao do cliente.',
+    observe: 'Foque em follow-up e prazo de retorno.',
+  },
+  fechado: {
+    title: 'Fechado',
+    whatIs: 'Negocio concluido com aceite do cliente.',
+    purpose: 'Compor receita fechada e conversao do funil.',
+    observe: 'Acompanhe ticket medio e servicos mais vendidos.',
+  },
+  perdido: {
+    title: 'Perdido',
+    whatIs: 'Lead que nao evoluiu para fechamento.',
+    purpose: 'Mapear perdas para ajustar abordagem comercial.',
+    observe: 'Analise motivo e origem para reduzir recorrencia.',
+  },
+};
+
+const UPDATE_TOOLTIP = {
+  title: 'Atualizar',
+  whatIs: 'Recarrega os dados da tela com as informacoes mais recentes.',
+  purpose: 'Garantir leitura atual antes de decidir proximo passo.',
+  observe: 'Use sempre antes de revisar KPI ou mover prioridades.',
+};
+
+const CHART_TOOLTIPS = {
+  origem_conversao: {
+    title: 'Origem x conversao',
+    whatIs: 'Compara volume de leads por origem com taxa de fechamento.',
+    purpose: 'Identificar canais que trazem mais resultado comercial.',
+    observe: 'Prefira origens com bom equilibrio entre volume e conversao.',
+  },
+  leads_urgencia: {
+    title: 'Leads por urgencia',
+    whatIs: 'Distribuicao dos leads por nivel de urgencia.',
+    purpose: 'Ajudar a priorizar atendimento do time.',
+    observe: 'Volume alto em urgencia alta pede acao imediata.',
+  },
+  servicos_pedidos: {
+    title: 'Servicos mais pedidos',
+    whatIs: 'Ranking de servicos com maior demanda no periodo.',
+    purpose: 'Guiar foco comercial e operacional em ofertas mais recorrentes.',
+    observe: 'Use para ajustar campanhas e capacidade do time.',
+  },
+  receita_servico: {
+    title: 'Receita por servico',
+    whatIs: 'Participacao de receita estimada por tipo de servico.',
+    purpose: 'Entender quais servicos sustentam o faturamento.',
+    observe: 'Concentre esforco nos servicos de maior retorno.',
+  },
+};
+
+function ChartCard({ title, icon: Icon, description, tooltip, children, empty, loading }) {
   return (
     <div className="hcard">
-      <div className="flex items-center gap-2 mb-1.5">
-        <div className="w-8 h-8 rounded-lg bg-hagav-muted/40 border border-hagav-border flex items-center justify-center">
-          <Icon size={14} className="text-hagav-gold" />
+      <EduTooltip enabled={Boolean(tooltip)} className="w-fit" {...tooltip}>
+        <div className="inline-flex items-center gap-2 mb-1.5">
+          <div className="w-8 h-8 rounded-lg bg-hagav-muted/40 border border-hagav-border flex items-center justify-center">
+            <Icon size={14} className="text-hagav-gold" />
+          </div>
+          <h3 className="text-sm font-semibold text-hagav-white">{title}</h3>
         </div>
-        <h3 className="text-sm font-semibold text-hagav-white">{title}</h3>
-      </div>
+      </EduTooltip>
       {description && (
         <p className="text-[11px] text-hagav-gray mb-4">{description}</p>
       )}
@@ -119,14 +240,14 @@ export default function DashboardPage() {
   const lists = insights.lists;
 
   const metricCards = [
-    { label: 'Leads no mes', value: m.leadsMes, icon: Users, onClick: () => router.push('/leads'), title: 'Abrir tela de leads' },
-    { label: 'Orcamentos em aberto', value: fmtBRL(m.orcamentosAbertos), icon: Wallet, accent: true, onClick: () => router.push('/orcamentos?abertos=1'), title: 'Abrir orcamentos em aberto' },
-    { label: 'Receita fechada no mes', value: fmtBRL(m.receitaFechadaMes), icon: CircleDollarSign, onClick: () => router.push('/orcamentos?status_orcamento=aprovado'), title: 'Abrir orcamentos fechados (aprovados)' },
-    { label: 'Ticket medio', value: fmtBRL(m.ticketMedio), icon: BadgeDollarSign, onClick: () => router.push('/orcamentos'), title: 'Abrir tela de orcamentos' },
-    { label: 'Taxa de conversao', value: fmtPercent(m.taxaConversao), icon: Percent, onClick: () => router.push('/pipeline'), title: 'Abrir pipeline' },
-    { label: 'Leads urgentes', value: m.leadsUrgentes, icon: Siren, onClick: () => router.push('/leads?urgencia=alta'), title: 'Filtrar leads urgentes' },
-    { label: 'Follow-up atrasado', value: m.followupAtrasado, icon: Clock3, onClick: () => router.push('/leads?followup=1'), title: 'Filtrar follow-up atrasado' },
-    { label: 'Tempo medio de resposta', value: fmtHours(m.tempoMedioResposta), icon: Timer, onClick: () => router.push('/leads'), title: 'Abrir leads e revisar tempos de resposta' },
+    { id: 'leads_mes', label: 'Leads no mes', value: m.leadsMes, icon: Users, onClick: () => router.push('/leads'), title: 'Abrir tela de leads' },
+    { id: 'orcamentos_aberto', label: 'Orcamentos em aberto', value: fmtBRL(m.orcamentosAbertos), icon: Wallet, onClick: () => router.push('/orcamentos?abertos=1'), title: 'Abrir orcamentos em aberto' },
+    { id: 'receita_fechada_mes', label: 'Receita fechada no mes', value: fmtBRL(m.receitaFechadaMes), icon: CircleDollarSign, onClick: () => router.push('/orcamentos?status_orcamento=aprovado'), title: 'Abrir orcamentos fechados (aprovados)' },
+    { id: 'ticket_medio', label: 'Ticket medio', value: fmtBRL(m.ticketMedio), icon: BadgeDollarSign, onClick: () => router.push('/orcamentos'), title: 'Abrir tela de orcamentos' },
+    { id: 'taxa_conversao', label: 'Taxa de conversao', value: fmtPercent(m.taxaConversao), icon: Percent, onClick: () => router.push('/pipeline'), title: 'Abrir pipeline' },
+    { id: 'leads_urgentes', label: 'Leads urgentes', value: m.leadsUrgentes, icon: Siren, onClick: () => router.push('/leads?urgencia=alta'), title: 'Filtrar leads urgentes' },
+    { id: 'followup_atrasado', label: 'Follow-up atrasado', value: m.followupAtrasado, icon: Clock3, onClick: () => router.push('/leads?followup=1'), title: 'Filtrar follow-up atrasado' },
+    { id: 'tempo_resposta_medio', label: 'Tempo medio de resposta', value: fmtHours(m.tempoMedioResposta), icon: Timer, onClick: () => router.push('/leads'), title: 'Abrir leads e revisar tempos de resposta' },
   ];
   const kpisPrincipais = metricCards.slice(0, 4);
   const kpisOperacionais = metricCards.slice(4);
@@ -186,10 +307,12 @@ export default function DashboardPage() {
             {lastRefresh ? `Atualizado as ${lastRefresh.toLocaleTimeString('pt-BR')}` : 'Carregando...'}
           </p>
         </div>
-        <button onClick={load} disabled={loading} className="btn-ghost btn-sm">
-          <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
-          Atualizar
-        </button>
+        <EduTooltip {...UPDATE_TOOLTIP} className="w-auto" panelClassName="left-auto right-0 translate-x-0">
+          <button onClick={load} disabled={loading} className="btn-ghost btn-sm">
+            <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
+            Atualizar
+          </button>
+        </EduTooltip>
       </div>
 
       {loadError && (
@@ -207,7 +330,25 @@ export default function DashboardPage() {
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
           {kpisPrincipais.map((card) => (
-            <MetricCard key={card.label} {...card} />
+            <EduTooltip key={card.id} {...KPI_TOOLTIPS[card.id]}>
+              <MetricCard {...card} />
+            </EduTooltip>
+          ))}
+        </div>
+      </section>
+
+      <section className="space-y-3">
+        <div className="flex items-end justify-between">
+          <div>
+            <p className="text-[10px] text-hagav-gray uppercase tracking-wider">Linha 2</p>
+            <h2 className="text-base font-semibold text-hagav-white">KPIs operacionais</h2>
+          </div>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+          {kpisOperacionais.map((card) => (
+            <EduTooltip key={card.id} {...KPI_TOOLTIPS[card.id]}>
+              <MetricCard {...card} />
+            </EduTooltip>
           ))}
         </div>
       </section>
@@ -223,10 +364,12 @@ export default function DashboardPage() {
           <p className="text-[11px] text-hagav-gray mb-4">Distribuicao atual dos leads por etapa comercial</p>
           <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-2">
             {pipelineSteps.map((step) => (
-              <div key={step.status} className="bg-hagav-surface border border-hagav-border rounded-lg p-3">
-                <p className="text-[10px] uppercase tracking-wider text-hagav-gray">{step.label}</p>
-                <p className="text-2xl font-bold text-hagav-white mt-1">{step.total}</p>
-              </div>
+              <EduTooltip key={step.status} {...PIPELINE_TOOLTIPS[step.status]}>
+                <div className="bg-hagav-surface border border-hagav-border rounded-lg p-3">
+                  <p className="text-[10px] uppercase tracking-wider text-hagav-gray">{step.label}</p>
+                  <p className="text-2xl font-bold text-hagav-white mt-1">{step.total}</p>
+                </div>
+              </EduTooltip>
             ))}
           </div>
         </div>
@@ -253,7 +396,7 @@ export default function DashboardPage() {
                   key={item.label}
                   type="button"
                   onClick={item.onClick}
-                  className={`text-left rounded-lg border p-3 transition-colors hover:border-hagav-gold/30 ${toneClass}`}
+                  className={`text-left rounded-lg border p-3 transition-colors hover:border-hagav-gold/30 focus:outline-none focus-visible:ring-1 focus-visible:ring-hagav-gold/35 ${toneClass}`}
                 >
                   <div className="flex items-center justify-between gap-2 mb-1">
                     <p className="text-[11px] uppercase tracking-wider">{item.label}</p>
@@ -270,20 +413,6 @@ export default function DashboardPage() {
 
       <RecentLeads entries={lists.ultimasEntradas || []} />
 
-      <section className="space-y-3">
-        <div className="flex items-end justify-between">
-          <div>
-            <p className="text-[10px] text-hagav-gray uppercase tracking-wider">Linha 2</p>
-            <h2 className="text-base font-semibold text-hagav-white">KPIs operacionais</h2>
-          </div>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
-          {kpisOperacionais.map((card) => (
-            <MetricCard key={card.label} {...card} />
-          ))}
-        </div>
-      </section>
-
       <section className="space-y-4">
         <div>
           <h2 className="text-base font-semibold text-hagav-white">Blocos graficos</h2>
@@ -294,6 +423,7 @@ export default function DashboardPage() {
         <ChartCard
           title="Origem x conversao"
           icon={TrendingUp}
+          tooltip={CHART_TOOLTIPS.origem_conversao}
           description="Volume por origem e taxa media de fechamento"
           empty={charts.origemConversao.length === 0}
           loading={loading}
@@ -320,6 +450,7 @@ export default function DashboardPage() {
         <ChartCard
           title="Leads por urgencia"
           icon={Siren}
+          tooltip={CHART_TOOLTIPS.leads_urgencia}
           description="Distribuicao dos leads por prioridade de atendimento"
           empty={charts.leadsPorUrgencia.length === 0}
           loading={loading}
@@ -353,6 +484,7 @@ export default function DashboardPage() {
         <ChartCard
           title="Servicos mais pedidos"
           icon={Filter}
+          tooltip={CHART_TOOLTIPS.servicos_pedidos}
           description="Servicos com maior volume de demanda no periodo"
           empty={charts.servicosMaisPedidos.length === 0}
           loading={loading}
@@ -371,6 +503,7 @@ export default function DashboardPage() {
         <ChartCard
           title="Receita por servico"
           icon={CircleDollarSign}
+          tooltip={CHART_TOOLTIPS.receita_servico}
           description="Participacao de receita estimada por servico"
           empty={charts.receitaPorServico.length === 0}
           loading={loading}

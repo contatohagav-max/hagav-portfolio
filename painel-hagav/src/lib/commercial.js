@@ -10,13 +10,66 @@ const HIGH_VALUE_KEYWORDS = [
   'recorrente'
 ];
 
-const STATUS_ABERTO = new Set(['novo', 'chamado', 'proposta enviada']);
+const STATUS_ABERTO = new Set(['novo', 'em_contato', 'proposta']);
 const STATUS_FECHADO = new Set(['fechado']);
 const STATUS_PERDIDO = new Set(['perdido']);
 
-const ORC_ABERTO = new Set(['pendente_revisao', 'em_revisao', 'aprovado', 'enviado']);
-const ORC_GANHO = new Set(['aprovado', 'enviado']);
+const ORC_ABERTO = new Set(['aberto']);
+const ORC_GANHO = new Set(['fechado']);
 const ORC_REVISAO = new Set(['pendente_revisao', 'em_revisao']);
+
+const LEAD_STATUS_ALIAS = {
+  novo: 'novo',
+  chamado: 'em_contato',
+  contatado: 'em_contato',
+  em_contato: 'em_contato',
+  proposta_enviada: 'proposta',
+  proposta: 'proposta',
+  fechado: 'fechado',
+  perdido: 'perdido',
+};
+
+const LEAD_STATUS_PIPELINE_ALIAS = {
+  novo: 'novo',
+  chamado: 'chamado',
+  contatado: 'chamado',
+  em_contato: 'chamado',
+  proposta_enviada: 'proposta enviada',
+  proposta: 'proposta enviada',
+  fechado: 'fechado',
+  perdido: 'perdido',
+};
+
+const ORCAMENTO_STATUS_ALIAS = {
+  pendente_revisao: 'aberto',
+  em_revisao: 'aberto',
+  pendente: 'aberto',
+  proposta: 'aberto',
+  proposta_enviada: 'aberto',
+  enviado: 'aberto',
+  em_negociacao: 'aberto',
+  negociacao: 'aberto',
+  aberto: 'aberto',
+  aprovado: 'fechado',
+  ganho: 'fechado',
+  fechado: 'fechado',
+  perdido: 'perdido',
+  cancelado: 'perdido',
+  reprovado: 'perdido',
+  recusado: 'perdido',
+};
+
+const ORCAMENTO_STATUS_PRE_FECHAMENTO = new Set([
+  'pendente_revisao',
+  'em_revisao',
+  'pendente',
+  'proposta',
+  'proposta_enviada',
+  'enviado',
+  'em_negociacao',
+  'negociacao',
+  'aberto',
+]);
 
 const DEFAULT_PRICING_RULES = {
   serviceBase: {
@@ -103,8 +156,112 @@ const DR_OFFICIAL_ITEM_TOTALS = {
 };
 
 function toNumber(value, fallback = 0) {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : fallback;
+  }
+  if (typeof value === 'string') {
+    const raw = value.trim();
+    if (!raw) return fallback;
+    const sanitized = raw.replace(/[^\d,.\-]/g, '');
+    if (!sanitized) return fallback;
+
+    const commaIdx = sanitized.lastIndexOf(',');
+    const dotIdx = sanitized.lastIndexOf('.');
+    let normalized = sanitized;
+
+    if (commaIdx > -1 && dotIdx > -1) {
+      normalized = commaIdx > dotIdx
+        ? sanitized.replace(/\./g, '').replace(',', '.')
+        : sanitized.replace(/,/g, '');
+    } else if (commaIdx > -1) {
+      normalized = sanitized.replace(/\./g, '').replace(',', '.');
+    } else {
+      normalized = sanitized.replace(/,/g, '');
+    }
+
+    const parsed = Number(normalized);
+    return Number.isFinite(parsed) ? parsed : fallback;
+  }
   const num = Number(value);
   return Number.isFinite(num) ? num : fallback;
+}
+
+function normalizeStatusKey(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+}
+
+function normalizeLeadStatus(status) {
+  const key = normalizeStatusKey(status);
+  return LEAD_STATUS_ALIAS[key] || key;
+}
+
+function normalizeLeadStatusPipeline(status) {
+  const key = normalizeStatusKey(status);
+  return LEAD_STATUS_PIPELINE_ALIAS[key] || key;
+}
+
+function normalizeOrcamentoStatus(statusOrcamento, leadStatus) {
+  const orcKey = normalizeStatusKey(statusOrcamento);
+  const lead = normalizeLeadStatus(leadStatus);
+  const leadIsFechado = lead === 'fechado';
+  const leadIsPerdido = lead === 'perdido';
+
+  // Quando o pipeline já foi fechado/perdido e o status de orçamento ainda está em
+  // fase pré-fechamento, consideramos o estado operacional do lead para evitar KPI zerado.
+  if ((leadIsFechado || leadIsPerdido) && (!orcKey || ORCAMENTO_STATUS_PRE_FECHAMENTO.has(orcKey))) {
+    return lead;
+  }
+
+  if (orcKey && ORCAMENTO_STATUS_ALIAS[orcKey]) {
+    return ORCAMENTO_STATUS_ALIAS[orcKey];
+  }
+
+  if (leadIsFechado) return 'fechado';
+  if (leadIsPerdido) return 'perdido';
+  if (orcKey) return 'aberto';
+  if (lead && STATUS_ABERTO.has(lead)) return 'aberto';
+  return '';
+}
+
+function isLeadFechadoStatus(status) {
+  return STATUS_FECHADO.has(normalizeLeadStatus(status));
+}
+
+function isLeadPerdidoStatus(status) {
+  return STATUS_PERDIDO.has(normalizeLeadStatus(status));
+}
+
+function isLeadAbertoStatus(status) {
+  const normalized = normalizeLeadStatus(status);
+  if (!normalized) return false;
+  return normalized !== 'fechado' && normalized !== 'perdido';
+}
+
+function isOrcamentoFechado(orcamento) {
+  return ORC_GANHO.has(normalizeOrcamentoStatus(orcamento?.status_orcamento, orcamento?.status));
+}
+
+function isOrcamentoAberto(orcamento) {
+  return ORC_ABERTO.has(normalizeOrcamentoStatus(orcamento?.status_orcamento, orcamento?.status));
+}
+
+function getOrcamentoValorFechado(orcamento) {
+  return toNumber(orcamento?.preco_final, 0)
+    || toNumber(orcamento?.valor_sugerido, 0)
+    || toNumber(orcamento?.preco_base, 0)
+    || toNumber(orcamento?.valor_estimado, 0);
+}
+
+function getOrcamentoValorAberto(orcamento) {
+  return toNumber(orcamento?.valor_sugerido, 0)
+    || toNumber(orcamento?.valor_estimado, 0)
+    || toNumber(orcamento?.preco_base, 0)
+    || toNumber(orcamento?.preco_final, 0);
 }
 
 function normalizeText(value) {
@@ -836,7 +993,7 @@ function parseDateSafe(value) {
 }
 
 function isLateFollowup(lead, nowDate) {
-  if (STATUS_FECHADO.has(lead.status) || STATUS_PERDIDO.has(lead.status)) return false;
+  if (isLeadFechadoStatus(lead.status) || isLeadPerdidoStatus(lead.status)) return false;
 
   const followupDate = parseDateSafe(lead.proximo_followup_em);
   if (followupDate) return followupDate.getTime() < nowDate.getTime();
@@ -851,6 +1008,24 @@ function isLateFollowup(lead, nowDate) {
     return differenceInHours(nowDate, created) > 48;
   }
   return false;
+}
+
+export function isLeadFollowupLate(lead, now = new Date()) {
+  const nowDate = now instanceof Date ? now : new Date(now);
+  return isLateFollowup(lead, nowDate);
+}
+
+function inMonthRange(dateValue, monthStart, monthEnd) {
+  if (!dateValue) return false;
+  return dateValue >= monthStart && dateValue < monthEnd;
+}
+
+function getOrcamentoDateForFechamentoMes(orcamento) {
+  return parseDateSafe(orcamento?.fechado_em)
+    || parseDateSafe(orcamento?.data_fechamento)
+    || parseDateSafe(orcamento?.data_fechamento_em)
+    || parseDateSafe(orcamento?.updated_at)
+    || parseDateSafe(orcamento?.created_at);
 }
 
 export function enrichLeadRecord(record) {
@@ -935,7 +1110,7 @@ export function enrichOrcamentoRecord(record) {
     quantidade_total: Number(snapshot.totalQuantidade || sumQuantidade(enrichedLead?.quantidade || enrichedLead?.Quantidade || '1')),
     incompleto: incompletoCampos.length > 0,
     incompleto_campos: incompletoCampos,
-    requer_revisao: ORC_REVISAO.has(enrichedLead?.status_orcamento) || precoFinal <= 0 || revisaoManual,
+    requer_revisao: ORC_REVISAO.has(normalizeStatusKey(enrichedLead?.status_orcamento)) || precoFinal <= 0 || revisaoManual,
   };
 }
 
@@ -957,37 +1132,36 @@ export function buildDashboardInsights(rawLeads = [], rawOrcamentos = []) {
 
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
 
   const leadsMes = leads.filter((lead) => {
     const created = parseDateSafe(lead.created_at);
-    return created ? created >= monthStart : false;
+    return inMonthRange(created, monthStart, monthEnd);
   });
 
-  const leadsFechadosMes = leadsMes.filter((lead) => STATUS_FECHADO.has(lead.status));
+  const leadsFechadosMes = leadsMes.filter((lead) => isLeadFechadoStatus(lead.status));
 
-  const orcamentosMes = orcamentos.filter((orc) => {
-    const created = parseDateSafe(orc.created_at);
-    return created ? created >= monthStart : false;
-  });
+  const orcamentosFechadosMes = orcamentos
+    .filter((orc) => isOrcamentoFechado(orc))
+    .filter((orc) => inMonthRange(getOrcamentoDateForFechamentoMes(orc), monthStart, monthEnd));
 
-  const receitaFechadaMes = orcamentosMes
-    .filter((orc) => ORC_GANHO.has(orc.status_orcamento))
-    .reduce((sum, orc) => sum + toNumber(orc.preco_final || orc.preco_base || orc.valor_estimado, 0), 0);
+  const receitaFechadaMes = orcamentosFechadosMes
+    .reduce((sum, orc) => sum + getOrcamentoValorFechado(orc), 0);
 
   const orcamentosAbertos = orcamentos
-    .filter((orc) => ORC_ABERTO.has(orc.status_orcamento))
-    .reduce((sum, orc) => sum + toNumber(orc.preco_final || orc.preco_base || orc.valor_estimado, 0), 0);
+    .filter((orc) => isOrcamentoAberto(orc))
+    .reduce((sum, orc) => sum + getOrcamentoValorAberto(orc), 0);
 
-  const ticketMedio = leadsFechadosMes.length > 0
-    ? receitaFechadaMes / leadsFechadosMes.length
+  const ticketMedio = orcamentosFechadosMes.length > 0
+    ? receitaFechadaMes / orcamentosFechadosMes.length
     : 0;
 
   const taxaConversao = leadsMes.length > 0
     ? (leadsFechadosMes.length / leadsMes.length) * 100
     : 0;
 
-  const leadsUrgentes = leads.filter((lead) => lead.urgencia === 'alta' && STATUS_ABERTO.has(lead.status)).length;
-  const followupAtrasado = leads.filter((lead) => isLateFollowup(lead, now)).length;
+  const leadsUrgentes = leads.filter((lead) => lead.urgencia === 'alta' && isLeadAbertoStatus(lead.status)).length;
+  const followupAtrasado = leads.filter((lead) => isLeadFollowupLate(lead, now)).length;
 
   const temposResposta = leads
     .map((lead) => {
@@ -1012,7 +1186,7 @@ export function buildDashboardInsights(rawLeads = [], rawOrcamentos = []) {
     }),
     { total: 0, fechados: 0 }
   ).map(([origem, values]) => {
-    const closed = leads.filter((lead) => normalizeText(lead.origem || 'Sem origem') === origem && STATUS_FECHADO.has(lead.status)).length;
+    const closed = leads.filter((lead) => normalizeText(lead.origem || 'Sem origem') === origem && isLeadFechadoStatus(lead.status)).length;
     const conversion = values.total > 0 ? (closed / values.total) * 100 : 0;
     return {
       origem,
@@ -1063,13 +1237,13 @@ export function buildDashboardInsights(rawLeads = [], rawOrcamentos = []) {
 
   const pipeline = [
     { status: 'novo', label: 'Novo' },
-    { status: 'chamado', label: 'Contatado' },
-    { status: 'proposta enviada', label: 'Proposta' },
+    { status: 'chamado', label: 'Em contato' },
+    { status: 'proposta enviada', label: 'Proposta enviada' },
     { status: 'fechado', label: 'Fechado' },
     { status: 'perdido', label: 'Perdido' },
   ].map((step) => ({
     ...step,
-    total: leads.filter((lead) => lead.status === step.status).length,
+    total: leads.filter((lead) => normalizeLeadStatusPipeline(lead.status) === step.status).length,
   }));
 
   const urgenciaData = ['alta', 'media', 'baixa'].map((urg) => ({
@@ -1077,12 +1251,35 @@ export function buildDashboardInsights(rawLeads = [], rawOrcamentos = []) {
     total: leads.filter((lead) => lead.urgencia === urg).length,
   }));
 
-  const ultimasEntradas = [...leads]
+  const ultimasEntradas = [
+    ...leads.map((lead) => ({
+      id: lead.id,
+      entryType: 'lead',
+      nome: lead.nome,
+      origem: lead.origem,
+      tipo: lead.fluxo || lead.servico || 'Lead',
+      valor_estimado: lead.valor_estimado,
+      status: lead.status,
+      prioridade: lead.prioridade,
+      created_at: lead.created_at,
+    })),
+    ...orcamentos.map((orc) => ({
+      id: orc.id,
+      entryType: 'orcamento',
+      nome: orc.nome,
+      origem: orc.origem,
+      tipo: orc.servico || orc.fluxo || 'Orcamento',
+      valor_estimado: orc.valor_estimado || orc.preco_final || orc.preco_base || 0,
+      status_orcamento: orc.status_orcamento,
+      prioridade: orc.prioridade,
+      created_at: orc.created_at,
+    })),
+  ]
     .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-    .slice(0, 10);
+    .slice(0, 12);
 
   const orcUrgentes = orcamentos
-    .filter((orc) => orc.urgencia === 'alta' && ORC_ABERTO.has(orc.status_orcamento))
+    .filter((orc) => orc.urgencia === 'alta' && isOrcamentoAberto(orc))
     .sort((a, b) => (b.valor_estimado || 0) - (a.valor_estimado || 0))
     .slice(0, 8);
 

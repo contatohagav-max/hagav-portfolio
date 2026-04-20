@@ -4,6 +4,7 @@ import {
   enrichLeadRecord,
   enrichOrcamentoRecord,
   COMMERCIAL_DEFAULTS,
+  isLeadFollowupLate,
 } from '@/lib/commercial';
 
 const supabaseUrl = String(process.env.NEXT_PUBLIC_SUPABASE_URL || '')
@@ -121,17 +122,8 @@ export async function fetchLeads({
   if (temperatura) leads = leads.filter((lead) => lead.temperatura === temperatura);
 
   if (onlyFollowupLate) {
-    const now = Date.now();
-    leads = leads.filter((lead) => {
-      if (lead.status === 'fechado' || lead.status === 'perdido') return false;
-      const nextFollowup = lead.proximo_followup_em ? new Date(lead.proximo_followup_em).getTime() : null;
-      if (Number.isFinite(nextFollowup)) return nextFollowup < now;
-      const lastContact = lead.ultimo_contato_em ? new Date(lead.ultimo_contato_em).getTime() : null;
-      const createdAt = lead.created_at ? new Date(lead.created_at).getTime() : null;
-      if (Number.isFinite(lastContact)) return (now - lastContact) > (1000 * 60 * 60 * 48);
-      if (Number.isFinite(createdAt)) return (now - createdAt) > (1000 * 60 * 60 * 48);
-      return false;
-    });
+    const now = new Date();
+    leads = leads.filter((lead) => isLeadFollowupLate(lead, now));
   }
 
   return leads;
@@ -295,8 +287,8 @@ export async function fetchDashboardMetrics() {
   }
 
   const [leadsRes, orcRes] = await Promise.all([
-    client.from('leads').select('*').order('created_at', { ascending: false }).limit(1500),
-    client.from('orcamentos').select('*').order('created_at', { ascending: false }).limit(1500),
+    client.from('leads').select('*').order('created_at', { ascending: false }).limit(5000),
+    client.from('orcamentos').select('*').order('created_at', { ascending: false }).limit(5000),
   ]);
 
   if (leadsRes.error) throw leadsRes.error;

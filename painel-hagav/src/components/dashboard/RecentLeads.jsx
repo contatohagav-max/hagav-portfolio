@@ -1,47 +1,84 @@
 import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
-import { LeadStatusBadge, UrgenciaBadge, TemperaturaBadge } from '@/components/ui/StatusBadge';
+import { LeadStatusBadge, OrcStatusBadge, PrioridadeBadge } from '@/components/ui/StatusBadge';
 import { fmtRelative, fmtBRL } from '@/lib/utils';
 
-export default function RecentLeads({ leads = [] }) {
+function getEntryTypeLabel(entry) {
+  if (entry?.entryType === 'orcamento' || entry?.status_orcamento) return 'Orcamento';
+  return 'Lead';
+}
+
+function getEntryHref(entry) {
+  if (entry?.entryType === 'orcamento' || entry?.status_orcamento) return '/orcamentos';
+  return '/leads';
+}
+
+export default function RecentLeads({ entries = [], leads = [] }) {
+  const rows = Array.isArray(entries) && entries.length > 0 ? entries : leads;
+
   return (
-    <div className="hcard flex flex-col">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-sm font-semibold text-hagav-white">Ultimas entradas</h3>
+    <div className="hcard flex flex-col p-0 overflow-hidden">
+      <div className="flex items-center justify-between px-5 py-4 border-b border-hagav-border/70">
+        <div>
+          <h3 className="text-sm font-semibold text-hagav-white">Ultimas entradas</h3>
+          <p className="text-[11px] text-hagav-gray mt-0.5">Leads e orcamentos mais recentes</p>
+        </div>
         <Link href="/leads" className="flex items-center gap-1 text-xs text-hagav-gold hover:text-hagav-gold-light transition-colors">
           Ver todos <ArrowRight size={12} />
         </Link>
       </div>
 
-      {leads.length === 0 ? (
-        <p className="text-sm text-hagav-gray py-6 text-center">Nenhum lead ainda.</p>
+      {rows.length === 0 ? (
+        <p className="text-sm text-hagav-gray py-10 text-center">Nenhuma entrada recente.</p>
       ) : (
-        <div className="space-y-0 -mx-5">
-          {leads.map((lead) => (
-            <Link key={lead.id} href="/leads">
-              <div className="flex items-center gap-3 px-5 py-3 hover:bg-hagav-muted/20 transition-colors border-b border-hagav-border/50 last:border-0">
-                <div className="w-8 h-8 rounded-full bg-hagav-muted/50 border border-hagav-border flex items-center justify-center shrink-0">
-                  <span className="text-xs font-semibold text-hagav-light">
-                    {(lead.nome || '?').charAt(0).toUpperCase()}
-                  </span>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <p className="text-sm font-medium text-hagav-light truncate">{lead.nome || 'Sem nome'}</p>
-                    <TemperaturaBadge temperatura={lead.temperatura} />
+        <>
+          <div className="hidden lg:grid grid-cols-[2.1fr_1.2fr_1.2fr_1fr_1fr_0.9fr_0.9fr] gap-3 px-5 py-2.5 text-[10px] text-hagav-gray uppercase tracking-wider border-b border-hagav-border/70">
+            <span>Nome</span>
+            <span>Origem</span>
+            <span>Tipo</span>
+            <span>Valor estimado</span>
+            <span>Status</span>
+            <span>Prioridade</span>
+            <span>Tempo</span>
+          </div>
+
+          <div className="divide-y divide-hagav-border/60">
+            {rows.map((entry) => {
+              const isOrcamento = entry?.entryType === 'orcamento' || Boolean(entry?.status_orcamento);
+              const typeLabel = getEntryTypeLabel(entry);
+              const tipo = entry?.tipo || (isOrcamento ? 'Orcamento' : 'Lead');
+              const valor = fmtBRL(entry?.valor_estimado || 0);
+              const tempo = fmtRelative(entry?.created_at);
+              const href = getEntryHref(entry);
+
+              return (
+                <Link key={`${typeLabel}-${entry.id}-${entry.created_at || ''}`} href={href}>
+                  <div className="px-5 py-3 hover:bg-hagav-muted/20 transition-colors">
+                    <div className="grid grid-cols-1 lg:grid-cols-[2.1fr_1.2fr_1.2fr_1fr_1fr_0.9fr_0.9fr] gap-2.5 lg:gap-3 items-center">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-hagav-light truncate">{entry?.nome || 'Sem nome'}</p>
+                      </div>
+                      <p className="text-xs text-hagav-gray truncate">{entry?.origem || '—'}</p>
+                      <p className="text-xs text-hagav-gray truncate">{typeLabel} · {tipo}</p>
+                      <p className="text-xs text-hagav-light font-medium">{valor}</p>
+                      <div className="flex items-center">
+                        {isOrcamento ? (
+                          <OrcStatusBadge status={entry?.status_orcamento} />
+                        ) : (
+                          <LeadStatusBadge status={entry?.status} />
+                        )}
+                      </div>
+                      <div className="flex items-center">
+                        <PrioridadeBadge prioridade={entry?.prioridade} />
+                      </div>
+                      <p className="text-[11px] text-hagav-gray">{tempo}</p>
+                    </div>
                   </div>
-                  <p className="text-xs text-hagav-gray truncate">{lead.fluxo} · {lead.origem || '—'}</p>
-                  <p className="text-[11px] text-hagav-gray mt-0.5">Valor estimado: {fmtBRL(lead.valor_estimado)}</p>
-                </div>
-                <div className="flex flex-col items-end gap-1 shrink-0">
-                  <LeadStatusBadge status={lead.status} />
-                  <UrgenciaBadge urgencia={lead.urgencia} />
-                  <span className="text-[10px] text-hagav-gray">{fmtRelative(lead.created_at)}</span>
-                </div>
-              </div>
-            </Link>
-          ))}
-        </div>
+                </Link>
+              );
+            })}
+          </div>
+        </>
       )}
     </div>
   );

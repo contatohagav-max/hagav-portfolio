@@ -164,7 +164,11 @@ export async function fetchLeads({
   if (status) {
     query = query.eq('status', mapLegacyLeadStatusToDeal(status, DEAL_STATUS.NOVO));
   } else {
-    query = query.in('status', DEAL_STATUS_GROUPS.leads);
+    const defaultLeadStatuses = Array.from(new Set([
+      ...DEAL_STATUS_GROUPS.leads,
+      DEAL_STATUS.ORCAMENTO,
+    ]));
+    query = query.in('status', defaultLeadStatuses);
   }
 
   if (origem) query = query.eq('origem', origem);

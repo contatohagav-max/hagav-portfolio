@@ -505,6 +505,9 @@ function getSupabaseConfig(env) {
   const url = firstEnvValue(env, [
     "SUPABASE_URL",
     "SUPABASE_PROJECT_URL",
+    "SUPABASE_API_URL",
+    "PUBLIC_SUPABASE_URL",
+    "NEXT_PUBLIC_SUPABASE_PROJECT_URL",
     "NEXT_PUBLIC_SUPABASE_URL"
   ]).replace(/\/+$/, "");
   const serviceRoleKey = firstEnvValue(env, [
@@ -512,11 +515,16 @@ function getSupabaseConfig(env) {
     "SUPABASE_SERVICE_ROLE_KEY",
     "SUPABASE_SERVICE_ROLE",
     "SUPABASE_SERVICE_KEY",
+    "SUPABASE_SECRET_KEY",
+    "SUPABASE_SERVICE_ROLE_SECRET",
+    "SUPABASE_SERVICE_ROLE_JWT",
     "SERVICE_ROLE"
   ]);
   const anonKey = firstEnvValue(env, [
     "SUPABASE_ANON_KEY",
     "SUPABASE_PUBLIC_ANON_KEY",
+    "PUBLIC_SUPABASE_ANON_KEY",
+    "NEXT_PUBLIC_SUPABASE_KEY",
     "NEXT_PUBLIC_SUPABASE_ANON_KEY",
     "SUPABASE_KEY"
   ]);
@@ -542,6 +550,27 @@ async function parseJsonSafe(response) {
   }
 }
 
+function composeSupabaseErrorReason(parsed, status) {
+  const parts = [
+    parsed?.message,
+    parsed?.error_description,
+    parsed?.error,
+    parsed?.details,
+    parsed?.hint,
+    parsed?.code
+  ]
+    .map((item) => String(item || "").trim())
+    .filter(Boolean);
+  const reason = parts.join(" | ") || `supabase_http_${status}`;
+  if (/row-level security/i.test(reason)) {
+    return `supabase_rls_blocked:${reason}`;
+  }
+  if (/permission denied/i.test(reason)) {
+    return `supabase_permission_denied:${reason}`;
+  }
+  return reason;
+}
+
 async function postSupabaseRow(config, table, payload) {
   const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
   const timeoutId = controller
@@ -561,7 +590,7 @@ async function postSupabaseRow(config, table, payload) {
     });
     if (!response.ok) {
       const parsed = await parseJsonSafe(response);
-      const reason = String(parsed?.message || parsed?.error_description || `supabase_http_${response.status}`);
+      const reason = composeSupabaseErrorReason(parsed, response.status);
       console.error("[validate-submit][supabase] insert_failed", JSON.stringify({
         table,
         status: response.status,
@@ -1080,9 +1109,14 @@ async function saveLead(env, lead) {
     supabaseReason: supabaseResult.reason || "",
     webhookReason: webhookResult.reason || ""
   }));
+  const reasons = [];
+  if (supabaseResult.reason) reasons.push(supabaseResult.reason);
+  if (webhookResult.reason && webhookResult.reason !== "webhook_not_configured") {
+    reasons.push(webhookResult.reason);
+  }
   return {
     ok: false,
-    reason: [supabaseResult.reason, webhookResult.reason].filter(Boolean).join(" | ")
+    reason: reasons.join(" | ") || "save_failed"
   };
 }
 

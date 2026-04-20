@@ -6,8 +6,16 @@ import { Search, RefreshCw, FileText, AlertTriangle, ClipboardList } from 'lucid
 import OrcamentosTable from '@/components/orcamentos/OrcamentosTable';
 import OrcamentoDrawer from '@/components/orcamentos/OrcamentoDrawer';
 import EmptyState from '@/components/ui/EmptyState';
+import EduTooltip from '@/components/ui/EduTooltip';
 import { fetchOrcamentos } from '@/lib/supabase';
 import { ORC_STATUS_LABELS, fmtBRL } from '@/lib/utils';
+
+const UPDATE_TOOLTIP = {
+  title: 'Atualizar',
+  whatIs: 'Recarrega os orcamentos com os filtros aplicados.',
+  purpose: 'Sincronizar negociacoes e valores em tempo real.',
+  observe: 'Use antes de revisar fechamentos e pendencias.',
+};
 
 export default function OrcamentosPage() {
   const searchParams = useSearchParams();
@@ -46,7 +54,12 @@ export default function OrcamentosPage() {
         limit: 800,
       });
       const rows = abertosOnly
-        ? data.filter((item) => ['pendente_revisao', 'em_revisao', 'aprovado', 'enviado'].includes(String(item.status_orcamento || '')))
+        ? data.filter((item) => {
+          const statusDeal = String(item.status_deal || '').toLowerCase();
+          if (statusDeal) return ['orcamento', 'proposta_enviada'].includes(statusDeal);
+          const statusOrcamento = String(item.status_orcamento || '').toLowerCase();
+          return ['pendente_revisao', 'em_revisao', 'enviado'].includes(statusOrcamento);
+        })
         : data;
       setOrcamentos(rows);
     } catch (err) {
@@ -84,10 +97,12 @@ export default function OrcamentosPage() {
             {loading ? 'Carregando...' : `${orcamentos.length} orcamento${orcamentos.length !== 1 ? 's' : ''}`}
           </p>
         </div>
-        <button onClick={load} disabled={loading} className="btn-ghost btn-sm">
-          <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
-          Atualizar
-        </button>
+        <EduTooltip {...UPDATE_TOOLTIP} className="w-auto" panelClassName="left-auto right-0 translate-x-0">
+          <button onClick={load} disabled={loading} className="btn-ghost btn-sm">
+            <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
+            Atualizar
+          </button>
+        </EduTooltip>
       </div>
 
       {!loading && orcamentos.length > 0 && (

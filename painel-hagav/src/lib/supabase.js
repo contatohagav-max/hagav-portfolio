@@ -5,6 +5,13 @@ import {
   enrichOrcamentoRecord,
   COMMERCIAL_DEFAULTS,
   isLeadFollowupLate,
+  DEAL_STATUS,
+  DEAL_STATUS_GROUPS,
+  normalizeDealStatus,
+  mapLegacyLeadStatusToDeal,
+  mapLegacyOrcamentoStatusToDeal,
+  mapDealStatusToLegacyLead,
+  mapDealStatusToLegacyOrcamento,
 } from '@/lib/commercial';
 
 const supabaseUrl = String(process.env.NEXT_PUBLIC_SUPABASE_URL || '')
@@ -31,6 +38,53 @@ function deepMerge(base, override) {
     merged[key] = value;
   });
   return merged;
+}
+
+function normalizeDealRecord(raw) {
+  const statusDeal = normalizeDealStatus(raw?.status, DEAL_STATUS.NOVO);
+  return {
+    ...raw,
+    status: statusDeal,
+  };
+}
+
+function mapDealToLeadRecord(raw) {
+  const deal = normalizeDealRecord(raw);
+  return {
+    ...deal,
+    status_deal: deal.status,
+    status: mapDealStatusToLegacyLead(deal.status),
+  };
+}
+
+function mapDealToOrcamentoRecord(raw) {
+  const deal = normalizeDealRecord(raw);
+  return {
+    ...deal,
+    status_deal: deal.status,
+    status: mapDealStatusToLegacyLead(deal.status),
+    status_orcamento: mapDealStatusToLegacyOrcamento(deal.status),
+  };
+}
+
+function normalizeLeadPatchToDeals(patch = {}) {
+  const next = { ...patch };
+  if (next.status !== undefined) {
+    next.status = mapLegacyLeadStatusToDeal(next.status, DEAL_STATUS.NOVO);
+  }
+  delete next.status_orcamento;
+  return next;
+}
+
+function normalizeOrcamentoPatchToDeals(patch = {}) {
+  const next = { ...patch };
+  if (next.status_orcamento !== undefined) {
+    next.status = mapLegacyOrcamentoStatusToDeal(next.status_orcamento, DEAL_STATUS.ORCAMENTO);
+    delete next.status_orcamento;
+  } else if (next.status !== undefined) {
+    next.status = mapLegacyLeadStatusToDeal(next.status, DEAL_STATUS.ORCAMENTO);
+  }
+  return next;
 }
 
 export function getSupabase() {
@@ -102,12 +156,17 @@ export async function fetchLeads({
   if (!client) return [];
 
   let query = client
-    .from('leads')
+    .from('deals')
     .select('*')
     .order('created_at', { ascending: false })
     .limit(limit);
 
-  if (status) query = query.eq('status', status);
+  if (status) {
+    query = query.eq('status', mapLegacyLeadStatusToDeal(status, DEAL_STATUS.NOVO));
+  } else {
+    query = query.in('status', DEAL_STATUS_GROUPS.leads);
+  }
+
   if (origem) query = query.eq('origem', origem);
   if (fluxo) query = query.eq('fluxo', fluxo);
   if (search) query = query.or(`nome.ilike.%${search}%,whatsapp.ilike.%${search}%,observacoes.ilike.%${search}%`);
@@ -115,7 +174,7 @@ export async function fetchLeads({
   const { data, error } = await query;
   if (error) throw error;
 
-  let leads = (data ?? []).map(enrichLeadRecord);
+  let leads = (data ?? []).map(mapDealToLeadRecord).map(enrichLeadRecord);
 
   if (prioridade) leads = leads.filter((lead) => lead.prioridade === prioridade);
   if (urgencia) leads = leads.filter((lead) => lead.urgencia === urgencia);
@@ -129,18 +188,48 @@ export async function fetchLeads({
   return leads;
 }
 
+export async function fetchPipelineDeals({ search, limit = 1200 } = {}) {
+  const client = getSupabase();
+  if (!client) return [];
+
+  const pipelineStatuses = [
+    DEAL_STATUS.NOVO,
+    DEAL_STATUS.QUALIFICADO,
+    DEAL_STATUS.ORCAMENTO,
+    DEAL_STATUS.PROPOSTA_ENVIADA,
+    DEAL_STATUS.FECHADO,
+    DEAL_STATUS.PERDIDO,
+  ];
+
+  let query = client
+    .from('deals')
+    .select('*')
+    .in('status', pipelineStatuses)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+
+  if (search) query = query.or(`nome.ilike.%${search}%,whatsapp.ilike.%${search}%,observacoes.ilike.%${search}%`);
+
+  const { data, error } = await query;
+  if (error) throw error;
+
+  return (data ?? []).map(mapDealToLeadRecord).map(enrichLeadRecord);
+}
+
 export async function updateLead(id, patch) {
   const client = getSupabase();
   if (!client) throw new Error('Supabase nao configurado');
+
+  const payload = normalizeLeadPatchToDeals(patch);
   const { data, error } = await client
-    .from('leads')
-    .update(patch)
+    .from('deals')
+    .update(payload)
     .eq('id', id)
     .select('*')
     .single();
+
   if (error) throw error;
-  const updated = data;
-  return enrichLeadRecord(updated);
+  return enrichLeadRecord(mapDealToLeadRecord(data));
 }
 
 // Orcamentos
@@ -158,19 +247,25 @@ export async function fetchOrcamentos({
   if (!client) return [];
 
   let query = client
-    .from('orcamentos')
+    .from('deals')
     .select('*')
     .order('created_at', { ascending: false })
     .limit(limit);
 
-  if (statusOrcamento) query = query.eq('status_orcamento', statusOrcamento);
-  if (status) query = query.eq('status', status);
+  if (statusOrcamento) {
+    query = query.eq('status', mapLegacyOrcamentoStatusToDeal(statusOrcamento, DEAL_STATUS.ORCAMENTO));
+  } else if (status) {
+    query = query.eq('status', mapLegacyLeadStatusToDeal(status, DEAL_STATUS.ORCAMENTO));
+  } else {
+    query = query.in('status', DEAL_STATUS_GROUPS.orcamentos);
+  }
+
   if (search) query = query.or(`nome.ilike.%${search}%,whatsapp.ilike.%${search}%,servico.ilike.%${search}%,resumo_orcamento.ilike.%${search}%`);
 
   const { data, error } = await query;
   if (error) throw error;
 
-  let orcamentos = (data ?? []).map(enrichOrcamentoRecord);
+  let orcamentos = (data ?? []).map(mapDealToOrcamentoRecord).map(enrichOrcamentoRecord);
 
   if (urgencia) orcamentos = orcamentos.filter((orc) => orc.urgencia === urgencia);
   if (prioridade) orcamentos = orcamentos.filter((orc) => orc.prioridade === prioridade);
@@ -182,15 +277,17 @@ export async function fetchOrcamentos({
 export async function updateOrcamento(id, patch) {
   const client = getSupabase();
   if (!client) throw new Error('Supabase nao configurado');
+
+  const payload = normalizeOrcamentoPatchToDeals(patch);
   const { data, error } = await client
-    .from('orcamentos')
-    .update(patch)
+    .from('deals')
+    .update(payload)
     .eq('id', id)
     .select('*')
     .single();
+
   if (error) throw error;
-  const updated = data;
-  return enrichOrcamentoRecord(updated);
+  return enrichOrcamentoRecord(mapDealToOrcamentoRecord(data));
 }
 
 // Contatos
@@ -286,35 +383,36 @@ export async function fetchDashboardMetrics() {
     return buildDashboardInsights([], []);
   }
 
-  async function fetchAllRows(table) {
-    const pageSize = 1000;
-    const maxRows = 50000;
-    let from = 0;
-    const rows = [];
+  const pageSize = 1000;
+  const maxRows = 10000;
+  let from = 0;
+  const deals = [];
 
-    while (from < maxRows) {
-      const to = from + pageSize - 1;
-      const { data, error } = await client
-        .from(table)
-        .select('*')
-        .order('created_at', { ascending: false })
-        .range(from, to);
+  while (from < maxRows) {
+    const to = from + pageSize - 1;
+    const { data, error } = await client
+      .from('deals')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .range(from, to);
 
-      if (error) throw error;
-      if (!Array.isArray(data) || data.length === 0) break;
+    if (error) throw error;
+    if (!Array.isArray(data) || data.length === 0) break;
 
-      rows.push(...data);
-      if (data.length < pageSize) break;
-      from += pageSize;
-    }
-
-    return rows;
+    deals.push(...data);
+    if (data.length < pageSize) break;
+    from += pageSize;
   }
 
-  const [leads, orcamentos] = await Promise.all([
-    fetchAllRows('leads'),
-    fetchAllRows('orcamentos'),
-  ]);
+  const leads = deals.map(mapDealToLeadRecord);
+  const orcamentos = deals
+    .filter((row) => [
+      DEAL_STATUS.ORCAMENTO,
+      DEAL_STATUS.PROPOSTA_ENVIADA,
+      DEAL_STATUS.FECHADO,
+      DEAL_STATUS.PERDIDO,
+    ].includes(normalizeDealStatus(row?.status, DEAL_STATUS.NOVO)))
+    .map(mapDealToOrcamentoRecord);
 
   return buildDashboardInsights(leads, orcamentos);
 }

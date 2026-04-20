@@ -28,17 +28,23 @@ const PIPELINE_STAGE_TOOLTIPS = {
     purpose: 'Dar inicio rapido ao primeiro contato.',
     observe: 'Tempo alto aqui reduz chance de conversao.',
   },
-  chamado: {
-    title: 'Chamado',
+  contatado: {
+    title: 'Contatado',
     whatIs: 'Lead em contato ativo com o comercial.',
     purpose: 'Conduzir qualificacao e avancar para proposta.',
     observe: 'Sempre deixe proxima acao definida.',
   },
-  'proposta enviada': {
+  qualificado: {
+    title: 'Qualificado',
+    whatIs: 'Lead validado e pronto para gerar proposta.',
+    purpose: 'Separar oportunidades reais das nao qualificadas.',
+    observe: 'Acao ideal nesta etapa e gerar orcamento rapidamente.',
+  },
+  proposta_enviada: {
     title: 'Proposta enviada',
-    whatIs: 'Lead que ja recebeu proposta.',
+    whatIs: 'Lead em fase comercial de proposta e negociacao.',
     purpose: 'Acompanhar negociacoes em fase de decisao.',
-    observe: 'Monitore prazo de retorno e objecoes.',
+    observe: 'Monitore prazo de retorno, ajustes e fechamento.',
   },
   fechado: {
     title: 'Fechado',
@@ -53,6 +59,16 @@ const PIPELINE_STAGE_TOOLTIPS = {
     observe: 'Analise recorrencias para ajustar abordagem.',
   },
 };
+
+function resolvePipelineColumnStatus(status) {
+  const normalized = String(status || '').toLowerCase();
+  if (normalized === 'chamado' || normalized === 'em_contato') return 'contatado';
+  if (normalized === 'proposta enviada') return 'proposta_enviada';
+  if (normalized === 'orcamento' || normalized === 'ajustando' || normalized === 'aprovado') {
+    return 'proposta_enviada';
+  }
+  return normalized;
+}
 
 function DroppableColumn({ column, leads, onSelectLead }) {
   const { setNodeRef, isOver } = useDroppable({ id: column.id });
@@ -118,7 +134,8 @@ export default function KanbanBoard({
     const map = {};
     KANBAN_COLUMNS.forEach(col => { map[col.id] = []; });
     leads.forEach(l => {
-      const colId = map[l.status] !== undefined ? l.status : 'novo';
+      const statusKey = resolvePipelineColumnStatus(l.status);
+      const colId = map[statusKey] !== undefined ? statusKey : 'novo';
       map[colId] = [...(map[colId] || []), l];
     });
     return map;
@@ -137,10 +154,13 @@ export default function KanbanBoard({
     let targetColId = over.id;
     // If dropped on a card, find that card's column
     if (!KANBAN_COLUMNS.find(c => c.id === over.id)) {
-      targetColId = leads.find(l => String(l.id) === over.id)?.status ?? activeLead.status;
+      targetColId = resolvePipelineColumnStatus(
+        leads.find(l => String(l.id) === over.id)?.status ?? activeLead.status
+      );
     }
 
-    if (targetColId === activeLead.status) return;
+    const activeCol = resolvePipelineColumnStatus(activeLead.status);
+    if (targetColId === activeCol) return;
 
     // Optimistic update
     setLeads((prev) => {
@@ -152,7 +172,8 @@ export default function KanbanBoard({
     // Persist
     try {
       await updateLead(activeLead.id, { status: targetColId });
-      onStatusPersist?.({ type: 'success', message: `Lead #${activeLeadId} movido para ${targetColId}.` });
+      const label = KANBAN_COLUMNS.find((item) => item.id === targetColId)?.label || targetColId;
+      onStatusPersist?.({ type: 'success', message: `Lead #${activeLeadId} movido para ${label}.` });
     } catch (err) {
       console.error('[Kanban] Error updating lead status:', err);
       // Rollback

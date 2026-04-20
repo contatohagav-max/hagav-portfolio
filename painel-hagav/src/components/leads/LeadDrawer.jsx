@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { X, MessageCircle, ExternalLink, Save, Loader2, PhoneCall } from 'lucide-react';
+import { X, MessageCircle, ExternalLink, Save, Loader2, PhoneCall, FilePlus2 } from 'lucide-react';
 import {
   LeadStatusBadge,
   PrioridadeBadge,
@@ -12,7 +12,7 @@ import EduTooltip from '@/components/ui/EduTooltip';
 import { updateLead } from '@/lib/supabase';
 import { fmtDateTime, whatsappLink, LEAD_STATUS_LABELS, fmtBRL } from '@/lib/utils';
 
-const LEAD_STATUSES = Object.keys(LEAD_STATUS_LABELS);
+const LEAD_STATUSES = ['novo', 'contatado', 'qualificado', 'descartado'];
 const WHATSAPP_TOOLTIP = {
   title: 'WhatsApp',
   whatIs: 'Abre conversa direta com o contato no WhatsApp.',
@@ -78,10 +78,37 @@ export default function LeadDrawer({ lead, onClose, onUpdated }) {
     }
   }
 
+  async function handleGenerateOrcamento() {
+    setSaving(true);
+    setError('');
+    try {
+      const updated = await updateLead(lead.id, {
+        status: 'orcamento',
+        observacoes: obs,
+        proxima_acao: proximaAcao,
+        prioridade,
+        urgencia,
+        ultimo_contato_em: fromDateTimeLocal(ultimoContato),
+      });
+      onUpdated?.(updated);
+      onClose();
+    } catch (err) {
+      setError(err.message ?? 'Erro ao gerar orcamento.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
   function markContactNow() {
     const now = new Date();
     setUltimoContato(toDateTimeLocal(now.toISOString()));
   }
+
+  const statusOptions = Array.from(new Set([
+    ...LEAD_STATUSES,
+    status || 'novo',
+  ]));
+  const canGenerateOrcamento = String(status || '').toLowerCase() === 'qualificado';
 
   const waLink = whatsappLink(lead.whatsapp, `Ola ${lead.nome || ''}, aqui e a HAGAV Studio!`);
 
@@ -131,8 +158,8 @@ export default function LeadDrawer({ lead, onClose, onUpdated }) {
               <div>
                 <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Status</label>
                 <select value={status} onChange={(e) => setStatus(e.target.value)} className="hselect w-full">
-                  {LEAD_STATUSES.map((item) => (
-                    <option key={item} value={item}>{LEAD_STATUS_LABELS[item]}</option>
+                  {statusOptions.map((item) => (
+                    <option key={item} value={item}>{LEAD_STATUS_LABELS[item] || item}</option>
                   ))}
                 </select>
               </div>
@@ -198,6 +225,12 @@ export default function LeadDrawer({ lead, onClose, onUpdated }) {
         </div>
 
         <div className="px-6 py-4 border-t border-hagav-border shrink-0 flex items-center gap-3">
+          {canGenerateOrcamento && (
+            <button onClick={handleGenerateOrcamento} disabled={saving} className="btn-gold">
+              {saving ? <Loader2 size={15} className="animate-spin" /> : <FilePlus2 size={15} />}
+              Gerar orcamento
+            </button>
+          )}
           <EduTooltip {...WHATSAPP_TOOLTIP} className="flex-1">
             <a href={waLink} target="_blank" rel="noreferrer" className="btn-ghost w-full justify-center">
               <MessageCircle size={15} />

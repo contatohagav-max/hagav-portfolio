@@ -1,12 +1,11 @@
 import { MessageCircle } from 'lucide-react';
 import {
   LeadStatusBadge,
-  PrioridadeBadge,
   UrgenciaBadge,
   TemperaturaBadge,
 } from '@/components/ui/StatusBadge';
 import EduTooltip from '@/components/ui/EduTooltip';
-import { fmtDateTime, fmtRelative, fmtBRL, whatsappLink, truncate } from '@/lib/utils';
+import { whatsappLink, truncate } from '@/lib/utils';
 
 const WHATSAPP_TOOLTIP = {
   title: 'WhatsApp',
@@ -26,18 +25,15 @@ export default function LeadsTable({ leads, onSelect }) {
 
   return (
     <div className="overflow-x-auto rounded-xl border border-hagav-border">
-      <table className="htable min-w-[1180px]">
+      <table className="htable min-w-[1020px]">
         <thead>
           <tr>
-            <th>#</th>
             <th>Lead</th>
+            <th>Servico</th>
+            <th>Origem</th>
             <th>Score</th>
-            <th>Prioridade</th>
             <th>Urgencia</th>
-            <th>Fluxo/Origem</th>
             <th>Proxima acao</th>
-            <th>Ultimo contato</th>
-            <th>Valor estimado</th>
             <th>Status</th>
             <th>Contato</th>
           </tr>
@@ -45,7 +41,6 @@ export default function LeadsTable({ leads, onSelect }) {
         <tbody>
           {leads.map((lead) => (
             <tr key={lead.id} onClick={() => onSelect(lead)}>
-              <td className="text-hagav-gray font-mono text-xs">{lead.id}</td>
               <td>
                 <div className="flex items-center gap-2.5">
                   <div className="w-8 h-8 rounded-full bg-hagav-muted/50 border border-hagav-border flex items-center justify-center shrink-0">
@@ -59,27 +54,22 @@ export default function LeadsTable({ leads, onSelect }) {
                   </div>
                 </div>
               </td>
+              <td className="text-xs text-hagav-light max-w-[190px]" title={lead.servico || ''}>
+                {truncate(lead.servico || lead.fluxo || '—', 50)}
+              </td>
+              <td className="text-xs text-hagav-gray max-w-[180px]" title={lead.origem || ''}>
+                {truncate(lead.origem || '—', 38)}
+              </td>
               <td>
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-semibold text-hagav-white">{lead.score_lead ?? 0}</span>
                   <TemperaturaBadge temperatura={lead.temperatura} />
                 </div>
               </td>
-              <td><PrioridadeBadge prioridade={lead.prioridade} /></td>
               <td><UrgenciaBadge urgencia={lead.urgencia} /></td>
-              <td>
-                <div>
-                  <p className="text-xs text-hagav-light">{lead.fluxo || '—'}</p>
-                  <p className="text-[11px] text-hagav-gray truncate max-w-[160px]">{lead.origem || '—'}</p>
-                </div>
-              </td>
               <td className="text-xs text-hagav-light max-w-[180px]" title={lead.proxima_acao || ''}>
                 {truncate(lead.proxima_acao || 'Sem acao definida', 48)}
               </td>
-              <td className="text-xs text-hagav-gray" title={fmtDateTime(lead.ultimo_contato_em || lead.created_at)}>
-                {lead.ultimo_contato_em ? fmtRelative(lead.ultimo_contato_em) : 'Sem contato'}
-              </td>
-              <td className="text-sm font-medium text-hagav-gold">{fmtBRL(lead.valor_estimado)}</td>
               <td><LeadStatusBadge status={lead.status} /></td>
               <td>
                 {lead.whatsapp ? (

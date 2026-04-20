@@ -55,36 +55,46 @@ export function fmtPercent(value, digits = 1) {
 
 export const LEAD_STATUS_LABELS = {
   novo: 'Novo',
-  chamado: 'Contatado',
-  'proposta enviada': 'Proposta',
+  contatado: 'Contatado',
+  qualificado: 'Qualificado',
+  descartado: 'Descartado',
+  orcamento: 'Orçamento',
+  proposta_enviada: 'Proposta enviada',
+  ajustando: 'Ajustando',
+  aprovado: 'Aprovado',
   fechado: 'Fechado',
   perdido: 'Perdido',
 };
 
 export const LEAD_STATUS_COLORS = {
   novo: 'bg-blue-500/15 text-blue-400 border-blue-500/30',
-  chamado: 'bg-violet-500/15 text-violet-400 border-violet-500/30',
-  'proposta enviada': 'bg-yellow-500/15 text-yellow-400 border-yellow-500/30',
+  contatado: 'bg-violet-500/15 text-violet-400 border-violet-500/30',
+  qualificado: 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30',
+  descartado: 'bg-zinc-500/20 text-zinc-300 border-zinc-500/30',
+  orcamento: 'bg-indigo-500/15 text-indigo-300 border-indigo-500/30',
+  proposta_enviada: 'bg-yellow-500/15 text-yellow-400 border-yellow-500/30',
+  ajustando: 'bg-amber-500/15 text-amber-300 border-amber-500/30',
+  aprovado: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30',
   fechado: 'bg-green-500/15 text-green-400 border-green-500/30',
   perdido: 'bg-red-500/15 text-red-400 border-red-500/30',
 };
 
 export const ORC_STATUS_LABELS = {
-  pendente_revisao: 'Pendente',
-  em_revisao: 'Em revisao',
+  orcamento: 'Orçamento',
+  proposta_enviada: 'Proposta enviada',
+  ajustando: 'Ajustando',
   aprovado: 'Aprovado',
-  enviado: 'Enviado',
-  arquivado: 'Arquivado',
-  cancelado: 'Cancelado',
+  perdido: 'Perdido',
+  fechado: 'Fechado',
 };
 
 export const ORC_STATUS_COLORS = {
-  pendente_revisao: 'bg-yellow-500/15 text-yellow-400 border-yellow-500/30',
-  em_revisao: 'bg-blue-500/15 text-blue-400 border-blue-500/30',
-  aprovado: 'bg-green-500/15 text-green-400 border-green-500/30',
-  enviado: 'bg-violet-500/15 text-violet-400 border-violet-500/30',
-  arquivado: 'bg-hagav-muted/50 text-hagav-gray border-hagav-muted',
-  cancelado: 'bg-red-500/15 text-red-400 border-red-500/30',
+  orcamento: 'bg-blue-500/15 text-blue-400 border-blue-500/30',
+  proposta_enviada: 'bg-violet-500/15 text-violet-400 border-violet-500/30',
+  ajustando: 'bg-yellow-500/15 text-yellow-400 border-yellow-500/30',
+  aprovado: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
+  perdido: 'bg-red-500/15 text-red-400 border-red-500/30',
+  fechado: 'bg-green-500/15 text-green-400 border-green-500/30',
 };
 
 export const URGENCIA_LABELS = {
@@ -139,8 +149,9 @@ export function whatsappLink(phone, msg = '') {
 
 export const KANBAN_COLUMNS = [
   { id: 'novo', label: 'Novo', color: 'border-blue-500' },
-  { id: 'chamado', label: 'Contatado', color: 'border-violet-500' },
-  { id: 'proposta enviada', label: 'Proposta', color: 'border-yellow-500' },
+  { id: 'contatado', label: 'Contatado', color: 'border-violet-500' },
+  { id: 'qualificado', label: 'Qualificado', color: 'border-cyan-500' },
+  { id: 'proposta_enviada', label: 'Proposta enviada', color: 'border-yellow-500' },
   { id: 'fechado', label: 'Fechado', color: 'border-green-500' },
   { id: 'perdido', label: 'Perdido', color: 'border-red-500' },
 ];

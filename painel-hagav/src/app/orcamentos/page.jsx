@@ -10,6 +10,8 @@ import EduTooltip from '@/components/ui/EduTooltip';
 import { fetchOrcamentos } from '@/lib/supabase';
 import { ORC_STATUS_LABELS, fmtBRL } from '@/lib/utils';
 
+const ORC_VISIBLE_STATUSES = ['orcamento', 'proposta_enviada', 'ajustando', 'aprovado', 'perdido'];
+const ORC_FILTER_STATUSES = ['orcamento', 'proposta_enviada', 'ajustando', 'aprovado', 'perdido'];
 const UPDATE_TOOLTIP = {
   title: 'Atualizar',
   whatIs: 'Recarrega os orcamentos com os filtros aplicados.',
@@ -56,9 +58,9 @@ export default function OrcamentosPage() {
       const rows = abertosOnly
         ? data.filter((item) => {
           const statusDeal = String(item.status_deal || '').toLowerCase();
-          if (statusDeal) return ['orcamento', 'proposta_enviada'].includes(statusDeal);
+          if (statusDeal) return ['orcamento', 'proposta_enviada', 'ajustando'].includes(statusDeal);
           const statusOrcamento = String(item.status_orcamento || '').toLowerCase();
-          return ['pendente_revisao', 'em_revisao', 'enviado'].includes(statusOrcamento);
+          return ['orcamento', 'proposta_enviada', 'ajustando'].includes(statusOrcamento);
         })
         : data;
       setOrcamentos(rows);
@@ -76,7 +78,12 @@ export default function OrcamentosPage() {
   }, [load]);
 
   function handleUpdated(updated) {
-    setOrcamentos((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
+    setOrcamentos((prev) => prev
+      .map((item) => (item.id === updated.id ? updated : item))
+      .filter((item) => {
+        const statusDeal = String(item.status_deal || '').toLowerCase();
+        return ORC_VISIBLE_STATUSES.includes(statusDeal);
+      }));
     setFeedback('Orcamento salvo com sucesso.');
     setTimeout(() => setFeedback(''), 2500);
   }
@@ -137,8 +144,8 @@ export default function OrcamentosPage() {
 
         <select value={statusOrc} onChange={(e) => setStatusOrc(e.target.value)} className="hselect">
           <option value="">Todos os status</option>
-          {Object.entries(ORC_STATUS_LABELS).map(([value, label]) => (
-            <option key={value} value={value}>{label}</option>
+          {ORC_FILTER_STATUSES.map((value) => (
+            <option key={value} value={value}>{ORC_STATUS_LABELS[value] || value}</option>
           ))}
         </select>
 

@@ -2,19 +2,27 @@ const DEFAULT_LIMIT = 60;
 const MAX_LIMIT = 200;
 
 const DEAL_TO_ORC_STATUS = {
-  novo: 'pendente_revisao',
-  qualificado: 'pendente_revisao',
-  orcamento: 'em_revisao',
+  novo: 'orcamento',
+  contatado: 'orcamento',
+  qualificado: 'orcamento',
+  descartado: 'perdido',
+  orcamento: 'orcamento',
   proposta_enviada: 'enviado',
-  fechado: 'aprovado',
+  ajustando: 'ajustando',
+  aprovado: 'aprovado',
+  fechado: 'fechado',
   perdido: 'arquivado',
 };
 
 const DEAL_TO_LEAD_STATUS = {
   novo: 'novo',
-  qualificado: 'chamado',
-  orcamento: 'proposta enviada',
-  proposta_enviada: 'proposta enviada',
+  contatado: 'contatado',
+  qualificado: 'qualificado',
+  descartado: 'descartado',
+  orcamento: 'orcamento',
+  proposta_enviada: 'proposta_enviada',
+  ajustando: 'ajustando',
+  aprovado: 'aprovado',
   fechado: 'fechado',
   perdido: 'perdido',
 };
@@ -22,8 +30,12 @@ const DEAL_TO_LEAD_STATUS = {
 const ORC_TO_DEAL_STATUS = {
   pendente_revisao: 'orcamento',
   em_revisao: 'orcamento',
+  orcamento: 'orcamento',
   enviado: 'proposta_enviada',
-  aprovado: 'fechado',
+  proposta_enviada: 'proposta_enviada',
+  ajustando: 'ajustando',
+  aprovado: 'aprovado',
+  fechado: 'fechado',
   arquivado: 'perdido',
   cancelado: 'perdido',
   perdido: 'perdido',
@@ -58,7 +70,7 @@ function normalizeStatusKey(value) {
 function normalizeDealStatus(value, fallback = "orcamento") {
   const key = normalizeStatusKey(value);
   if (!key) return fallback;
-  if (["novo", "qualificado", "orcamento", "proposta_enviada", "fechado", "perdido"].includes(key)) {
+  if (["novo", "contatado", "qualificado", "descartado", "orcamento", "proposta_enviada", "ajustando", "aprovado", "fechado", "perdido"].includes(key)) {
     return key;
   }
   return ORC_TO_DEAL_STATUS[key] || fallback;
@@ -66,7 +78,7 @@ function normalizeDealStatus(value, fallback = "orcamento") {
 
 function mapDealToOrcStatus(value) {
   const key = normalizeDealStatus(value, "orcamento");
-  return DEAL_TO_ORC_STATUS[key] || "pendente_revisao";
+  return DEAL_TO_ORC_STATUS[key] || "orcamento";
 }
 
 function mapDealToLegacyLeadStatus(value) {
@@ -197,7 +209,7 @@ async function listOrcamentos(request, env) {
   if (statusOrc) {
     query.set("status", `eq.${mapOrcStatusToDeal(statusOrc)}`);
   } else {
-    query.set("status", "in.(orcamento,proposta_enviada,fechado,perdido)");
+    query.set("status", "in.(orcamento,proposta_enviada,ajustando,aprovado,perdido)");
   }
 
   const result = await fetchSupabase(config, `/rest/v1/deals?${query.toString()}`);

@@ -100,7 +100,7 @@ const KPI_TOOLTIPS = {
   },
   leads_urgentes: {
     title: 'Leads urgentes',
-    whatIs: 'Quantidade de leads abertos com urgencia alta.',
+    whatIs: 'Quantidade de leads com urgencia alta ou media.',
     purpose: 'Indicar demandas que exigem acao imediata.',
     observe: 'Priorize contato rapido para evitar perda de oportunidade.',
   },
@@ -125,13 +125,19 @@ const PIPELINE_TOOLTIPS = {
     purpose: 'Identificar o que precisa do primeiro contato.',
     observe: 'Nao deixe acumular por muito tempo.',
   },
-  chamado: {
-    title: 'Chamado',
+  contatado: {
+    title: 'Contatado',
     whatIs: 'Lead em contato ativo com o time comercial.',
     purpose: 'Acompanhar negociacoes em andamento.',
     observe: 'Valide se ha proxima acao definida para cada lead.',
   },
-  'proposta enviada': {
+  qualificado: {
+    title: 'Qualificado',
+    whatIs: 'Lead validado e pronto para gerar orcamento.',
+    purpose: 'Garantir qualidade antes da fase de negociacao.',
+    observe: 'Use esta etapa para acionar o botao Gerar orcamento.',
+  },
+  proposta_enviada: {
     title: 'Proposta enviada',
     whatIs: 'Lead que ja recebeu proposta comercial.',
     purpose: 'Monitorar etapa de decisao do cliente.',
@@ -242,7 +248,7 @@ export default function DashboardPage() {
   const metricCards = [
     { id: 'leads_mes', label: 'Leads no mes', value: m.leadsMes, icon: Users, onClick: () => router.push('/leads'), title: 'Abrir tela de leads' },
     { id: 'orcamentos_aberto', label: 'Orcamentos em aberto', value: fmtBRL(m.orcamentosAbertos), icon: Wallet, onClick: () => router.push('/orcamentos?abertos=1'), title: 'Abrir orcamentos em aberto' },
-    { id: 'receita_fechada_mes', label: 'Receita fechada no mes', value: fmtBRL(m.receitaFechadaMes), icon: CircleDollarSign, onClick: () => router.push('/orcamentos?status_orcamento=aprovado'), title: 'Abrir orcamentos fechados (aprovados)' },
+    { id: 'receita_fechada_mes', label: 'Receita fechada no mes', value: fmtBRL(m.receitaFechadaMes), icon: CircleDollarSign, onClick: () => router.push('/pipeline'), title: 'Abrir pipeline e revisar fechamentos' },
     { id: 'ticket_medio', label: 'Ticket medio', value: fmtBRL(m.ticketMedio), icon: BadgeDollarSign, onClick: () => router.push('/orcamentos'), title: 'Abrir tela de orcamentos' },
     { id: 'taxa_conversao', label: 'Taxa de conversao', value: fmtPercent(m.taxaConversao), icon: Percent, onClick: () => router.push('/pipeline'), title: 'Abrir pipeline' },
     { id: 'leads_urgentes', label: 'Leads urgentes', value: m.leadsUrgentes, icon: Siren, onClick: () => router.push('/leads?urgencia=alta'), title: 'Filtrar leads urgentes' },
@@ -254,15 +260,17 @@ export default function DashboardPage() {
 
   const pipelineLabelMap = {
     novo: 'Novo',
-    chamado: 'Em contato',
-    'proposta enviada': 'Proposta enviada',
+    contatado: 'Contatado',
+    qualificado: 'Qualificado',
+    proposta_enviada: 'Proposta enviada',
     fechado: 'Fechado',
     perdido: 'Perdido',
   };
   const pipelineFallback = [
     { status: 'novo', total: 0 },
-    { status: 'chamado', total: 0 },
-    { status: 'proposta enviada', total: 0 },
+    { status: 'contatado', total: 0 },
+    { status: 'qualificado', total: 0 },
+    { status: 'proposta_enviada', total: 0 },
     { status: 'fechado', total: 0 },
     { status: 'perdido', total: 0 },
   ];
@@ -285,7 +293,7 @@ export default function DashboardPage() {
       value: lists.orcSemRevisao.length,
       hint: 'Pendentes de validacao comercial',
       tone: 'yellow',
-      onClick: () => router.push('/orcamentos?status_orcamento=pendente_revisao'),
+      onClick: () => router.push('/orcamentos?status_orcamento=orcamento'),
       icon: CircleDollarSign,
     },
     {

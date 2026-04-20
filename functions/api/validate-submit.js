@@ -27,7 +27,7 @@ const recentSubmissionIds = new Map();
 const SUPABASE_TIMEOUT_MS = 12000;
 const SUBMISSION_ID_TTL_MS = 1000 * 60 * 30;
 const STATUS_PADRAO = "novo";
-const STATUS_ORCAMENTO_PADRAO = "pendente_revisao";
+const STATUS_ORCAMENTO_PADRAO = "orcamento";
 const DEFAULT_SCORE_WEIGHTS = {
   urgenciaAlta: 18,
   fluxoRecorrente: 20,

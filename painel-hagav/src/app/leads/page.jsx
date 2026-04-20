@@ -11,6 +11,7 @@ import { fetchLeads } from '@/lib/supabase';
 import { LEAD_STATUS_LABELS } from '@/lib/utils';
 
 const FLUXOS = ['', 'DU', 'DR', 'WhatsApp', 'Contato'];
+const LEAD_FILTER_STATUSES = ['novo', 'contatado', 'qualificado', 'descartado'];
 const UPDATE_TOOLTIP = {
   title: 'Atualizar',
   whatIs: 'Recarrega a lista de leads com os filtros atuais.',
@@ -76,7 +77,12 @@ export default function LeadsPage() {
   }, [load]);
 
   function handleUpdated(updated) {
-    setLeads((prev) => prev.map((lead) => (lead.id === updated.id ? updated : lead)));
+    setLeads((prev) => {
+      const next = prev
+        .map((lead) => (lead.id === updated.id ? updated : lead))
+        .filter((lead) => LEAD_FILTER_STATUSES.includes(String(lead.status || '').toLowerCase()));
+      return next;
+    });
     setFeedback('Lead salvo com sucesso.');
     setTimeout(() => setFeedback(''), 2500);
   }
@@ -85,7 +91,7 @@ export default function LeadsPage() {
   const quentes = leads.filter((lead) => lead.temperatura === 'Quente').length;
   const urgentes = leads.filter((lead) => lead.urgencia === 'alta').length;
   const followupLateCount = leads.filter((lead) => {
-    if (lead.status === 'fechado' || lead.status === 'perdido') return false;
+    if (lead.status === 'fechado' || lead.status === 'perdido' || lead.status === 'descartado') return false;
     const now = Date.now();
     const nextDate = lead.proximo_followup_em ? new Date(lead.proximo_followup_em).getTime() : null;
     if (Number.isFinite(nextDate)) return nextDate < now;
@@ -153,8 +159,8 @@ export default function LeadsPage() {
 
         <select value={status} onChange={(e) => setStatus(e.target.value)} className="hselect">
           <option value="">Todos os status</option>
-          {Object.entries(LEAD_STATUS_LABELS).map(([value, label]) => (
-            <option key={value} value={value}>{label}</option>
+          {LEAD_FILTER_STATUSES.map((value) => (
+            <option key={value} value={value}>{LEAD_STATUS_LABELS[value] || value}</option>
           ))}
         </select>
 

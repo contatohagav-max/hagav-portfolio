@@ -1,13 +1,14 @@
 'use client';
 
 import { useState } from 'react';
-import { X, Save, Loader2, MessageCircle, ExternalLink, AlertTriangle } from 'lucide-react';
+import { X, Save, Loader2, MessageCircle, ExternalLink, AlertTriangle, CheckCircle2, Send, Ban } from 'lucide-react';
 import { OrcStatusBadge, PrioridadeBadge, UrgenciaBadge, TemperaturaBadge } from '@/components/ui/StatusBadge';
 import EduTooltip from '@/components/ui/EduTooltip';
+import Modal from '@/components/ui/Modal';
 import { updateOrcamento } from '@/lib/supabase';
 import { fmtDateTime, fmtBRL, whatsappLink, ORC_STATUS_LABELS } from '@/lib/utils';
 
-const ORC_STATUSES = Object.keys(ORC_STATUS_LABELS);
+const ORC_STATUSES = ['orcamento', 'proposta_enviada', 'ajustando', 'aprovado', 'perdido'];
 const WHATSAPP_TOOLTIP = {
   title: 'WhatsApp',
   whatIs: 'Abre o contato direto do cliente no WhatsApp.',
@@ -70,8 +71,20 @@ function extractReferenceUrl(value) {
   return match[0].replace(/[),.;]+$/, '');
 }
 
+function parseDetalhes(value) {
+  if (!value) return {};
+  if (typeof value === 'object' && !Array.isArray(value)) return { ...value };
+  if (typeof value !== 'string') return {};
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
 export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
-  const [statusOrc, setStatusOrc] = useState(orc?.status_orcamento ?? 'pendente_revisao');
+  const [statusOrc, setStatusOrc] = useState(orc?.status_orcamento ?? 'orcamento');
   const [precoFinal, setPrecoFinal] = useState(orc?.preco_final ?? 0);
   const [obsInternas, setObsInternas] = useState(orc?.observacoes_internas ?? '');
   const [urgencia, setUrgencia] = useState(orc?.urgencia ?? 'media');
@@ -80,6 +93,15 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
   const [responsavel, setResponsavel] = useState(orc?.responsavel ?? '');
   const [followup, setFollowup] = useState(toDateTimeLocal(orc?.proximo_followup_em));
   const [referenceExpanded, setReferenceExpanded] = useState(false);
+  const [obsExpanded, setObsExpanded] = useState(false);
+  const [closeModalOpen, setCloseModalOpen] = useState(false);
+  const [contratoValorFinal, setContratoValorFinal] = useState(String(orc?.preco_final || orc?.valor_sugerido || 0));
+  const [contratoInicio, setContratoInicio] = useState('');
+  const [contratoDuracao, setContratoDuracao] = useState('12');
+  const [contratoVencimento, setContratoVencimento] = useState('');
+  const [contratoObs, setContratoObs] = useState('');
+  const [contratoFormaPagamento, setContratoFormaPagamento] = useState('');
+  const [contratoRecorrente, setContratoRecorrente] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -123,6 +145,13 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
   const referencePreview = !referenceExpanded && referenceText.length > 84
     ? `${referenceText.slice(0, 84)}...`
     : referenceText;
+  const observacoesText = normalizeText(orc.observacoes || '');
+  const canExpandObs = observacoesText.length > 220;
+  const observacoesPreview = !obsExpanded && canExpandObs
+    ? `${observacoesText.slice(0, 220)}...`
+    : observacoesText;
+  const statusOptions = Array.from(new Set([...ORC_STATUSES, statusOrc || 'orcamento']));
+  const canCloseContract = ['aprovado', 'proposta_enviada', 'ajustando', 'orcamento'].includes(String(statusOrc || '').toLowerCase());
 
   async function handleSave() {
     setSaving(true);
@@ -142,6 +171,86 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
       onClose();
     } catch (err) {
       setError(err.message ?? 'Erro ao salvar.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleQuickStatus(nextStatus) {
+    setStatusOrc(nextStatus);
+    setSaving(true);
+    setError('');
+    try {
+      const updated = await updateOrcamento(orc.id, {
+        status_orcamento: nextStatus,
+        preco_final: Number(precoFinal),
+        observacoes_internas: obsInternas,
+        urgencia,
+        prioridade,
+        proxima_acao: proximaAcao,
+        responsavel,
+        proximo_followup_em: fromDateTimeLocal(followup),
+      });
+      onUpdated?.(updated);
+      onClose();
+    } catch (err) {
+      setError(err.message ?? 'Erro ao atualizar status.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleCloseContract() {
+    const valorFinal = Number(contratoValorFinal);
+    if (!Number.isFinite(valorFinal) || valorFinal <= 0) {
+      setError('Informe um valor final valido para fechar o contrato.');
+      return;
+    }
+
+    const nowIso = new Date().toISOString();
+    const detalhesAtual = parseDetalhes(orc.detalhes);
+    const renovacaoDate = contratoVencimento
+      ? (() => {
+        const date = new Date(`${contratoVencimento}T12:00:00`);
+        if (Number.isNaN(date.getTime())) return null;
+        date.setDate(date.getDate() - 15);
+        return date.toISOString();
+      })()
+      : null;
+
+    setSaving(true);
+    setError('');
+    try {
+      const updated = await updateOrcamento(orc.id, {
+        status_orcamento: 'fechado',
+        preco_final: valorFinal,
+        valor_fechado: valorFinal,
+        fechado_em: nowIso,
+        validade_ate: contratoVencimento || null,
+        observacoes_internas: [obsInternas, contratoObs].filter(Boolean).join('\n').trim(),
+        responsavel,
+        proximo_followup_em: renovacaoDate || fromDateTimeLocal(followup),
+        detalhes: {
+          ...detalhesAtual,
+          contrato: {
+            valor_final: valorFinal,
+            data_inicio: contratoInicio || null,
+            duracao_meses: Number(contratoDuracao || 0) || null,
+            vencimento: contratoVencimento || null,
+            observacoes: contratoObs || '',
+            responsavel: responsavel || '',
+            forma_pagamento: contratoFormaPagamento || '',
+            recorrente: Boolean(contratoRecorrente),
+            gerado_em: nowIso,
+            renovacao_alerta_em: renovacaoDate,
+          },
+        },
+      });
+      onUpdated?.(updated);
+      setCloseModalOpen(false);
+      onClose();
+    } catch (err) {
+      setError(err.message ?? 'Erro ao fechar contrato.');
     } finally {
       setSaving(false);
     }
@@ -186,9 +295,9 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
           </div>
 
           <div className="flex flex-wrap gap-2">
-            <OrcStatusBadge status={orc.status_orcamento} />
-            <UrgenciaBadge urgencia={orc.urgencia} />
-            <PrioridadeBadge prioridade={orc.prioridade} />
+            <OrcStatusBadge status={statusOrc} />
+            <UrgenciaBadge urgencia={urgencia} />
+            <PrioridadeBadge prioridade={prioridade} />
             <TemperaturaBadge temperatura={orc.temperatura} />
             <span className="badge bg-hagav-gold/15 text-hagav-gold border-hagav-gold/30">Score {orc.score_lead ?? 0}</span>
           </div>
@@ -209,23 +318,6 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
               <p className="text-sm text-hagav-light whitespace-pre-wrap leading-relaxed">{orc.resumo_orcamento}</p>
             </div>
           )}
-
-          <div>
-            <p className="text-xs text-hagav-gray uppercase tracking-wider mb-2">Motor de calculo</p>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-              <InfoRow label="Complexidade" value={orc.complexidade_nivel || '—'} />
-              <InfoRow label="Mult. complexidade" value={Number(orc.multiplicador_complexidade || 1).toFixed(2)} />
-              <InfoRow label="Mult. urgencia" value={Number(orc.multiplicador_urgencia || 1).toFixed(2)} />
-              <InfoRow label="Desc. volume" value={`${Number(orc.desconto_volume_percent || 0).toFixed(1)}%`} />
-              <InfoRow label="Ajuste referencia" value={`${Number(orc.ajuste_referencia_percent || 0).toFixed(1)}%`} />
-              <InfoRow label="Ajuste multicamera" value={`${Number(orc.ajuste_multicamera_percent || 0).toFixed(1)}%`} />
-            </div>
-            {orc.motivo_calculo ? (
-              <div className="bg-hagav-surface border border-hagav-border rounded-lg p-3 mt-2 text-xs text-hagav-gray whitespace-pre-wrap">
-                {orc.motivo_calculo}
-              </div>
-            ) : null}
-          </div>
 
           <div>
             <p className="text-xs text-hagav-gray uppercase tracking-wider mb-2">Dados para operacao</p>
@@ -289,11 +381,20 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
             ) : null}
           </div>
 
-          {orc.observacoes && (
+          {observacoesText && (
             <div>
               <p className="text-xs text-hagav-gray uppercase tracking-wider mb-2">Observacoes do cliente</p>
               <div className="bg-hagav-surface border border-hagav-border rounded-lg p-3 text-sm text-hagav-light whitespace-pre-wrap">
-                {orc.observacoes}
+                {observacoesPreview}
+                {canExpandObs && (
+                  <button
+                    type="button"
+                    onClick={() => setObsExpanded((prev) => !prev)}
+                    className="block mt-2 text-xs text-hagav-gold hover:text-hagav-gold-light"
+                  >
+                    {obsExpanded ? 'Ocultar observacoes' : 'Ver observacoes completas'}
+                  </button>
+                )}
               </div>
             </div>
           )}
@@ -305,8 +406,8 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
               <div>
                 <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Status</label>
                 <select value={statusOrc} onChange={(e) => setStatusOrc(e.target.value)} className="hselect w-full">
-                  {ORC_STATUSES.map((status) => (
-                    <option key={status} value={status}>{ORC_STATUS_LABELS[status]}</option>
+                  {statusOptions.map((status) => (
+                    <option key={status} value={status}>{ORC_STATUS_LABELS[status] || status}</option>
                   ))}
                 </select>
               </div>
@@ -391,15 +492,36 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
           )}
         </div>
 
-        <div className="px-6 py-4 border-t border-hagav-border shrink-0 flex items-center gap-2">
+        <div className="px-6 py-4 border-t border-hagav-border shrink-0 flex items-center gap-2 flex-wrap">
           <button
             type="button"
-            disabled
-            title="Geracao de proposta/PDF entra na proxima etapa"
-            className="btn-ghost btn-sm opacity-60 cursor-not-allowed"
+            onClick={() => handleQuickStatus('proposta_enviada')}
+            disabled={saving}
+            className="btn-ghost btn-sm"
           >
-            Gerar proposta (em breve)
+            <Send size={13} />
+            Enviar proposta
           </button>
+          <button
+            type="button"
+            onClick={() => handleQuickStatus('perdido')}
+            disabled={saving}
+            className="btn-ghost btn-sm"
+          >
+            <Ban size={13} />
+            Marcar perdido
+          </button>
+          {canCloseContract && (
+            <button
+              type="button"
+              onClick={() => setCloseModalOpen(true)}
+              disabled={saving}
+              className="btn-gold btn-sm"
+            >
+              <CheckCircle2 size={13} />
+              Fechar contrato
+            </button>
+          )}
           <EduTooltip {...WHATSAPP_TOOLTIP} className="w-auto">
             <a href={waLink} target="_blank" rel="noreferrer" className="btn-ghost btn-sm">
               <MessageCircle size={13} />
@@ -413,6 +535,60 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
           </button>
         </div>
       </aside>
+
+      <Modal open={closeModalOpen} onClose={() => setCloseModalOpen(false)} title="Fechamento comercial" width="max-w-2xl">
+        <div className="space-y-3">
+          <p className="text-xs text-hagav-gray">
+            Informe os dados comerciais para gerar contrato e mover o deal para fechado.
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+            <div>
+              <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Valor final (R$)</label>
+              <input type="number" min="0" step="0.01" value={contratoValorFinal} onChange={(e) => setContratoValorFinal(e.target.value)} className="hinput w-full" />
+            </div>
+            <div>
+              <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Data inicio</label>
+              <input type="date" value={contratoInicio} onChange={(e) => setContratoInicio(e.target.value)} className="hinput w-full" />
+            </div>
+            <div>
+              <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Duracao (meses)</label>
+              <input type="number" min="1" step="1" value={contratoDuracao} onChange={(e) => setContratoDuracao(e.target.value)} className="hinput w-full" />
+            </div>
+            <div>
+              <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Vencimento</label>
+              <input type="date" value={contratoVencimento} onChange={(e) => setContratoVencimento(e.target.value)} className="hinput w-full" />
+            </div>
+            <div>
+              <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Responsavel</label>
+              <input type="text" value={responsavel} onChange={(e) => setResponsavel(e.target.value)} className="hinput w-full" placeholder="Ex.: Vinicius" />
+            </div>
+            <div>
+              <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Forma de pagamento</label>
+              <input type="text" value={contratoFormaPagamento} onChange={(e) => setContratoFormaPagamento(e.target.value)} className="hinput w-full" placeholder="PIX, boleto, cartao..." />
+            </div>
+            <div className="md:col-span-2">
+              <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Observacoes do contrato</label>
+              <textarea rows={3} value={contratoObs} onChange={(e) => setContratoObs(e.target.value)} className="hinput w-full resize-none" placeholder="Condicoes comerciais, observacoes e combinados." />
+            </div>
+          </div>
+          <label className="flex items-center gap-2 text-sm text-hagav-light">
+            <input
+              type="checkbox"
+              checked={contratoRecorrente}
+              onChange={(e) => setContratoRecorrente(e.target.checked)}
+              className="rounded border-hagav-border bg-hagav-surface"
+            />
+            Contrato recorrente
+          </label>
+          <div className="pt-2 flex items-center justify-end gap-2">
+            <button type="button" className="btn-ghost btn-sm" onClick={() => setCloseModalOpen(false)} disabled={saving}>Cancelar</button>
+            <button type="button" className="btn-gold btn-sm" onClick={handleCloseContract} disabled={saving}>
+              {saving ? <Loader2 size={13} className="animate-spin" /> : <CheckCircle2 size={13} />}
+              Gerar contrato
+            </button>
+          </div>
+        </div>
+      </Modal>
     </>
   );
 }

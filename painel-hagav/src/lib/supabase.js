@@ -164,11 +164,7 @@ export async function fetchLeads({
   if (status) {
     query = query.eq('status', mapLegacyLeadStatusToDeal(status, DEAL_STATUS.NOVO));
   } else {
-    const defaultLeadStatuses = Array.from(new Set([
-      ...DEAL_STATUS_GROUPS.leads,
-      DEAL_STATUS.ORCAMENTO,
-    ]));
-    query = query.in('status', defaultLeadStatuses);
+    query = query.in('status', DEAL_STATUS_GROUPS.leads);
   }
 
   if (origem) query = query.eq('origem', origem);
@@ -198,9 +194,12 @@ export async function fetchPipelineDeals({ search, limit = 1200 } = {}) {
 
   const pipelineStatuses = [
     DEAL_STATUS.NOVO,
+    DEAL_STATUS.CONTATADO,
     DEAL_STATUS.QUALIFICADO,
     DEAL_STATUS.ORCAMENTO,
     DEAL_STATUS.PROPOSTA_ENVIADA,
+    DEAL_STATUS.AJUSTANDO,
+    DEAL_STATUS.APROVADO,
     DEAL_STATUS.FECHADO,
     DEAL_STATUS.PERDIDO,
   ];
@@ -413,6 +412,8 @@ export async function fetchDashboardMetrics() {
     .filter((row) => [
       DEAL_STATUS.ORCAMENTO,
       DEAL_STATUS.PROPOSTA_ENVIADA,
+      DEAL_STATUS.AJUSTANDO,
+      DEAL_STATUS.APROVADO,
       DEAL_STATUS.FECHADO,
       DEAL_STATUS.PERDIDO,
     ].includes(normalizeDealStatus(row?.status, DEAL_STATUS.NOVO)))

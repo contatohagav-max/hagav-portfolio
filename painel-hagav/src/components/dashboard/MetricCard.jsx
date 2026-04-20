@@ -19,7 +19,7 @@ export default function MetricCard({
       disabled={!interactive}
       title={title || ''}
       className={classNames(
-        'metric-card group text-left',
+        'metric-card group text-left outline-none focus:outline-none focus-visible:ring-1 focus-visible:ring-hagav-gold/35',
         accent && 'border-hagav-gold/30 shadow-gold',
         interactive ? 'cursor-pointer hover:border-hagav-gold/25 transition-colors' : 'cursor-default',
       )}

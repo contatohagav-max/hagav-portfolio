@@ -10,41 +10,51 @@ const HIGH_VALUE_KEYWORDS = [
   'recorrente'
 ];
 
-const STATUS_ABERTO = new Set(['novo', 'em_contato', 'proposta']);
+const STATUS_ABERTO = new Set(['novo', 'contatado', 'qualificado', 'orcamento', 'proposta_enviada', 'ajustando', 'aprovado']);
 const STATUS_FECHADO = new Set(['fechado']);
-const STATUS_PERDIDO = new Set(['perdido']);
+const STATUS_PERDIDO = new Set(['perdido', 'descartado']);
 const URGENCIA_OPERACIONAL = new Set(['alta', 'media']);
 
-const ORC_REVISAO = new Set(['pendente_revisao', 'em_revisao']);
+const ORC_REVISAO = new Set(['orcamento', 'ajustando']);
 
 export const DEAL_STATUS = Object.freeze({
   NOVO: 'novo',
+  CONTATADO: 'contatado',
   QUALIFICADO: 'qualificado',
+  DESCARTADO: 'descartado',
   ORCAMENTO: 'orcamento',
   PROPOSTA_ENVIADA: 'proposta_enviada',
+  AJUSTANDO: 'ajustando',
+  APROVADO: 'aprovado',
   FECHADO: 'fechado',
   PERDIDO: 'perdido',
 });
 
 export const DEAL_STATUS_GROUPS = Object.freeze({
-  leads: [DEAL_STATUS.NOVO, DEAL_STATUS.QUALIFICADO],
-  orcamentos: [DEAL_STATUS.ORCAMENTO, DEAL_STATUS.PROPOSTA_ENVIADA],
-  pipeline: [DEAL_STATUS.PROPOSTA_ENVIADA, DEAL_STATUS.FECHADO, DEAL_STATUS.PERDIDO],
-  aberto: [DEAL_STATUS.ORCAMENTO, DEAL_STATUS.PROPOSTA_ENVIADA],
+  leads: [DEAL_STATUS.NOVO, DEAL_STATUS.CONTATADO, DEAL_STATUS.QUALIFICADO, DEAL_STATUS.DESCARTADO],
+  orcamentos: [DEAL_STATUS.ORCAMENTO, DEAL_STATUS.PROPOSTA_ENVIADA, DEAL_STATUS.AJUSTANDO, DEAL_STATUS.APROVADO, DEAL_STATUS.PERDIDO],
+  pipeline: [DEAL_STATUS.NOVO, DEAL_STATUS.CONTATADO, DEAL_STATUS.QUALIFICADO, DEAL_STATUS.PROPOSTA_ENVIADA, DEAL_STATUS.FECHADO, DEAL_STATUS.PERDIDO],
+  aberto: [DEAL_STATUS.ORCAMENTO, DEAL_STATUS.PROPOSTA_ENVIADA, DEAL_STATUS.AJUSTANDO],
   fechado: [DEAL_STATUS.FECHADO],
 });
 
 const LEGACY_LEAD_TO_DEAL = Object.freeze({
   novo: DEAL_STATUS.NOVO,
-  chamado: DEAL_STATUS.QUALIFICADO,
-  contatado: DEAL_STATUS.QUALIFICADO,
-  em_contato: DEAL_STATUS.QUALIFICADO,
+  chamado: DEAL_STATUS.CONTATADO,
+  contatado: DEAL_STATUS.CONTATADO,
+  em_contato: DEAL_STATUS.CONTATADO,
   qualificado: DEAL_STATUS.QUALIFICADO,
+  descartado: DEAL_STATUS.DESCARTADO,
+  spam: DEAL_STATUS.DESCARTADO,
+  lixo: DEAL_STATUS.DESCARTADO,
+  fake: DEAL_STATUS.DESCARTADO,
   proposta: DEAL_STATUS.PROPOSTA_ENVIADA,
   proposta_enviada: DEAL_STATUS.PROPOSTA_ENVIADA,
   orcamento: DEAL_STATUS.ORCAMENTO,
+  ajustando: DEAL_STATUS.AJUSTANDO,
+  aprovado: DEAL_STATUS.APROVADO,
   fechado: DEAL_STATUS.FECHADO,
-  aprovado: DEAL_STATUS.FECHADO,
+  ganho: DEAL_STATUS.FECHADO,
   perdido: DEAL_STATUS.PERDIDO,
   arquivado: DEAL_STATUS.PERDIDO,
   cancelado: DEAL_STATUS.PERDIDO,
@@ -54,11 +64,16 @@ const LEGACY_ORC_TO_DEAL = Object.freeze({
   pendente_revisao: DEAL_STATUS.ORCAMENTO,
   em_revisao: DEAL_STATUS.ORCAMENTO,
   orcamento: DEAL_STATUS.ORCAMENTO,
+  em_negociacao: DEAL_STATUS.AJUSTANDO,
+  negociacao: DEAL_STATUS.AJUSTANDO,
+  ajustando: DEAL_STATUS.AJUSTANDO,
   enviado: DEAL_STATUS.PROPOSTA_ENVIADA,
   proposta_enviada: DEAL_STATUS.PROPOSTA_ENVIADA,
-  aprovado: DEAL_STATUS.FECHADO,
+  proposta: DEAL_STATUS.PROPOSTA_ENVIADA,
+  aprovado: DEAL_STATUS.APROVADO,
   ganho: DEAL_STATUS.FECHADO,
   fechado: DEAL_STATUS.FECHADO,
+  descartado: DEAL_STATUS.DESCARTADO,
   arquivado: DEAL_STATUS.PERDIDO,
   cancelado: DEAL_STATUS.PERDIDO,
   perdido: DEAL_STATUS.PERDIDO,
@@ -66,20 +81,28 @@ const LEGACY_ORC_TO_DEAL = Object.freeze({
 
 const DEAL_TO_LEAD_STATUS = Object.freeze({
   [DEAL_STATUS.NOVO]: 'novo',
-  [DEAL_STATUS.QUALIFICADO]: 'chamado',
-  [DEAL_STATUS.ORCAMENTO]: 'proposta enviada',
-  [DEAL_STATUS.PROPOSTA_ENVIADA]: 'proposta enviada',
+  [DEAL_STATUS.CONTATADO]: 'contatado',
+  [DEAL_STATUS.QUALIFICADO]: 'qualificado',
+  [DEAL_STATUS.DESCARTADO]: 'descartado',
+  [DEAL_STATUS.ORCAMENTO]: 'orcamento',
+  [DEAL_STATUS.PROPOSTA_ENVIADA]: 'proposta_enviada',
+  [DEAL_STATUS.AJUSTANDO]: 'ajustando',
+  [DEAL_STATUS.APROVADO]: 'aprovado',
   [DEAL_STATUS.FECHADO]: 'fechado',
   [DEAL_STATUS.PERDIDO]: 'perdido',
 });
 
 const DEAL_TO_ORC_STATUS = Object.freeze({
-  [DEAL_STATUS.NOVO]: 'pendente_revisao',
-  [DEAL_STATUS.QUALIFICADO]: 'pendente_revisao',
-  [DEAL_STATUS.ORCAMENTO]: 'em_revisao',
-  [DEAL_STATUS.PROPOSTA_ENVIADA]: 'enviado',
+  [DEAL_STATUS.NOVO]: 'orcamento',
+  [DEAL_STATUS.CONTATADO]: 'orcamento',
+  [DEAL_STATUS.QUALIFICADO]: 'orcamento',
+  [DEAL_STATUS.DESCARTADO]: 'perdido',
+  [DEAL_STATUS.ORCAMENTO]: 'orcamento',
+  [DEAL_STATUS.PROPOSTA_ENVIADA]: 'proposta_enviada',
+  [DEAL_STATUS.AJUSTANDO]: 'ajustando',
+  [DEAL_STATUS.APROVADO]: 'aprovado',
   [DEAL_STATUS.FECHADO]: 'aprovado',
-  [DEAL_STATUS.PERDIDO]: 'arquivado',
+  [DEAL_STATUS.PERDIDO]: 'perdido',
 });
 
 // Definicao oficial de KPI para orcamentos:
@@ -87,48 +110,48 @@ const DEAL_TO_ORC_STATUS = Object.freeze({
 // - Fechado: receita efetivamente convertida
 // - Excluido: oportunidades encerradas sem ganho
 const ORCAMENTO_KPI_STATUS_ABERTO = new Set([
-  'pendente_revisao',
-  'em_revisao',
-  'pendente',
-  'proposta',
+  'orcamento',
   'proposta_enviada',
-  'enviado',
-  'em_negociacao',
-  'negociacao',
-  'aberto',
+  'ajustando',
 ]);
 
 const ORCAMENTO_KPI_STATUS_FECHADO = new Set([
-  'aprovado',
-  'ganho',
   'fechado',
 ]);
 
 const ORCAMENTO_KPI_STATUS_EXCLUIDO = new Set([
   'perdido',
-  'cancelado',
-  'reprovado',
-  'recusado',
+  'descartado',
 ]);
 
 const LEAD_STATUS_ALIAS = {
   novo: 'novo',
-  chamado: 'em_contato',
-  contatado: 'em_contato',
-  em_contato: 'em_contato',
-  proposta_enviada: 'proposta',
-  proposta: 'proposta',
+  chamado: 'contatado',
+  contatado: 'contatado',
+  em_contato: 'contatado',
+  qualificado: 'qualificado',
+  descartado: 'descartado',
+  orcamento: 'orcamento',
+  proposta_enviada: 'proposta_enviada',
+  proposta: 'proposta_enviada',
+  ajustando: 'ajustando',
+  aprovado: 'aprovado',
   fechado: 'fechado',
   perdido: 'perdido',
 };
 
 const LEAD_STATUS_PIPELINE_ALIAS = {
   novo: 'novo',
-  chamado: 'chamado',
-  contatado: 'chamado',
-  em_contato: 'chamado',
-  proposta_enviada: 'proposta enviada',
-  proposta: 'proposta enviada',
+  chamado: 'contatado',
+  contatado: 'contatado',
+  em_contato: 'contatado',
+  qualificado: 'qualificado',
+  orcamento: 'proposta_enviada',
+  proposta_enviada: 'proposta_enviada',
+  proposta: 'proposta_enviada',
+  ajustando: 'proposta_enviada',
+  aprovado: 'proposta_enviada',
+  descartado: 'perdido',
   fechado: 'fechado',
   perdido: 'perdido',
 };
@@ -156,14 +179,17 @@ export function getDealKpiPolicy() {
   return {
     aberto: {
       included: [...DEAL_STATUS_GROUPS.aberto],
-      excluded: [DEAL_STATUS.FECHADO, DEAL_STATUS.PERDIDO],
+      excluded: [DEAL_STATUS.FECHADO, DEAL_STATUS.PERDIDO, DEAL_STATUS.DESCARTADO, DEAL_STATUS.APROVADO],
     },
     fechado: {
-      included: [...DEAL_STATUS_GROUPS.fechado, 'aprovado'],
+      included: [...DEAL_STATUS_GROUPS.fechado],
       excluded: [
         ...DEAL_STATUS_GROUPS.aberto,
         DEAL_STATUS.NOVO,
+        DEAL_STATUS.CONTATADO,
         DEAL_STATUS.QUALIFICADO,
+        DEAL_STATUS.APROVADO,
+        DEAL_STATUS.DESCARTADO,
         DEAL_STATUS.PERDIDO,
       ],
     },
@@ -323,7 +349,7 @@ export function mapDealStatusToLegacyLead(status, fallback = 'novo') {
   return DEAL_TO_LEAD_STATUS[key] || fallback;
 }
 
-export function mapDealStatusToLegacyOrcamento(status, fallback = 'pendente_revisao') {
+export function mapDealStatusToLegacyOrcamento(status, fallback = 'orcamento') {
   const key = normalizeDealStatus(status, '');
   return DEAL_TO_ORC_STATUS[key] || fallback;
 }
@@ -349,7 +375,7 @@ function isLeadPerdidoStatus(status) {
 function isLeadAbertoStatus(status) {
   const normalized = normalizeLeadStatus(status);
   if (!normalized) return false;
-  return normalized !== 'fechado' && normalized !== 'perdido';
+  return normalized !== 'fechado' && normalized !== 'perdido' && normalized !== 'descartado';
 }
 
 function isOrcamentoFechado(orcamento) {
@@ -366,6 +392,7 @@ function resolveOrcamentoKpiStatus(orcamento) {
 
   if (rawStatus && ORCAMENTO_KPI_STATUS_FECHADO.has(rawStatus)) return 'fechado';
   if (rawStatus && ORCAMENTO_KPI_STATUS_EXCLUIDO.has(rawStatus)) return 'perdido';
+  if (rawStatus === 'aprovado') return 'aprovado';
   if (rawStatus && ORCAMENTO_KPI_STATUS_ABERTO.has(rawStatus)) {
     // Regra de conciliacao: quando Pipeline ja marcou fechamento/perda,
     // nao manter KPI financeiro em "aberto" por atraso de sincronizacao.
@@ -375,7 +402,7 @@ function resolveOrcamentoKpiStatus(orcamento) {
   }
 
   // Fallback defensivo para status legado/fora do padrao.
-  if (rawStatus && /(aprov|ganh|fech)/.test(rawStatus)) return 'fechado';
+  if (rawStatus && /(ganh|fech)/.test(rawStatus)) return 'fechado';
   if (rawStatus && /(perd|cancel|recus|reprov)/.test(rawStatus)) return 'perdido';
   if (rawStatus) {
     if (lead === 'fechado') return 'fechado';
@@ -390,7 +417,8 @@ function resolveOrcamentoKpiStatus(orcamento) {
 }
 
 function getOrcamentoValorFechado(orcamento) {
-  return toNumber(orcamento?.preco_final, 0)
+  return toNumber(orcamento?.valor_fechado, 0)
+    || toNumber(orcamento?.preco_final, 0)
     || toNumber(orcamento?.valor_sugerido, 0)
     || toNumber(orcamento?.preco_base, 0)
     || toNumber(orcamento?.valor_estimado, 0);
@@ -1342,57 +1370,52 @@ function groupBy(items, getKey, getValue = () => 1, reducer = (acc, v) => acc + 
 export function buildDashboardInsights(rawLeads = [], rawOrcamentos = []) {
   const leads = rawLeads.map(enrichLeadRecord);
   const orcamentos = rawOrcamentos.map(enrichOrcamentoRecord);
+  const leadTriageStatuses = new Set([DEAL_STATUS.NOVO, DEAL_STATUS.CONTATADO, DEAL_STATUS.QUALIFICADO]);
 
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
   const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
 
-  const leadsMes = leads.filter((lead) => {
+  const leadsMesTriagem = leads.filter((lead) => {
     const created = parseDateSafe(lead.created_at);
-    return inMonthRange(created, monthStart, monthEnd);
+    if (!inMonthRange(created, monthStart, monthEnd)) return false;
+    return leadTriageStatuses.has(normalizeDealStatus(lead.status, DEAL_STATUS.NOVO));
   });
 
-  const leadsFechadosMes = leadsMes.filter((lead) => isLeadFechadoStatus(lead.status));
+  const dealsMesAtivos = leads.filter((lead) => {
+    const created = parseDateSafe(lead.created_at);
+    if (!inMonthRange(created, monthStart, monthEnd)) return false;
+    return normalizeDealStatus(lead.status, DEAL_STATUS.NOVO) !== DEAL_STATUS.DESCARTADO;
+  });
+
+  const dealsFechadosMes = dealsMesAtivos.filter((lead) => isLeadFechadoStatus(lead.status));
 
   const orcamentosFechadosMes = orcamentos
     .filter((orc) => isOrcamentoFechado(orc))
     .filter((orc) => inMonthRange(getOrcamentoDateForFechamentoMes(orc), monthStart, monthEnd));
 
-  const receitaFechadaMesOrc = orcamentosFechadosMes
+  const receitaFechadaMes = orcamentosFechadosMes
     .reduce((sum, orc) => sum + getOrcamentoValorFechado(orc), 0);
-
-  const leadsFechadosMesComValor = leadsFechadosMes
-    .map((lead) => toNumber(lead?.valor_estimado, 0))
-    .filter((valor) => valor > 0);
-  const receitaFechadaMesLeads = leadsFechadosMesComValor
-    .reduce((sum, valor) => sum + valor, 0);
-
-  // Fallback operacional:
-  // Quando o funil (leads) ja indica "fechado", mas status financeiro do orcamento
-  // ainda nao sincronizou, usamos valor estimado do lead para nao zerar KPI.
-  const receitaFechadaMes = receitaFechadaMesOrc > 0
-    ? receitaFechadaMesOrc
-    : receitaFechadaMesLeads;
 
   const orcamentosAbertos = orcamentos
     .filter((orc) => isOrcamentoAberto(orc))
     .reduce((sum, orc) => sum + getOrcamentoValorAberto(orc), 0);
 
-  const ticketMedio = receitaFechadaMesOrc > 0
-    ? (orcamentosFechadosMes.length > 0 ? receitaFechadaMesOrc / orcamentosFechadosMes.length : 0)
-    : (leadsFechadosMesComValor.length > 0 ? receitaFechadaMesLeads / leadsFechadosMesComValor.length : 0);
+  const ticketMedio = orcamentosFechadosMes.length > 0
+    ? receitaFechadaMes / orcamentosFechadosMes.length
+    : 0;
 
-  const taxaConversao = leadsMes.length > 0
-    ? (leadsFechadosMes.length / leadsMes.length) * 100
+  const taxaConversao = dealsMesAtivos.length > 0
+    ? (dealsFechadosMes.length / dealsMesAtivos.length) * 100
     : 0;
 
   const leadsUrgentes = leads
     .filter((lead) => URGENCIA_OPERACIONAL.has(normalizeStatusKey(lead.urgencia)))
-    .filter((lead) => isLeadAbertoStatus(lead.status))
+    .filter((lead) => leadTriageStatuses.has(normalizeDealStatus(lead.status, DEAL_STATUS.NOVO)))
     .length;
   const followupAtrasado = leads.filter((lead) => isLeadFollowupLate(lead, now)).length;
 
-  const leadBaseTempoResposta = leadsMes.length > 0 ? leadsMes : leads;
+  const leadBaseTempoResposta = leadsMesTriagem.length > 0 ? leadsMesTriagem : leads;
   const temposResposta = leadBaseTempoResposta
     .map((lead) => {
       const created = parseDateSafe(lead.created_at);
@@ -1468,8 +1491,9 @@ export function buildDashboardInsights(rawLeads = [], rawOrcamentos = []) {
 
   const pipeline = [
     { status: 'novo', label: 'Novo' },
-    { status: 'chamado', label: 'Em contato' },
-    { status: 'proposta enviada', label: 'Proposta enviada' },
+    { status: 'contatado', label: 'Contatado' },
+    { status: 'qualificado', label: 'Qualificado' },
+    { status: 'proposta_enviada', label: 'Proposta enviada' },
     { status: 'fechado', label: 'Fechado' },
     { status: 'perdido', label: 'Perdido' },
   ].map((step) => ({
@@ -1482,8 +1506,25 @@ export function buildDashboardInsights(rawLeads = [], rawOrcamentos = []) {
     total: leads.filter((lead) => lead.urgencia === urg).length,
   }));
 
-  const ultimasEntradas = [
-    ...leads.map((lead) => ({
+  const ultimasEntradas = leads.map((lead) => {
+    const statusDeal = normalizeDealStatus(lead.status, DEAL_STATUS.NOVO);
+    const isOrcamentoStage = DEAL_STATUS_GROUPS.orcamentos.includes(statusDeal) || statusDeal === DEAL_STATUS.FECHADO;
+
+    if (isOrcamentoStage) {
+      return {
+        id: lead.id,
+        entryType: 'orcamento',
+        nome: lead.nome,
+        origem: lead.origem,
+        tipo: lead.servico || lead.fluxo || 'Orcamento',
+        valor_estimado: lead.valor_estimado || lead.preco_final || lead.preco_base || 0,
+        status_orcamento: mapDealStatusToLegacyOrcamento(statusDeal, 'orcamento'),
+        prioridade: lead.prioridade,
+        created_at: lead.created_at,
+      };
+    }
+
+    return {
       id: lead.id,
       entryType: 'lead',
       nome: lead.nome,
@@ -1493,19 +1534,8 @@ export function buildDashboardInsights(rawLeads = [], rawOrcamentos = []) {
       status: lead.status,
       prioridade: lead.prioridade,
       created_at: lead.created_at,
-    })),
-    ...orcamentos.map((orc) => ({
-      id: orc.id,
-      entryType: 'orcamento',
-      nome: orc.nome,
-      origem: orc.origem,
-      tipo: orc.servico || orc.fluxo || 'Orcamento',
-      valor_estimado: orc.valor_estimado || orc.preco_final || orc.preco_base || 0,
-      status_orcamento: orc.status_orcamento,
-      prioridade: orc.prioridade,
-      created_at: orc.created_at,
-    })),
-  ]
+    };
+  })
     .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
     .slice(0, 12);
 
@@ -1520,7 +1550,7 @@ export function buildDashboardInsights(rawLeads = [], rawOrcamentos = []) {
 
   return {
     metrics: {
-      leadsMes: leadsMes.length,
+      leadsMes: leadsMesTriagem.length,
       orcamentosAbertos,
       receitaFechadaMes,
       ticketMedio,
@@ -1566,8 +1596,8 @@ export const COMMERCIAL_DEFAULTS = {
   pricing: DEFAULT_PRICING_RULES,
   pipelineStatus: [
     DEAL_STATUS.NOVO,
+    DEAL_STATUS.CONTATADO,
     DEAL_STATUS.QUALIFICADO,
-    DEAL_STATUS.ORCAMENTO,
     DEAL_STATUS.PROPOSTA_ENVIADA,
     DEAL_STATUS.FECHADO,
     DEAL_STATUS.PERDIDO,

@@ -26,21 +26,21 @@ const NAV_TOOLTIPS = {
   },
   '/leads': {
     title: 'Leads',
-    whatIs: 'Lista de oportunidades recebidas.',
-    purpose: 'Qualificar contatos e definir proxima acao comercial.',
-    observe: 'Revise urgencia, prioridade e tempo sem contato.',
+    whatIs: 'Etapa de triagem e qualificacao dos novos contatos.',
+    purpose: 'Validar lead real antes de gerar orcamento.',
+    observe: 'Somente leads qualificados devem seguir para Orcamentos.',
   },
   '/orcamentos': {
     title: 'Orçamentos',
-    whatIs: 'Painel de propostas e valores em negociacao.',
-    purpose: 'Acompanhar revisao, fechamento e pendencias de cada proposta.',
-    observe: 'Monitore status, urgencia e campos incompletos.',
+    whatIs: 'Etapa comercial de proposta, ajuste e fechamento.',
+    purpose: 'Precificar, negociar e fechar contrato.',
+    observe: 'Mantenha foco em proposta_enviada, ajustando e aprovado.',
   },
   '/pipeline': {
     title: 'Pipeline',
     whatIs: 'Quadro visual das etapas do processo comercial.',
     purpose: 'Mover oportunidades com clareza de status.',
-    observe: 'Evite acúmulo em Novo e Proposta enviada.',
+    observe: 'Evite acúmulo em Novo, Contatado e Qualificado.',
   },
 };
 

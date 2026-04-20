@@ -17,20 +17,62 @@ import {
 } from '@dnd-kit/sortable';
 import { useDroppable } from '@dnd-kit/core';
 import KanbanCard from './KanbanCard';
+import EduTooltip from '@/components/ui/EduTooltip';
 import { KANBAN_COLUMNS, classNames } from '@/lib/utils';
 import { updateLead } from '@/lib/supabase';
 
+const PIPELINE_STAGE_TOOLTIPS = {
+  novo: {
+    title: 'Novo',
+    whatIs: 'Lead recem-entrado, ainda sem atendimento completo.',
+    purpose: 'Dar inicio rapido ao primeiro contato.',
+    observe: 'Tempo alto aqui reduz chance de conversao.',
+  },
+  chamado: {
+    title: 'Chamado',
+    whatIs: 'Lead em contato ativo com o comercial.',
+    purpose: 'Conduzir qualificacao e avancar para proposta.',
+    observe: 'Sempre deixe proxima acao definida.',
+  },
+  'proposta enviada': {
+    title: 'Proposta enviada',
+    whatIs: 'Lead que ja recebeu proposta.',
+    purpose: 'Acompanhar negociacoes em fase de decisao.',
+    observe: 'Monitore prazo de retorno e objecoes.',
+  },
+  fechado: {
+    title: 'Fechado',
+    whatIs: 'Negocio concluido com aceite do cliente.',
+    purpose: 'Representar conversao e receita efetiva.',
+    observe: 'Revise ticket e origem para replicar padrao.',
+  },
+  perdido: {
+    title: 'Perdido',
+    whatIs: 'Lead que nao virou venda.',
+    purpose: 'Registrar perdas e aprender com os motivos.',
+    observe: 'Analise recorrencias para ajustar abordagem.',
+  },
+};
+
 function DroppableColumn({ column, leads, onSelectLead }) {
   const { setNodeRef, isOver } = useDroppable({ id: column.id });
+  const tooltip = PIPELINE_STAGE_TOOLTIPS[column.id];
 
   return (
     <div className={classNames('kanban-col shrink-0', isOver && 'ring-1 ring-hagav-gold/40')}>
-      <div className={classNames('kanban-col-header border-t-2', column.color)}>
-        <span className="text-xs font-semibold text-hagav-light">{column.label}</span>
-        <span className="text-xs text-hagav-gray bg-hagav-muted/40 px-1.5 py-0.5 rounded-full">
-          {leads.length}
-        </span>
-      </div>
+      <EduTooltip
+        enabled={Boolean(tooltip)}
+        side="bottom"
+        panelClassName="left-3 right-3 w-auto translate-x-0"
+        {...tooltip}
+      >
+        <div className={classNames('kanban-col-header border-t-2', column.color)}>
+          <span className="text-xs font-semibold text-hagav-light">{column.label}</span>
+          <span className="text-xs text-hagav-gray bg-hagav-muted/40 px-1.5 py-0.5 rounded-full">
+            {leads.length}
+          </span>
+        </div>
+      </EduTooltip>
 
       <div
         ref={setNodeRef}
@@ -87,8 +129,8 @@ export default function KanbanBoard({
     setActiveId(null);
     if (!over) return;
 
-    const activeLeadId = Number(active.id);
-    const activeLead = leads.find(l => l.id === activeLeadId);
+    const activeLeadId = String(active.id);
+    const activeLead = leads.find(l => String(l.id) === activeLeadId);
     if (!activeLead) return;
 
     // Determine target column
@@ -102,20 +144,20 @@ export default function KanbanBoard({
 
     // Optimistic update
     setLeads((prev) => {
-      const next = prev.map((l) => (l.id === activeLeadId ? { ...l, status: targetColId } : l));
+      const next = prev.map((l) => (String(l.id) === activeLeadId ? { ...l, status: targetColId } : l));
       onLeadsChange?.(next);
       return next;
     });
 
     // Persist
     try {
-      await updateLead(activeLeadId, { status: targetColId });
+      await updateLead(activeLead.id, { status: targetColId });
       onStatusPersist?.({ type: 'success', message: `Lead #${activeLeadId} movido para ${targetColId}.` });
     } catch (err) {
       console.error('[Kanban] Error updating lead status:', err);
       // Rollback
       setLeads((prev) => {
-        const next = prev.map((l) => (l.id === activeLeadId ? { ...l, status: activeLead.status } : l));
+        const next = prev.map((l) => (String(l.id) === activeLeadId ? { ...l, status: activeLead.status } : l));
         onLeadsChange?.(next);
         return next;
       });

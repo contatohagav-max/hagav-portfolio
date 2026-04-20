@@ -17,6 +17,71 @@ const URGENCIA_OPERACIONAL = new Set(['alta', 'media']);
 
 const ORC_REVISAO = new Set(['pendente_revisao', 'em_revisao']);
 
+export const DEAL_STATUS = Object.freeze({
+  NOVO: 'novo',
+  QUALIFICADO: 'qualificado',
+  ORCAMENTO: 'orcamento',
+  PROPOSTA_ENVIADA: 'proposta_enviada',
+  FECHADO: 'fechado',
+  PERDIDO: 'perdido',
+});
+
+export const DEAL_STATUS_GROUPS = Object.freeze({
+  leads: [DEAL_STATUS.NOVO, DEAL_STATUS.QUALIFICADO],
+  orcamentos: [DEAL_STATUS.ORCAMENTO, DEAL_STATUS.PROPOSTA_ENVIADA],
+  pipeline: [DEAL_STATUS.PROPOSTA_ENVIADA, DEAL_STATUS.FECHADO, DEAL_STATUS.PERDIDO],
+  aberto: [DEAL_STATUS.ORCAMENTO, DEAL_STATUS.PROPOSTA_ENVIADA],
+  fechado: [DEAL_STATUS.FECHADO],
+});
+
+const LEGACY_LEAD_TO_DEAL = Object.freeze({
+  novo: DEAL_STATUS.NOVO,
+  chamado: DEAL_STATUS.QUALIFICADO,
+  contatado: DEAL_STATUS.QUALIFICADO,
+  em_contato: DEAL_STATUS.QUALIFICADO,
+  qualificado: DEAL_STATUS.QUALIFICADO,
+  proposta: DEAL_STATUS.PROPOSTA_ENVIADA,
+  proposta_enviada: DEAL_STATUS.PROPOSTA_ENVIADA,
+  orcamento: DEAL_STATUS.ORCAMENTO,
+  fechado: DEAL_STATUS.FECHADO,
+  aprovado: DEAL_STATUS.FECHADO,
+  perdido: DEAL_STATUS.PERDIDO,
+  arquivado: DEAL_STATUS.PERDIDO,
+  cancelado: DEAL_STATUS.PERDIDO,
+});
+
+const LEGACY_ORC_TO_DEAL = Object.freeze({
+  pendente_revisao: DEAL_STATUS.ORCAMENTO,
+  em_revisao: DEAL_STATUS.ORCAMENTO,
+  orcamento: DEAL_STATUS.ORCAMENTO,
+  enviado: DEAL_STATUS.PROPOSTA_ENVIADA,
+  proposta_enviada: DEAL_STATUS.PROPOSTA_ENVIADA,
+  aprovado: DEAL_STATUS.FECHADO,
+  ganho: DEAL_STATUS.FECHADO,
+  fechado: DEAL_STATUS.FECHADO,
+  arquivado: DEAL_STATUS.PERDIDO,
+  cancelado: DEAL_STATUS.PERDIDO,
+  perdido: DEAL_STATUS.PERDIDO,
+});
+
+const DEAL_TO_LEAD_STATUS = Object.freeze({
+  [DEAL_STATUS.NOVO]: 'novo',
+  [DEAL_STATUS.QUALIFICADO]: 'chamado',
+  [DEAL_STATUS.ORCAMENTO]: 'proposta enviada',
+  [DEAL_STATUS.PROPOSTA_ENVIADA]: 'proposta enviada',
+  [DEAL_STATUS.FECHADO]: 'fechado',
+  [DEAL_STATUS.PERDIDO]: 'perdido',
+});
+
+const DEAL_TO_ORC_STATUS = Object.freeze({
+  [DEAL_STATUS.NOVO]: 'pendente_revisao',
+  [DEAL_STATUS.QUALIFICADO]: 'pendente_revisao',
+  [DEAL_STATUS.ORCAMENTO]: 'em_revisao',
+  [DEAL_STATUS.PROPOSTA_ENVIADA]: 'enviado',
+  [DEAL_STATUS.FECHADO]: 'aprovado',
+  [DEAL_STATUS.PERDIDO]: 'arquivado',
+});
+
 // Definicao oficial de KPI para orcamentos:
 // - Aberto: oportunidades ainda em negociacao
 // - Fechado: receita efetivamente convertida
@@ -82,6 +147,24 @@ export function getOrcamentoKpiPolicy() {
       excluded: [
         ...Array.from(ORCAMENTO_KPI_STATUS_ABERTO),
         ...Array.from(ORCAMENTO_KPI_STATUS_EXCLUIDO),
+      ],
+    },
+  };
+}
+
+export function getDealKpiPolicy() {
+  return {
+    aberto: {
+      included: [...DEAL_STATUS_GROUPS.aberto],
+      excluded: [DEAL_STATUS.FECHADO, DEAL_STATUS.PERDIDO],
+    },
+    fechado: {
+      included: [...DEAL_STATUS_GROUPS.fechado, 'aprovado'],
+      excluded: [
+        ...DEAL_STATUS_GROUPS.aberto,
+        DEAL_STATUS.NOVO,
+        DEAL_STATUS.QUALIFICADO,
+        DEAL_STATUS.PERDIDO,
       ],
     },
   };
@@ -214,6 +297,35 @@ function normalizeStatusKey(value) {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '_')
     .replace(/^_+|_+$/g, '');
+}
+
+export function normalizeDealStatus(status, fallback = DEAL_STATUS.NOVO) {
+  const key = normalizeStatusKey(status);
+  if (!key) return fallback;
+  if (Object.values(DEAL_STATUS).includes(key)) return key;
+  return LEGACY_LEAD_TO_DEAL[key]
+    || LEGACY_ORC_TO_DEAL[key]
+    || fallback;
+}
+
+export function mapLegacyLeadStatusToDeal(status, fallback = DEAL_STATUS.NOVO) {
+  const key = normalizeStatusKey(status);
+  return LEGACY_LEAD_TO_DEAL[key] || normalizeDealStatus(key, fallback);
+}
+
+export function mapLegacyOrcamentoStatusToDeal(status, fallback = DEAL_STATUS.ORCAMENTO) {
+  const key = normalizeStatusKey(status);
+  return LEGACY_ORC_TO_DEAL[key] || normalizeDealStatus(key, fallback);
+}
+
+export function mapDealStatusToLegacyLead(status, fallback = 'novo') {
+  const key = normalizeDealStatus(status, '');
+  return DEAL_TO_LEAD_STATUS[key] || fallback;
+}
+
+export function mapDealStatusToLegacyOrcamento(status, fallback = 'pendente_revisao') {
+  const key = normalizeDealStatus(status, '');
+  return DEAL_TO_ORC_STATUS[key] || fallback;
 }
 
 function normalizeLeadStatus(status) {
@@ -1452,5 +1564,12 @@ export const COMMERCIAL_DEFAULTS = {
     semPressa: -6,
   },
   pricing: DEFAULT_PRICING_RULES,
-  pipelineStatus: ['novo', 'chamado', 'proposta enviada', 'fechado', 'perdido'],
+  pipelineStatus: [
+    DEAL_STATUS.NOVO,
+    DEAL_STATUS.QUALIFICADO,
+    DEAL_STATUS.ORCAMENTO,
+    DEAL_STATUS.PROPOSTA_ENVIADA,
+    DEAL_STATUS.FECHADO,
+    DEAL_STATUS.PERDIDO,
+  ],
 };

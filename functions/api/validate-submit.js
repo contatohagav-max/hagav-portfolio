@@ -228,8 +228,9 @@ function validateWhatsapp(raw) {
 
 function normalizeTipoValue(rawTipo, answers = {}) {
   const tipoRaw = stripDangerousText(String(rawTipo || ""), 40).toLowerCase();
-  if (tipoRaw === "unica" || tipoRaw === "du" || tipoRaw.includes("pontual")) return "unica";
-  if (tipoRaw === "recorrente" || tipoRaw === "dr" || tipoRaw.includes("mensal")) return "recorrente";
+  const tipoAscii = tipoRaw.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  if (tipoAscii === "du" || tipoAscii.includes("pontual") || tipoAscii.includes("unica")) return "unica";
+  if (tipoAscii === "dr" || tipoAscii.includes("mensal") || tipoAscii.includes("recorrente")) return "recorrente";
 
   const contratacao = stripDangerousText(String(answers?.flow_tipo_contratacao || ""), 60).toLowerCase();
   if (contratacao.includes("pontual")) return "unica";
@@ -244,6 +245,42 @@ function firstPositiveMapValue(rawMap) {
     if (Number.isInteger(qty) && qty > 0) return String(qty);
   }
   return "";
+}
+
+function normalizeYesNoValue(rawValue) {
+  const raw = stripDangerousText(String(rawValue || ""), 8).toLowerCase();
+  if (raw === "sim") return "Sim";
+  if (raw === "nao" || raw === "não") return "Não";
+  return "";
+}
+
+function normalizeServiceMap(rawMap, keyLimit, valLimit) {
+  if (!rawMap || typeof rawMap !== "object" || Array.isArray(rawMap)) return {};
+  const map = {};
+  for (const [rawKey, rawValue] of Object.entries(rawMap)) {
+    const safeKey = stripDangerousText(String(rawKey || ""), keyLimit);
+    const safeValue = stripDangerousText(String(rawValue || ""), valLimit);
+    if (!safeKey || !safeValue) continue;
+    map[safeKey] = safeValue;
+  }
+  return map;
+}
+
+function buildServiceMapFromSelection(selection, rawValue, keyLimit, valLimit) {
+  const fromObject = normalizeServiceMap(rawValue, keyLimit, valLimit);
+  if (Object.keys(fromObject).length > 0) return fromObject;
+
+  const singleValue = stripDangerousText(String(rawValue || ""), valLimit);
+  if (!singleValue) return {};
+
+  const selected = Array.isArray(selection?.selected) ? selection.selected : [];
+  const map = {};
+  for (const service of selected) {
+    const safeService = stripDangerousText(String(service || ""), keyLimit);
+    if (!safeService) continue;
+    map[safeService] = singleValue;
+  }
+  return map;
 }
 
 function normalizeIncomingPayload(body) {
@@ -264,12 +301,43 @@ function normalizeIncomingPayload(body) {
     if (!answers.rec_operacoes && answers.flow_servicos) answers.rec_operacoes = answers.flow_servicos;
     if (!answers.rec_quantidades && answers.flow_quantidades) answers.rec_quantidades = answers.flow_quantidades;
     if (!answers.rec_inicio && answers.flow_inicio) answers.rec_inicio = answers.flow_inicio;
+    if (!answers.rec_inicio && answers.flow_prazo) answers.rec_inicio = answers.flow_prazo;
+    if (!answers.rec_referencia && answers.flow_referencia) answers.rec_referencia = answers.flow_referencia;
+    if (!answers.rec_objetivo && answers.flow_objetivo) answers.rec_objetivo = answers.flow_objetivo;
+    if (!answers.rec_gravado && answers.flow_gravado) answers.rec_gravado = answers.flow_gravado;
+    if (!answers.rec_gravado && answers.flow_material_gravado) answers.rec_gravado = answers.flow_material_gravado;
+    if (!answers.rec_tempo_bruto && answers.flow_tempo_bruto) answers.rec_tempo_bruto = answers.flow_tempo_bruto;
+
+    if (!answers.rec_gravado_por_tipo || typeof answers.rec_gravado_por_tipo !== "object") {
+      const gravadoMap = buildServiceMapFromSelection(
+        answers.rec_operacoes,
+        answers.flow_gravado_por_tipo
+          || answers.flow_material_gravado_por_tipo
+          || answers.flow_gravado
+          || answers.flow_material_gravado
+          || answers.rec_gravado,
+        LIMITS.service,
+        16
+      );
+      if (Object.keys(gravadoMap).length > 0) answers.rec_gravado_por_tipo = gravadoMap;
+    }
+
+    if (!answers.rec_tempo_bruto_por_tipo || typeof answers.rec_tempo_bruto_por_tipo !== "object") {
+      const tempoMap = buildServiceMapFromSelection(
+        answers.rec_operacoes,
+        answers.flow_tempo_bruto_por_tipo || answers.flow_tempo_bruto || answers.rec_tempo_bruto,
+        LIMITS.service,
+        LIMITS.duration
+      );
+      if (Object.keys(tempoMap).length > 0) answers.rec_tempo_bruto_por_tipo = tempoMap;
+    }
 
     if (!answers.rec_tipo_operacao && answers.rec_operacoes?.selected?.length) {
       answers.rec_tipo_operacao = String(answers.rec_operacoes.selected[0] || "");
     }
     if (!answers.rec_volume) {
-      answers.rec_volume = firstPositiveMapValue(answers.rec_quantidades);
+      answers.rec_volume = firstPositiveMapValue(answers.rec_quantidades)
+        || stripDangerousText(String(answers.flow_volume || ""), 60);
     }
   }
 
@@ -367,18 +435,28 @@ function validateTipoPayload(body) {
           return fail("dr.quantidades.valor", "Campo recorrente invalido");
         }
       }
-      const gravado = answers?.rec_gravado_por_tipo;
-      if (!gravado || typeof gravado !== "object") {
+      const gravado = normalizeServiceMap(answers?.rec_gravado_por_tipo, LIMITS.service, 16);
+      const tempoBruto = normalizeServiceMap(answers?.rec_tempo_bruto_por_tipo, LIMITS.service, LIMITS.duration);
+      const legacyGravado = normalizeYesNoValue(
+        answers?.rec_gravado || answers?.flow_gravado || answers?.flow_material_gravado
+      );
+      const legacyTempo = stripDangerousText(
+        String(answers?.rec_tempo_bruto || answers?.flow_tempo_bruto || ""),
+        LIMITS.duration
+      );
+      if (Object.keys(gravado).length === 0 && !legacyGravado) {
         return fail("dr.gravado", "Campo recorrente invalido");
       }
-      const tempoBruto = answers?.rec_tempo_bruto_por_tipo || {};
       for (const operation of normalizedOps) {
-        const stateValue = stripDangerousText(String(getMapValueByKey(gravado, operation) || ""), 8);
-        if (stateValue !== "Sim" && stateValue !== "Não") {
+        const stateValue = normalizeYesNoValue(getMapValueByKey(gravado, operation) || legacyGravado);
+        if (!stateValue) {
           return fail("dr.gravado.valor", "Campo recorrente invalido");
         }
         if (stateValue === "Sim") {
-          const tempo = stripDangerousText(String(getMapValueByKey(tempoBruto, operation) || ""), LIMITS.duration);
+          const tempo = stripDangerousText(
+            String(getMapValueByKey(tempoBruto, operation) || legacyTempo || ""),
+            LIMITS.duration
+          );
           if (!tempo) return fail("dr.tempo_bruto", "Campo recorrente invalido");
         }
       }
@@ -426,17 +504,20 @@ function firstEnvValue(env, keys) {
 function getSupabaseConfig(env) {
   const url = firstEnvValue(env, [
     "SUPABASE_URL",
-    "SUPABASE_PROJECT_URL"
+    "SUPABASE_PROJECT_URL",
+    "NEXT_PUBLIC_SUPABASE_URL"
   ]).replace(/\/+$/, "");
   const serviceRoleKey = firstEnvValue(env, [
     "SERVICE_ROLE_KEY",
     "SUPABASE_SERVICE_ROLE_KEY",
+    "SUPABASE_SERVICE_ROLE",
     "SUPABASE_SERVICE_KEY",
     "SERVICE_ROLE"
   ]);
   const anonKey = firstEnvValue(env, [
     "SUPABASE_ANON_KEY",
     "SUPABASE_PUBLIC_ANON_KEY",
+    "NEXT_PUBLIC_SUPABASE_ANON_KEY",
     "SUPABASE_KEY"
   ]);
   const writeKey = serviceRoleKey || anonKey;
@@ -797,6 +878,36 @@ function buildResumoComercial(row, pricing, score, urgencia, prioridade) {
   return stripDangerousText(parts.join(" | "), 1800);
 }
 
+function parseBooleanLike(value) {
+  const normalized = String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+  if (!normalized) return null;
+  if (["sim", "true", "1", "yes", "y"].includes(normalized)) return true;
+  if (["nao", "não", "false", "0", "no", "n"].includes(normalized)) return false;
+  return null;
+}
+
+function parseIntegerLike(value) {
+  const match = String(value || "").match(/(\d+)/);
+  if (!match || !match[1]) return null;
+  const parsed = Number(match[1]);
+  if (!Number.isFinite(parsed)) return null;
+  return Math.max(1, Math.round(parsed));
+}
+
+function safeJsonFromText(rawText) {
+  const text = String(rawText || "").trim();
+  if (!text) return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { raw: text };
+  }
+}
+
 async function saveLeadToSupabase(env, lead) {
   const config = getSupabaseConfig(env);
   if (!config.url || !config.writeKey || config.missing.length > 0) {
@@ -821,23 +932,28 @@ async function saveLeadToSupabase(env, lead) {
   const valorEstimado = Number(pricing.valorSugerido || pricing.precoFinal || pricing.precoBase || 0);
   const margemEstimada = Number(pricing.margemEstimada || estimateMargemFromPricing(row, pricing));
   const resumoComercial = buildResumoComercial(row, pricing, scoreLead, urgencia, prioridade);
+  const detalhesPayload = safeJsonFromText(buildOrcamentoDetalhesSerializado(lead, pricing));
+  const complexidadeNivel = stripDangerousText(pricing.complexidadeNivel || "N2", 20).toLowerCase();
+  const quantidadeInt = parseIntegerLike(row.Quantidade || "");
 
-  const orcamentoInsert = {
+  const dealInsert = {
     fluxo: row.Fluxo || "",
     pagina: row.Pagina || "orcamento",
     origem: row.Origem || "hagav.com.br",
-    status: row.Status || STATUS_PADRAO,
+    status: STATUS_PADRAO,
     nome: row.Nome || "",
     whatsapp: row.WhatsApp || "",
     servico: stripDangerousText(normalizeServicoCurto(row.ServicoOuOperacao || ""), 300),
-    quantidade: row.Quantidade || "",
-    material_gravado: row.MaterialGravado || "",
+    quantidade: quantidadeInt,
+    material_gravado: parseBooleanLike(row.MaterialGravado),
     tempo_bruto: row.TempoBruto || "",
     prazo: row.Prazo || "",
-    referencia: row.Referencia || "",
+    referencia: parseBooleanLike(row.Referencia),
+    multicamera: Number(pricing.ajusteMulticameraPercent || 0) > 0,
     observacoes: row.Observacoes || "",
-    detalhes: buildOrcamentoDetalhesSerializado(lead, pricing),
+    detalhes: detalhesPayload,
     resumo_orcamento: buildResumoOrcamento(row),
+    resumo_comercial: resumoComercial,
     preco_base: Number(pricing.precoBase || 0),
     preco_final: Number(pricing.precoFinal || 0),
     valor_estimado: valorEstimado,
@@ -848,7 +964,7 @@ async function saveLeadToSupabase(env, lead) {
     revisao_manual: Boolean(pricing.revisaoManual),
     alerta_capacidade: Boolean(pricing.alertaCapacidade),
     operacao_especial: Boolean(pricing.operacaoEspecial),
-    complexidade_nivel: stripDangerousText(pricing.complexidadeNivel || "N2", 20),
+    complexidade_nivel: complexidadeNivel || "n2",
     multiplicador_complexidade: Number(pricing.multiplicadorComplexidade || 1),
     multiplicador_urgencia: Number(pricing.multiplicadorUrgencia || 1),
     desconto_volume_percent: Number(pricing.descontoVolumePercent || 0),
@@ -862,50 +978,15 @@ async function saveLeadToSupabase(env, lead) {
     responsavel: "",
     ultimo_contato_em: null,
     proximo_followup_em: null,
-    resumo_comercial: resumoComercial,
     pacote_sugerido: stripDangerousText(pricing.pacoteSugerido || "", 120),
-    status_orcamento: stripDangerousText(pricing.statusOrcamento || STATUS_ORCAMENTO_PADRAO, 60),
     observacoes_internas: stripDangerousText(pricing.observacoesInternas || "", 500),
     link_pdf: stripDangerousText(pricing.linkPdf || "", 500)
   };
 
-  const orcamentoResult = await postSupabaseRowWithSchemaFallback(config, "orcamentos", orcamentoInsert);
-  if (!orcamentoResult.ok) {
-    console.warn("[validate-submit][supabase] orcamentos_insert_failed", JSON.stringify({ reason: orcamentoResult.reason || "" }));
-    return orcamentoResult;
-  }
-
-  const leadInsert = {
-    fluxo: row.Fluxo || "",
-    pagina: row.Pagina || "orcamento",
-    origem: row.Origem || "hagav.com.br",
-    status: row.Status || STATUS_PADRAO,
-    nome: row.Nome || "",
-    whatsapp: row.WhatsApp || "",
-    servico: stripDangerousText(normalizeServicoCurto(row.ServicoOuOperacao || ""), 300),
-    quantidade: row.Quantidade || "",
-    material_gravado: row.MaterialGravado || "",
-    tempo_bruto: row.TempoBruto || "",
-    prazo: row.Prazo || "",
-    referencia: row.Referencia || "",
-    observacoes: row.Observacoes || "",
-    score_lead: scoreLead,
-    urgencia,
-    prioridade,
-    temperatura,
-    valor_estimado: valorEstimado,
-    margem_estimada: margemEstimada,
-    proxima_acao: "",
-    responsavel: "",
-    ultimo_contato_em: null,
-    proximo_followup_em: null,
-    resumo_orcamento: buildResumoOrcamento(row),
-    resumo_comercial: resumoComercial
-  };
-  const leadResult = await postSupabaseRowWithSchemaFallback(config, "leads", leadInsert);
-  if (!leadResult.ok) {
-    console.warn("[validate-submit][supabase] leads_insert_failed", JSON.stringify({ reason: leadResult.reason || "" }));
-    return leadResult;
+  const dealResult = await postSupabaseRowWithSchemaFallback(config, "deals", dealInsert);
+  if (!dealResult.ok) {
+    console.warn("[validate-submit][supabase] deals_insert_failed", JSON.stringify({ reason: dealResult.reason || "" }));
+    return dealResult;
   }
 
   return { ok: true };
@@ -981,16 +1062,24 @@ async function saveLeadToSheetsWebhook(env, lead) {
 
 async function saveLead(env, lead) {
   const supabaseResult = await saveLeadToSupabase(env, lead);
-  if (supabaseResult.ok) return supabaseResult;
+  if (supabaseResult.ok) {
+    console.log("[validate-submit] save_path", JSON.stringify({ path: "supabase", ok: true }));
+    return supabaseResult;
+  }
 
   console.warn("[validate-submit] supabase_failed_trying_webhook", JSON.stringify({
     reason: supabaseResult.reason || ""
   }));
   const webhookResult = await saveLeadToSheetsWebhook(env, lead);
   if (webhookResult.ok) {
+    console.log("[validate-submit] save_path", JSON.stringify({ path: "webhook_fallback", ok: true }));
     return { ok: true, reason: "saved_via_webhook_fallback" };
   }
 
+  console.error("[validate-submit] save_path_failed", JSON.stringify({
+    supabaseReason: supabaseResult.reason || "",
+    webhookReason: webhookResult.reason || ""
+  }));
   return {
     ok: false,
     reason: [supabaseResult.reason, webhookResult.reason].filter(Boolean).join(" | ")

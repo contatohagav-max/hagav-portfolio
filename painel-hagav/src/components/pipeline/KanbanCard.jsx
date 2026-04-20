@@ -2,7 +2,15 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { MessageCircle, GripVertical } from 'lucide-react';
 import { UrgenciaBadge, TemperaturaBadge } from '@/components/ui/StatusBadge';
+import EduTooltip from '@/components/ui/EduTooltip';
 import { fmtRelative, whatsappLink, fmtBRL, truncate } from '@/lib/utils';
+
+const WHATSAPP_TOOLTIP = {
+  title: 'WhatsApp',
+  whatIs: 'Abre conversa direta com o lead deste card.',
+  purpose: 'Acelerar resposta durante o trabalho no pipeline.',
+  observe: 'Registre a proxima acao apos o contato.',
+};
 
 export default function KanbanCard({ lead, onSelect }) {
   const {
@@ -53,15 +61,17 @@ export default function KanbanCard({ lead, onSelect }) {
           <div className="flex items-center justify-between mt-2.5">
             <span className="text-[10px] text-hagav-gray">{fmtRelative(lead.created_at)}</span>
             {lead.whatsapp && (
-              <a
-                href={whatsappLink(lead.whatsapp)}
-                target="_blank"
-                rel="noreferrer"
-                onClick={(e) => e.stopPropagation()}
-                className="text-green-400 hover:text-green-300 opacity-0 group-hover:opacity-100 transition-opacity"
-              >
-                <MessageCircle size={13} />
-              </a>
+              <EduTooltip {...WHATSAPP_TOOLTIP} className="w-auto" panelClassName="left-auto right-0 translate-x-0">
+                <a
+                  href={whatsappLink(lead.whatsapp)}
+                  target="_blank"
+                  rel="noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  className="text-green-400 hover:text-green-300 opacity-0 group-hover:opacity-100 transition-opacity"
+                >
+                  <MessageCircle size={13} />
+                </a>
+              </EduTooltip>
             )}
           </div>
         </div>

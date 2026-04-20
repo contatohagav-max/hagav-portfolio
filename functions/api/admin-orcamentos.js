@@ -1,6 +1,34 @@
 const DEFAULT_LIMIT = 60;
 const MAX_LIMIT = 200;
 
+const DEAL_TO_ORC_STATUS = {
+  novo: 'pendente_revisao',
+  qualificado: 'pendente_revisao',
+  orcamento: 'em_revisao',
+  proposta_enviada: 'enviado',
+  fechado: 'aprovado',
+  perdido: 'arquivado',
+};
+
+const DEAL_TO_LEAD_STATUS = {
+  novo: 'novo',
+  qualificado: 'chamado',
+  orcamento: 'proposta enviada',
+  proposta_enviada: 'proposta enviada',
+  fechado: 'fechado',
+  perdido: 'perdido',
+};
+
+const ORC_TO_DEAL_STATUS = {
+  pendente_revisao: 'orcamento',
+  em_revisao: 'orcamento',
+  enviado: 'proposta_enviada',
+  aprovado: 'fechado',
+  arquivado: 'perdido',
+  cancelado: 'perdido',
+  perdido: 'perdido',
+};
+
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
@@ -16,6 +44,39 @@ function stripDangerousText(value, maxLen) {
   const normalized = value.normalize("NFKC").replace(/[\u0000-\u001F\u007F]/g, " ").trim();
   const withoutTags = normalized.replace(/<[^>]*>/g, "");
   return withoutTags.slice(0, maxLen);
+}
+
+function normalizeStatusKey(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
+function normalizeDealStatus(value, fallback = "orcamento") {
+  const key = normalizeStatusKey(value);
+  if (!key) return fallback;
+  if (["novo", "qualificado", "orcamento", "proposta_enviada", "fechado", "perdido"].includes(key)) {
+    return key;
+  }
+  return ORC_TO_DEAL_STATUS[key] || fallback;
+}
+
+function mapDealToOrcStatus(value) {
+  const key = normalizeDealStatus(value, "orcamento");
+  return DEAL_TO_ORC_STATUS[key] || "pendente_revisao";
+}
+
+function mapDealToLegacyLeadStatus(value) {
+  const key = normalizeDealStatus(value, "novo");
+  return DEAL_TO_LEAD_STATUS[key] || "novo";
+}
+
+function mapOrcStatusToDeal(value) {
+  const key = normalizeStatusKey(value);
+  return ORC_TO_DEAL_STATUS[key] || normalizeDealStatus(key, "orcamento");
 }
 
 function firstEnvValue(env, keys) {
@@ -82,6 +143,33 @@ async function fetchSupabase(config, path, options = {}) {
   return { ok: true, data: parsed };
 }
 
+function formatBoolLike(value) {
+  if (value === true) return "Sim";
+  if (value === false) return "Nao";
+  return String(value || "");
+}
+
+function mapDealRowToLegacy(row) {
+  return {
+    ...row,
+    status: mapDealToLegacyLeadStatus(row?.status),
+    status_deal: normalizeDealStatus(row?.status, "orcamento"),
+    status_orcamento: mapDealToOrcStatus(row?.status),
+    material_gravado: formatBoolLike(row?.material_gravado),
+    referencia: formatBoolLike(row?.referencia),
+    detalhes: typeof row?.detalhes === "string"
+      ? row.detalhes
+      : (row?.detalhes ? JSON.stringify(row.detalhes) : "")
+  };
+}
+
+function sanitizeId(value) {
+  const id = stripDangerousText(String(value || ""), 120);
+  if (!id) return "";
+  if (!/^[a-zA-Z0-9-]+$/.test(id)) return "";
+  return id;
+}
+
 async function listOrcamentos(request, env) {
   const auth = isAuthorized(request, env);
   if (!auth.ok) return json({ ok: false, error: auth.reason }, auth.status);
@@ -96,21 +184,27 @@ async function listOrcamentos(request, env) {
   const limit = Number.isFinite(limitRaw)
     ? Math.max(1, Math.min(MAX_LIMIT, Math.round(limitRaw)))
     : DEFAULT_LIMIT;
-  const status = stripDangerousText(url.searchParams.get("status_orcamento") || "", 60);
+  const statusOrc = stripDangerousText(url.searchParams.get("status_orcamento") || "", 60);
 
   const query = new URLSearchParams();
   query.set(
     "select",
-    "id,created_at,fluxo,pagina,origem,status,nome,whatsapp,servico,quantidade,material_gravado,tempo_bruto,prazo,referencia,observacoes,detalhes,resumo_orcamento,resumo_comercial,preco_base,preco_final,valor_estimado,valor_sugerido,margem_estimada,faixa_sugerida,motivo_calculo,revisao_manual,alerta_capacidade,operacao_especial,complexidade_nivel,multiplicador_complexidade,multiplicador_urgencia,desconto_volume_percent,ajuste_referencia_percent,ajuste_multicamera_percent,pacote_sugerido,status_orcamento,urgencia,prioridade,temperatura,score_lead,proxima_acao,responsavel,ultimo_contato_em,proximo_followup_em,observacoes_internas,link_pdf"
+    "id,created_at,updated_at,fluxo,pagina,origem,status,nome,whatsapp,servico,quantidade,material_gravado,tempo_bruto,prazo,referencia,observacoes,detalhes,resumo_orcamento,resumo_comercial,preco_base,preco_final,valor_estimado,valor_sugerido,margem_estimada,faixa_sugerida,motivo_calculo,revisao_manual,alerta_capacidade,operacao_especial,complexidade_nivel,multiplicador_complexidade,multiplicador_urgencia,desconto_volume_percent,ajuste_referencia_percent,ajuste_multicamera_percent,pacote_sugerido,urgencia,prioridade,temperatura,score_lead,proxima_acao,responsavel,ultimo_contato_em,proximo_followup_em,observacoes_internas,link_pdf"
   );
   query.set("order", "created_at.desc");
   query.set("limit", String(limit));
-  if (status) query.set("status_orcamento", `eq.${status}`);
 
-  const result = await fetchSupabase(config, `/rest/v1/orcamentos?${query.toString()}`);
+  if (statusOrc) {
+    query.set("status", `eq.${mapOrcStatusToDeal(statusOrc)}`);
+  } else {
+    query.set("status", "in.(orcamento,proposta_enviada,fechado,perdido)");
+  }
+
+  const result = await fetchSupabase(config, `/rest/v1/deals?${query.toString()}`);
   if (!result.ok) return json({ ok: false, error: result.reason }, 502);
 
-  return json({ ok: true, rows: Array.isArray(result.data) ? result.data : [] });
+  const rows = Array.isArray(result.data) ? result.data.map(mapDealRowToLegacy) : [];
+  return json({ ok: true, rows });
 }
 
 async function updateOrcamento(request, env) {
@@ -129,8 +223,8 @@ async function updateOrcamento(request, env) {
     return json({ ok: false, error: "json_invalido" }, 400);
   }
 
-  const id = Number(body?.id || 0);
-  if (!Number.isInteger(id) || id <= 0) {
+  const id = sanitizeId(body?.id);
+  if (!id) {
     return json({ ok: false, error: "id_invalido" }, 400);
   }
 
@@ -149,8 +243,9 @@ async function updateOrcamento(request, env) {
   }
 
   if (body?.status_orcamento !== undefined) {
-    payload.status_orcamento = stripDangerousText(String(body.status_orcamento || ""), 60);
+    payload.status = mapOrcStatusToDeal(String(body.status_orcamento || ""));
   }
+
   if (body?.urgencia !== undefined) {
     payload.urgencia = stripDangerousText(String(body.urgencia || ""), 20);
   }
@@ -194,7 +289,7 @@ async function updateOrcamento(request, env) {
 
   const result = await fetchSupabase(
     config,
-    `/rest/v1/orcamentos?id=eq.${id}&select=id,preco_base,preco_final,valor_estimado,valor_sugerido,margem_estimada,faixa_sugerida,motivo_calculo,revisao_manual,complexidade_nivel,multiplicador_complexidade,multiplicador_urgencia,desconto_volume_percent,ajuste_referencia_percent,ajuste_multicamera_percent,pacote_sugerido,status_orcamento,urgencia,prioridade,proxima_acao,responsavel,proximo_followup_em,observacoes_internas,link_pdf`,
+    `/rest/v1/deals?id=eq.${encodeURIComponent(id)}&select=id,status,preco_base,preco_final,valor_estimado,valor_sugerido,margem_estimada,faixa_sugerida,motivo_calculo,revisao_manual,complexidade_nivel,multiplicador_complexidade,multiplicador_urgencia,desconto_volume_percent,ajuste_referencia_percent,ajuste_multicamera_percent,pacote_sugerido,urgencia,prioridade,proxima_acao,responsavel,proximo_followup_em,observacoes_internas,link_pdf`,
     {
       method: "PATCH",
       headers: { prefer: "return=representation" },
@@ -204,7 +299,7 @@ async function updateOrcamento(request, env) {
 
   if (!result.ok) return json({ ok: false, error: result.reason }, 502);
   const row = Array.isArray(result.data) ? (result.data[0] || null) : null;
-  return json({ ok: true, row });
+  return json({ ok: true, row: row ? mapDealRowToLegacy(row) : null });
 }
 
 export async function onRequest(context) {
@@ -213,6 +308,3 @@ export async function onRequest(context) {
   if (method === "PATCH" || method === "POST") return updateOrcamento(context.request, context.env);
   return json({ ok: false, error: "method_not_allowed" }, 405);
 }
-
-
-

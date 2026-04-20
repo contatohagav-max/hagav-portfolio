@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Painel Interno • HAGAV Orçamentos</title>
+  <link rel="stylesheet" href="/assets/orcamentos-admin.css" />
+</head>
+<body>
+  <main class="admin-wrap">
+    <header class="admin-header">
+      <img class="admin-logo" src="/assets/hagav-logo-oficial.png" alt="HAGAV" />
+      <a class="btn btn-ghost" href="/">Voltar ao site</a>
+    </header>
+
+    <section class="panel">
+      <h1 style="margin:0 0 8px;">Painel Interno de Orçamentos</h1>
+      <p class="muted" style="margin:0 0 12px;">Lead entra → cálculo base automático → revisão manual → gerar PDF de rascunho.</p>
+      <div class="access-row">
+        <input id="access-key" type="password" placeholder="Chave de acesso interna" style="min-width:280px; flex:1;" />
+        <button id="save-key" class="btn btn-yellow">Entrar no painel</button>
+      </div>
+    </section>
+
+    <section class="toolbar">
+      <select id="status-filter">
+        <option value="">Todos os status</option>
+        <option value="pendente_revisao">pendente_revisao</option>
+        <option value="em_revisao">em_revisao</option>
+        <option value="aprovado">aprovado</option>
+        <option value="enviado">enviado</option>
+        <option value="arquivado">arquivado</option>
+        <option value="cancelado">cancelado</option>
+      </select>
+      <button id="refresh-list" class="btn btn-ghost">Atualizar</button>
+      <span id="page-status" class="muted"></span>
+    </section>
+
+    <section id="cards" class="cards"></section>
+  </main>
+
+  <script src="/assets/orcamentos-admin.js"></script>
+</body>
+</html>
+

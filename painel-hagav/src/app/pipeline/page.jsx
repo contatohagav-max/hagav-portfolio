@@ -5,7 +5,7 @@ import { RefreshCw, Kanban, Siren, Clock3 } from 'lucide-react';
 import KanbanBoard from '@/components/pipeline/KanbanBoard';
 import EmptyState from '@/components/ui/EmptyState';
 import EduTooltip from '@/components/ui/EduTooltip';
-import { fetchLeads } from '@/lib/supabase';
+import { fetchPipelineDeals } from '@/lib/supabase';
 import { isLeadFollowupLate } from '@/lib/commercial';
 import LeadDrawer from '@/components/leads/LeadDrawer';
 
@@ -27,7 +27,7 @@ export default function PipelinePage() {
     setLoading(true);
     setLoadError('');
     try {
-      const data = await fetchLeads({ limit: 1500 });
+      const data = await fetchPipelineDeals({ limit: 1500 });
       setLeads(data);
     } catch (err) {
       console.error('[Pipeline]', err);

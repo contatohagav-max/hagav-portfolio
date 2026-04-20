@@ -6,10 +6,17 @@ import { Search, RefreshCw, Users, Flame, Clock3, Target } from 'lucide-react';
 import LeadsTable from '@/components/leads/LeadsTable';
 import LeadDrawer from '@/components/leads/LeadDrawer';
 import EmptyState from '@/components/ui/EmptyState';
+import EduTooltip from '@/components/ui/EduTooltip';
 import { fetchLeads } from '@/lib/supabase';
 import { LEAD_STATUS_LABELS } from '@/lib/utils';
 
 const FLUXOS = ['', 'DU', 'DR', 'WhatsApp', 'Contato'];
+const UPDATE_TOOLTIP = {
+  title: 'Atualizar',
+  whatIs: 'Recarrega a lista de leads com os filtros atuais.',
+  purpose: 'Evitar decisao com dados antigos.',
+  observe: 'Use apos novos contatos ou alteracoes de status.',
+};
 
 export default function LeadsPage() {
   const searchParams = useSearchParams();
@@ -96,10 +103,12 @@ export default function LeadsPage() {
             {loading ? 'Carregando...' : `${leads.length} lead${leads.length !== 1 ? 's' : ''}`}
           </p>
         </div>
-        <button onClick={load} disabled={loading} className="btn-ghost btn-sm">
-          <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
-          Atualizar
-        </button>
+        <EduTooltip {...UPDATE_TOOLTIP} className="w-auto" panelClassName="left-auto right-0 translate-x-0">
+          <button onClick={load} disabled={loading} className="btn-ghost btn-sm">
+            <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
+            Atualizar
+          </button>
+        </EduTooltip>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">

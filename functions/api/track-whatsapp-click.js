@@ -108,8 +108,8 @@ async function saveWhatsappClick(env, payload) {
 
   const contatoResult = await postSupabaseRow(config, "contatos", payload.contato);
   if (!contatoResult.ok) return contatoResult;
-  const leadResult = await postSupabaseRow(config, "leads", payload.lead);
-  if (!leadResult.ok) return leadResult;
+  const dealResult = await postSupabaseRow(config, "deals", payload.deal);
+  if (!dealResult.ok) return dealResult;
   return { ok: true };
 }
 
@@ -145,7 +145,7 @@ export async function onRequestPost(context) {
       origem,
       mensagem: observacoes
     },
-    lead: {
+    deal: {
       fluxo: "WhatsApp",
       pagina,
       origem,
@@ -153,11 +153,11 @@ export async function onRequestPost(context) {
       nome: "",
       whatsapp: "",
       servico: "Clique no WhatsApp",
-      quantidade: "",
-      material_gravado: "",
+      quantidade: 1,
+      material_gravado: null,
       tempo_bruto: "",
       prazo: "",
-      referencia: "",
+      referencia: null,
       observacoes,
       score_lead: 18,
       urgencia: "baixa",
@@ -167,7 +167,7 @@ export async function onRequestPost(context) {
       margem_estimada: 0,
       proxima_acao: "",
       responsavel: "",
-      ultimo_contato_em: null,
+      ultimo_contato_em: new Date().toISOString(),
       proximo_followup_em: null,
       resumo_orcamento: "WhatsApp | Evento de interesse sem formulario",
       resumo_comercial: `WhatsApp | Origem: ${origem} | Evento de interesse`

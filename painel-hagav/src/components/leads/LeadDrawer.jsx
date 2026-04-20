@@ -8,10 +8,17 @@ import {
   UrgenciaBadge,
   TemperaturaBadge,
 } from '@/components/ui/StatusBadge';
+import EduTooltip from '@/components/ui/EduTooltip';
 import { updateLead } from '@/lib/supabase';
 import { fmtDateTime, whatsappLink, LEAD_STATUS_LABELS, fmtBRL } from '@/lib/utils';
 
 const LEAD_STATUSES = Object.keys(LEAD_STATUS_LABELS);
+const WHATSAPP_TOOLTIP = {
+  title: 'WhatsApp',
+  whatIs: 'Abre conversa direta com o contato no WhatsApp.',
+  purpose: 'Agilizar follow-up e acelerar avancos no funil.',
+  observe: 'Confirme contexto e proxima acao antes de enviar.',
+};
 
 function toDateTimeLocal(iso) {
   if (!iso) return '';
@@ -191,11 +198,13 @@ export default function LeadDrawer({ lead, onClose, onUpdated }) {
         </div>
 
         <div className="px-6 py-4 border-t border-hagav-border shrink-0 flex items-center gap-3">
-          <a href={waLink} target="_blank" rel="noreferrer" className="btn-ghost flex-1 justify-center">
-            <MessageCircle size={15} />
-            WhatsApp
-            <ExternalLink size={12} className="opacity-50" />
-          </a>
+          <EduTooltip {...WHATSAPP_TOOLTIP} className="flex-1">
+            <a href={waLink} target="_blank" rel="noreferrer" className="btn-ghost w-full justify-center">
+              <MessageCircle size={15} />
+              WhatsApp
+              <ExternalLink size={12} className="opacity-50" />
+            </a>
+          </EduTooltip>
           <button type="button" onClick={markContactNow} className="btn-ghost">
             <PhoneCall size={15} />
             Contato

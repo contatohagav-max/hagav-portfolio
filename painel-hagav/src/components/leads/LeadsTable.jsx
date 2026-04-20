@@ -5,7 +5,15 @@ import {
   UrgenciaBadge,
   TemperaturaBadge,
 } from '@/components/ui/StatusBadge';
+import EduTooltip from '@/components/ui/EduTooltip';
 import { fmtDateTime, fmtRelative, fmtBRL, whatsappLink, truncate } from '@/lib/utils';
+
+const WHATSAPP_TOOLTIP = {
+  title: 'WhatsApp',
+  whatIs: 'Atalho para iniciar conversa com o lead no WhatsApp.',
+  purpose: 'Fazer contato imediato sem sair da listagem.',
+  observe: 'Priorize leads urgentes e registre retorno no painel.',
+};
 
 export default function LeadsTable({ leads, onSelect }) {
   if (leads.length === 0) {
@@ -75,16 +83,18 @@ export default function LeadsTable({ leads, onSelect }) {
               <td><LeadStatusBadge status={lead.status} /></td>
               <td>
                 {lead.whatsapp ? (
-                  <a
-                    href={whatsappLink(lead.whatsapp)}
-                    target="_blank"
-                    rel="noreferrer"
-                    onClick={(e) => e.stopPropagation()}
-                    className="inline-flex items-center gap-1 text-xs text-green-400 hover:text-green-300 transition-colors px-2 py-1 rounded bg-green-500/10 border border-green-500/20"
-                  >
-                    <MessageCircle size={11} />
-                    Chamar
-                  </a>
+                  <EduTooltip {...WHATSAPP_TOOLTIP} className="w-auto" panelClassName="left-auto right-0 translate-x-0">
+                    <a
+                      href={whatsappLink(lead.whatsapp)}
+                      target="_blank"
+                      rel="noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className="inline-flex items-center gap-1 text-xs text-green-400 hover:text-green-300 transition-colors px-2 py-1 rounded bg-green-500/10 border border-green-500/20"
+                    >
+                      <MessageCircle size={11} />
+                      Chamar
+                    </a>
+                  </EduTooltip>
                 ) : (
                   <span className="text-xs text-hagav-gray">—</span>
                 )}

@@ -4,8 +4,17 @@ import { useEffect, useState } from 'react';
 import { RefreshCw, Kanban, Siren, Clock3 } from 'lucide-react';
 import KanbanBoard from '@/components/pipeline/KanbanBoard';
 import EmptyState from '@/components/ui/EmptyState';
+import EduTooltip from '@/components/ui/EduTooltip';
 import { fetchLeads } from '@/lib/supabase';
+import { isLeadFollowupLate } from '@/lib/commercial';
 import LeadDrawer from '@/components/leads/LeadDrawer';
+
+const UPDATE_TOOLTIP = {
+  title: 'Atualizar',
+  whatIs: 'Recarrega os leads e as etapas do pipeline.',
+  purpose: 'Garantir que o time trabalhe com o estado mais atual.',
+  observe: 'Use antes de mover cards ou priorizar contatos.',
+};
 
 export default function PipelinePage() {
   const [leads, setLeads] = useState([]);
@@ -18,7 +27,7 @@ export default function PipelinePage() {
     setLoading(true);
     setLoadError('');
     try {
-      const data = await fetchLeads({ limit: 900 });
+      const data = await fetchLeads({ limit: 1500 });
       setLeads(data);
     } catch (err) {
       console.error('[Pipeline]', err);
@@ -32,13 +41,12 @@ export default function PipelinePage() {
     load();
   }, []);
 
-  const urgentes = leads.filter((lead) => lead.urgencia === 'alta' && lead.status !== 'fechado' && lead.status !== 'perdido').length;
-  const atrasados = leads.filter((lead) => {
-    if (lead.status === 'fechado' || lead.status === 'perdido') return false;
-    const next = lead.proximo_followup_em ? new Date(lead.proximo_followup_em).getTime() : null;
-    if (Number.isFinite(next)) return next < Date.now();
-    return false;
-  }).length;
+  const urgentes = leads
+    .filter((lead) => ['alta', 'media'].includes(String(lead.urgencia || '').toLowerCase()))
+    .filter((lead) => lead.status !== 'fechado' && lead.status !== 'perdido')
+    .length;
+  const now = new Date();
+  const atrasados = leads.filter((lead) => isLeadFollowupLate(lead, now)).length;
 
   function handleStatusFeedback(next) {
     if (!next?.message) return;
@@ -61,10 +69,12 @@ export default function PipelinePage() {
             {loading ? 'Carregando...' : `${leads.length} lead${leads.length !== 1 ? 's' : ''} no funil`}
           </p>
         </div>
-        <button onClick={load} disabled={loading} className="btn-ghost btn-sm">
-          <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
-          Atualizar
-        </button>
+        <EduTooltip {...UPDATE_TOOLTIP} className="w-auto" panelClassName="left-auto right-0 translate-x-0">
+          <button onClick={load} disabled={loading} className="btn-ghost btn-sm">
+            <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
+            Atualizar
+          </button>
+        </EduTooltip>
       </div>
 
       {!loading && leads.length > 0 && (

@@ -1,4 +1,4 @@
-import { parseISO, isValid, differenceInHours } from 'date-fns';
+import { parseISO, isValid, differenceInMinutes } from 'date-fns';
 
 const HIGH_VALUE_KEYWORDS = [
   'criativo',
@@ -13,6 +13,7 @@ const HIGH_VALUE_KEYWORDS = [
 const STATUS_ABERTO = new Set(['novo', 'em_contato', 'proposta']);
 const STATUS_FECHADO = new Set(['fechado']);
 const STATUS_PERDIDO = new Set(['perdido']);
+const URGENCIA_OPERACIONAL = new Set(['alta', 'media']);
 
 const ORC_ABERTO = new Set(['aberto']);
 const ORC_GANHO = new Set(['fechado']);
@@ -58,18 +59,6 @@ const ORCAMENTO_STATUS_ALIAS = {
   reprovado: 'perdido',
   recusado: 'perdido',
 };
-
-const ORCAMENTO_STATUS_PRE_FECHAMENTO = new Set([
-  'pendente_revisao',
-  'em_revisao',
-  'pendente',
-  'proposta',
-  'proposta_enviada',
-  'enviado',
-  'em_negociacao',
-  'negociacao',
-  'aberto',
-]);
 
 const DEFAULT_PRICING_RULES = {
   serviceBase: {
@@ -208,22 +197,17 @@ function normalizeLeadStatusPipeline(status) {
 function normalizeOrcamentoStatus(statusOrcamento, leadStatus) {
   const orcKey = normalizeStatusKey(statusOrcamento);
   const lead = normalizeLeadStatus(leadStatus);
-  const leadIsFechado = lead === 'fechado';
-  const leadIsPerdido = lead === 'perdido';
-
-  // Quando o pipeline já foi fechado/perdido e o status de orçamento ainda está em
-  // fase pré-fechamento, consideramos o estado operacional do lead para evitar KPI zerado.
-  if ((leadIsFechado || leadIsPerdido) && (!orcKey || ORCAMENTO_STATUS_PRE_FECHAMENTO.has(orcKey))) {
-    return lead;
-  }
 
   if (orcKey && ORCAMENTO_STATUS_ALIAS[orcKey]) {
     return ORCAMENTO_STATUS_ALIAS[orcKey];
   }
 
-  if (leadIsFechado) return 'fechado';
-  if (leadIsPerdido) return 'perdido';
+  // Se o orçamento já possui um status (mesmo fora do alias), tratamos como aberto
+  // para evitar fechar receita por inferência de status de lead.
   if (orcKey) return 'aberto';
+
+  if (lead === 'fechado') return 'fechado';
+  if (lead === 'perdido') return 'perdido';
   if (lead && STATUS_ABERTO.has(lead)) return 'aberto';
   return '';
 }
@@ -996,18 +980,8 @@ function isLateFollowup(lead, nowDate) {
   if (isLeadFechadoStatus(lead.status) || isLeadPerdidoStatus(lead.status)) return false;
 
   const followupDate = parseDateSafe(lead.proximo_followup_em);
-  if (followupDate) return followupDate.getTime() < nowDate.getTime();
-
-  const lastContact = parseDateSafe(lead.ultimo_contato_em);
-  const created = parseDateSafe(lead.created_at);
-
-  if (lastContact) {
-    return differenceInHours(nowDate, lastContact) > 48;
-  }
-  if (created) {
-    return differenceInHours(nowDate, created) > 48;
-  }
-  return false;
+  if (!followupDate) return false;
+  return followupDate.getTime() < nowDate.getTime();
 }
 
 export function isLeadFollowupLate(lead, now = new Date()) {
@@ -1026,6 +1000,13 @@ function getOrcamentoDateForFechamentoMes(orcamento) {
     || parseDateSafe(orcamento?.data_fechamento_em)
     || parseDateSafe(orcamento?.updated_at)
     || parseDateSafe(orcamento?.created_at);
+}
+
+function getLeadPrimeiroContatoDate(lead) {
+  return parseDateSafe(lead?.primeiro_contato_em)
+    || parseDateSafe(lead?.data_primeiro_contato)
+    || parseDateSafe(lead?.first_contact_at)
+    || parseDateSafe(lead?.ultimo_contato_em);
 }
 
 export function enrichLeadRecord(record) {
@@ -1160,15 +1141,20 @@ export function buildDashboardInsights(rawLeads = [], rawOrcamentos = []) {
     ? (leadsFechadosMes.length / leadsMes.length) * 100
     : 0;
 
-  const leadsUrgentes = leads.filter((lead) => lead.urgencia === 'alta' && isLeadAbertoStatus(lead.status)).length;
+  const leadsUrgentes = leads
+    .filter((lead) => URGENCIA_OPERACIONAL.has(normalizeStatusKey(lead.urgencia)))
+    .filter((lead) => isLeadAbertoStatus(lead.status))
+    .length;
   const followupAtrasado = leads.filter((lead) => isLeadFollowupLate(lead, now)).length;
 
-  const temposResposta = leads
+  const leadBaseTempoResposta = leadsMes.length > 0 ? leadsMes : leads;
+  const temposResposta = leadBaseTempoResposta
     .map((lead) => {
       const created = parseDateSafe(lead.created_at);
-      const lastContact = parseDateSafe(lead.ultimo_contato_em);
-      if (!created || !lastContact || lastContact <= created) return null;
-      return differenceInHours(lastContact, created);
+      const primeiroContato = getLeadPrimeiroContatoDate(lead);
+      if (!created || !primeiroContato || primeiroContato <= created) return null;
+      const minutes = differenceInMinutes(primeiroContato, created);
+      return Number.isFinite(minutes) && minutes >= 0 ? (minutes / 60) : null;
     })
     .filter((value) => value !== null);
 

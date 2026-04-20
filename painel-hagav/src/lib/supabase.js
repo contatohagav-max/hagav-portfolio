@@ -286,13 +286,35 @@ export async function fetchDashboardMetrics() {
     return buildDashboardInsights([], []);
   }
 
-  const [leadsRes, orcRes] = await Promise.all([
-    client.from('leads').select('*').order('created_at', { ascending: false }).limit(5000),
-    client.from('orcamentos').select('*').order('created_at', { ascending: false }).limit(5000),
+  async function fetchAllRows(table) {
+    const pageSize = 1000;
+    const maxRows = 50000;
+    let from = 0;
+    const rows = [];
+
+    while (from < maxRows) {
+      const to = from + pageSize - 1;
+      const { data, error } = await client
+        .from(table)
+        .select('*')
+        .order('created_at', { ascending: false })
+        .range(from, to);
+
+      if (error) throw error;
+      if (!Array.isArray(data) || data.length === 0) break;
+
+      rows.push(...data);
+      if (data.length < pageSize) break;
+      from += pageSize;
+    }
+
+    return rows;
+  }
+
+  const [leads, orcamentos] = await Promise.all([
+    fetchAllRows('leads'),
+    fetchAllRows('orcamentos'),
   ]);
 
-  if (leadsRes.error) throw leadsRes.error;
-  if (orcRes.error) throw orcRes.error;
-
-  return buildDashboardInsights(leadsRes.data || [], orcRes.data || []);
+  return buildDashboardInsights(leads, orcamentos);
 }

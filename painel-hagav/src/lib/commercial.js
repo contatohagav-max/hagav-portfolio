@@ -250,16 +250,27 @@ function isOrcamentoAberto(orcamento) {
 
 function resolveOrcamentoKpiStatus(orcamento) {
   const rawStatus = normalizeStatusKey(orcamento?.status_orcamento);
+  const lead = normalizeLeadStatus(orcamento?.status);
+
   if (rawStatus && ORCAMENTO_KPI_STATUS_FECHADO.has(rawStatus)) return 'fechado';
-  if (rawStatus && ORCAMENTO_KPI_STATUS_ABERTO.has(rawStatus)) return 'aberto';
   if (rawStatus && ORCAMENTO_KPI_STATUS_EXCLUIDO.has(rawStatus)) return 'perdido';
+  if (rawStatus && ORCAMENTO_KPI_STATUS_ABERTO.has(rawStatus)) {
+    // Regra de conciliacao: quando Pipeline ja marcou fechamento/perda,
+    // nao manter KPI financeiro em "aberto" por atraso de sincronizacao.
+    if (lead === 'fechado') return 'fechado';
+    if (lead === 'perdido') return 'perdido';
+    return 'aberto';
+  }
 
   // Fallback defensivo para status legado/fora do padrao.
   if (rawStatus && /(aprov|ganh|fech)/.test(rawStatus)) return 'fechado';
   if (rawStatus && /(perd|cancel|recus|reprov)/.test(rawStatus)) return 'perdido';
-  if (rawStatus) return 'aberto';
+  if (rawStatus) {
+    if (lead === 'fechado') return 'fechado';
+    if (lead === 'perdido') return 'perdido';
+    return 'aberto';
+  }
 
-  const lead = normalizeLeadStatus(orcamento?.status);
   if (lead === 'fechado') return 'fechado';
   if (lead === 'perdido') return 'perdido';
   if (lead && STATUS_ABERTO.has(lead)) return 'aberto';
@@ -1235,16 +1246,29 @@ export function buildDashboardInsights(rawLeads = [], rawOrcamentos = []) {
     .filter((orc) => isOrcamentoFechado(orc))
     .filter((orc) => inMonthRange(getOrcamentoDateForFechamentoMes(orc), monthStart, monthEnd));
 
-  const receitaFechadaMes = orcamentosFechadosMes
+  const receitaFechadaMesOrc = orcamentosFechadosMes
     .reduce((sum, orc) => sum + getOrcamentoValorFechado(orc), 0);
+
+  const leadsFechadosMesComValor = leadsFechadosMes
+    .map((lead) => toNumber(lead?.valor_estimado, 0))
+    .filter((valor) => valor > 0);
+  const receitaFechadaMesLeads = leadsFechadosMesComValor
+    .reduce((sum, valor) => sum + valor, 0);
+
+  // Fallback operacional:
+  // Quando o funil (leads) ja indica "fechado", mas status financeiro do orcamento
+  // ainda nao sincronizou, usamos valor estimado do lead para nao zerar KPI.
+  const receitaFechadaMes = receitaFechadaMesOrc > 0
+    ? receitaFechadaMesOrc
+    : receitaFechadaMesLeads;
 
   const orcamentosAbertos = orcamentos
     .filter((orc) => isOrcamentoAberto(orc))
     .reduce((sum, orc) => sum + getOrcamentoValorAberto(orc), 0);
 
-  const ticketMedio = orcamentosFechadosMes.length > 0
-    ? receitaFechadaMes / orcamentosFechadosMes.length
-    : 0;
+  const ticketMedio = receitaFechadaMesOrc > 0
+    ? (orcamentosFechadosMes.length > 0 ? receitaFechadaMesOrc / orcamentosFechadosMes.length : 0)
+    : (leadsFechadosMesComValor.length > 0 ? receitaFechadaMesLeads / leadsFechadosMesComValor.length : 0);
 
   const taxaConversao = leadsMes.length > 0
     ? (leadsFechadosMes.length / leadsMes.length) * 100

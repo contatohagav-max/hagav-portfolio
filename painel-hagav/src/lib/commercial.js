@@ -15,9 +15,36 @@ const STATUS_FECHADO = new Set(['fechado']);
 const STATUS_PERDIDO = new Set(['perdido']);
 const URGENCIA_OPERACIONAL = new Set(['alta', 'media']);
 
-const ORC_ABERTO = new Set(['aberto']);
-const ORC_GANHO = new Set(['fechado']);
 const ORC_REVISAO = new Set(['pendente_revisao', 'em_revisao']);
+
+// Definicao oficial de KPI para orcamentos:
+// - Aberto: oportunidades ainda em negociacao
+// - Fechado: receita efetivamente convertida
+// - Excluido: oportunidades encerradas sem ganho
+const ORCAMENTO_KPI_STATUS_ABERTO = new Set([
+  'pendente_revisao',
+  'em_revisao',
+  'pendente',
+  'proposta',
+  'proposta_enviada',
+  'enviado',
+  'em_negociacao',
+  'negociacao',
+  'aberto',
+]);
+
+const ORCAMENTO_KPI_STATUS_FECHADO = new Set([
+  'aprovado',
+  'ganho',
+  'fechado',
+]);
+
+const ORCAMENTO_KPI_STATUS_EXCLUIDO = new Set([
+  'perdido',
+  'cancelado',
+  'reprovado',
+  'recusado',
+]);
 
 const LEAD_STATUS_ALIAS = {
   novo: 'novo',
@@ -41,24 +68,24 @@ const LEAD_STATUS_PIPELINE_ALIAS = {
   perdido: 'perdido',
 };
 
-const ORCAMENTO_STATUS_ALIAS = {
-  pendente_revisao: 'aberto',
-  em_revisao: 'aberto',
-  pendente: 'aberto',
-  proposta: 'aberto',
-  proposta_enviada: 'aberto',
-  enviado: 'aberto',
-  em_negociacao: 'aberto',
-  negociacao: 'aberto',
-  aberto: 'aberto',
-  aprovado: 'fechado',
-  ganho: 'fechado',
-  fechado: 'fechado',
-  perdido: 'perdido',
-  cancelado: 'perdido',
-  reprovado: 'perdido',
-  recusado: 'perdido',
-};
+export function getOrcamentoKpiPolicy() {
+  return {
+    aberto: {
+      included: Array.from(ORCAMENTO_KPI_STATUS_ABERTO),
+      excluded: [
+        ...Array.from(ORCAMENTO_KPI_STATUS_FECHADO),
+        ...Array.from(ORCAMENTO_KPI_STATUS_EXCLUIDO),
+      ],
+    },
+    fechado: {
+      included: Array.from(ORCAMENTO_KPI_STATUS_FECHADO),
+      excluded: [
+        ...Array.from(ORCAMENTO_KPI_STATUS_ABERTO),
+        ...Array.from(ORCAMENTO_KPI_STATUS_EXCLUIDO),
+      ],
+    },
+  };
+}
 
 const DEFAULT_PRICING_RULES = {
   serviceBase: {
@@ -194,24 +221,6 @@ function normalizeLeadStatusPipeline(status) {
   return LEAD_STATUS_PIPELINE_ALIAS[key] || key;
 }
 
-function normalizeOrcamentoStatus(statusOrcamento, leadStatus) {
-  const orcKey = normalizeStatusKey(statusOrcamento);
-  const lead = normalizeLeadStatus(leadStatus);
-
-  if (orcKey && ORCAMENTO_STATUS_ALIAS[orcKey]) {
-    return ORCAMENTO_STATUS_ALIAS[orcKey];
-  }
-
-  // Se o orçamento já possui um status (mesmo fora do alias), tratamos como aberto
-  // para evitar fechar receita por inferência de status de lead.
-  if (orcKey) return 'aberto';
-
-  if (lead === 'fechado') return 'fechado';
-  if (lead === 'perdido') return 'perdido';
-  if (lead && STATUS_ABERTO.has(lead)) return 'aberto';
-  return '';
-}
-
 function isLeadFechadoStatus(status) {
   return STATUS_FECHADO.has(normalizeLeadStatus(status));
 }
@@ -227,11 +236,29 @@ function isLeadAbertoStatus(status) {
 }
 
 function isOrcamentoFechado(orcamento) {
-  return ORC_GANHO.has(normalizeOrcamentoStatus(orcamento?.status_orcamento, orcamento?.status));
+  return resolveOrcamentoKpiStatus(orcamento) === 'fechado';
 }
 
 function isOrcamentoAberto(orcamento) {
-  return ORC_ABERTO.has(normalizeOrcamentoStatus(orcamento?.status_orcamento, orcamento?.status));
+  return resolveOrcamentoKpiStatus(orcamento) === 'aberto';
+}
+
+function resolveOrcamentoKpiStatus(orcamento) {
+  const rawStatus = normalizeStatusKey(orcamento?.status_orcamento);
+  if (rawStatus && ORCAMENTO_KPI_STATUS_FECHADO.has(rawStatus)) return 'fechado';
+  if (rawStatus && ORCAMENTO_KPI_STATUS_ABERTO.has(rawStatus)) return 'aberto';
+  if (rawStatus && ORCAMENTO_KPI_STATUS_EXCLUIDO.has(rawStatus)) return 'perdido';
+
+  // Fallback defensivo para status legado/fora do padrao.
+  if (rawStatus && /(aprov|ganh|fech)/.test(rawStatus)) return 'fechado';
+  if (rawStatus && /(perd|cancel|recus|reprov)/.test(rawStatus)) return 'perdido';
+  if (rawStatus) return 'aberto';
+
+  const lead = normalizeLeadStatus(orcamento?.status);
+  if (lead === 'fechado') return 'fechado';
+  if (lead === 'perdido') return 'perdido';
+  if (lead && STATUS_ABERTO.has(lead)) return 'aberto';
+  return '';
 }
 
 function getOrcamentoValorFechado(orcamento) {
@@ -648,6 +675,14 @@ function extractServiceItems(record) {
 function applyStructuredFallback(record) {
   const parsed = parseJsonSafe(record?.detalhes);
   const answers = parsed?.respostasCompletas || parsed?.answers;
+  const calculo = parsed?.calculoAutomatico && typeof parsed.calculoAutomatico === 'object'
+    ? parsed.calculoAutomatico
+    : {};
+  const precoBaseParsed = toNumber(calculo.precoBase ?? parsed?.preco_base, 0);
+  const precoFinalParsed = toNumber(calculo.precoFinal ?? parsed?.preco_final, 0);
+  const valorSugeridoParsed = toNumber(calculo.valorSugerido ?? parsed?.valor_sugerido, 0);
+  const valorEstimadoParsed = toNumber(parsed?.valor_estimado, 0) || valorSugeridoParsed || precoFinalParsed || precoBaseParsed;
+  const statusOrcParsed = normalizeText(record?.status_orcamento || parsed?.status_orcamento || parsed?.statusOrcamento);
   const flow = inferFlow({ ...record, fluxo: record?.fluxo || parsed?.fluxo || record?.Fluxo });
   const structured = buildStructuredFromAnswers(flow, answers);
   const items = extractServiceItems(record);
@@ -674,6 +709,11 @@ function applyStructuredFallback(record) {
       || summarizeItemsField(items, 'tempo_bruto', primary?.tempo_bruto || normalizeText(parsed?.tempo_bruto || parsed?.tempoBruto || record?.TempoBruto)),
     prazo: normalizeText(record?.prazo) || normalizeText(structured?.prazo) || primary?.prazo || normalizeText(parsed?.prazo || record?.Prazo),
     referencia: normalizeText(record?.referencia) || normalizeText(structured?.referencia) || primary?.referencia || normalizeText(parsed?.referencia || record?.Referencia),
+    preco_base: toNumber(record?.preco_base, 0) || precoBaseParsed,
+    preco_final: toNumber(record?.preco_final, 0) || precoFinalParsed,
+    valor_sugerido: toNumber(record?.valor_sugerido, 0) || valorSugeridoParsed,
+    valor_estimado: toNumber(record?.valor_estimado, 0) || valorEstimadoParsed,
+    status_orcamento: statusOrcParsed,
     observacoes: normalizeText(record?.observacoes || record?.Observacoes)
       || normalizeText(parsed?.observacoes || parsed?.extras || answers?.extras),
     itens_servico: items,

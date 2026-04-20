@@ -97,6 +97,7 @@ function BadgeContrato({ status }) {
 function resolveDisplayStatusContrato(row) {
   if (!row) return 'ativo';
   const base = String(row.status_contrato || '').toLowerCase();
+  if (base === 'vencendo') return 'vencendo';
   if (base === 'ativo' && Number.isFinite(row.dias_para_vencimento) && row.dias_para_vencimento >= 0 && row.dias_para_vencimento <= 15) {
     return 'vencendo';
   }
@@ -510,6 +511,7 @@ export default function ClientesPage() {
                 <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Status contrato</label>
                 <select value={statusEdicao} onChange={(e) => setStatusEdicao(e.target.value)} className="hselect w-full">
                   <option value="ativo">Ativo</option>
+                  <option value="vencendo">Vencendo</option>
                   <option value="vencido">Vencido</option>
                   <option value="encerrado">Encerrado</option>
                 </select>

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { X, MessageCircle, ExternalLink, Save, Loader2, PhoneCall, FilePlus2 } from 'lucide-react';
+import { X, MessageCircle, ExternalLink, Save, Loader2, PhoneCall, FilePlus2, Ban } from 'lucide-react';
 import {
   LeadStatusBadge,
   PrioridadeBadge,
@@ -102,6 +102,50 @@ export default function LeadDrawer({ lead, onClose, onUpdated }) {
   function markContactNow() {
     const now = new Date();
     setUltimoContato(toDateTimeLocal(now.toISOString()));
+  }
+
+  async function handleMarkContato() {
+    const nowIso = new Date().toISOString();
+    const nextStatus = String(status || '').toLowerCase() === 'novo' ? 'contatado' : status;
+    setSaving(true);
+    setError('');
+    try {
+      const updated = await updateLead(lead.id, {
+        status: nextStatus,
+        observacoes: obs,
+        proxima_acao: proximaAcao,
+        prioridade,
+        urgencia,
+        ultimo_contato_em: nowIso,
+      });
+      onUpdated?.(updated);
+      onClose();
+    } catch (err) {
+      setError(err.message ?? 'Erro ao marcar contato.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDescartar() {
+    setSaving(true);
+    setError('');
+    try {
+      const updated = await updateLead(lead.id, {
+        status: 'descartado',
+        observacoes: obs,
+        proxima_acao: proximaAcao,
+        prioridade,
+        urgencia,
+        ultimo_contato_em: fromDateTimeLocal(ultimoContato),
+      });
+      onUpdated?.(updated);
+      onClose();
+    } catch (err) {
+      setError(err.message ?? 'Erro ao descartar lead.');
+    } finally {
+      setSaving(false);
+    }
   }
 
   const statusOptions = Array.from(new Set([
@@ -238,9 +282,13 @@ export default function LeadDrawer({ lead, onClose, onUpdated }) {
               <ExternalLink size={12} className="opacity-50" />
             </a>
           </EduTooltip>
-          <button type="button" onClick={markContactNow} className="btn-ghost">
+          <button type="button" onClick={handleMarkContato} disabled={saving} className="btn-ghost">
             <PhoneCall size={15} />
-            Contato
+            Marcar contato
+          </button>
+          <button type="button" onClick={handleDescartar} disabled={saving} className="btn-ghost">
+            <Ban size={15} />
+            Descartar
           </button>
           <button onClick={handleSave} disabled={saving} className="btn-gold flex-1 justify-center">
             {saving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}

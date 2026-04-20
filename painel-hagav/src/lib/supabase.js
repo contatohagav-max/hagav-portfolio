@@ -439,10 +439,13 @@ export async function fetchClientesContratos({
     const expected = String(statusContrato || '').toLowerCase();
     if (expected === 'vencendo') {
       contratos = contratos.filter((item) => (
-        String(item.status_contrato || '').toLowerCase() === 'ativo'
-        && Number.isFinite(item.dias_para_vencimento)
-        && item.dias_para_vencimento >= 0
-        && item.dias_para_vencimento <= 15
+        String(item.status_contrato || '').toLowerCase() === 'vencendo'
+        || (
+          String(item.status_contrato || '').toLowerCase() === 'ativo'
+          && Number.isFinite(item.dias_para_vencimento)
+          && item.dias_para_vencimento >= 0
+          && item.dias_para_vencimento <= 15
+        )
       ));
     } else {
       contratos = contratos.filter((item) => String(item.status_contrato || '').toLowerCase() === expected);

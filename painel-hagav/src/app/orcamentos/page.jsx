@@ -100,8 +100,8 @@ export default function OrcamentosPage() {
   const incompletos = orcamentos.filter((item) => item.incompleto).length;
 
   return (
-    <div className="space-y-5 animate-fade-in">
-      <div className="flex items-center justify-between">
+    <div className="space-y-4 md:space-y-5 animate-fade-in">
+      <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
           <h1 className="page-title">Orcamentos</h1>
           <p className="page-subtitle">
@@ -117,7 +117,7 @@ export default function OrcamentosPage() {
       </div>
 
       {!loading && orcamentos.length > 0 && (
-        <div className="grid grid-cols-2 xl:grid-cols-6 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-2.5">
           {[
             { label: 'Preco base', value: fmtBRL(totalBase) },
             { label: 'Preco final', value: fmtBRL(totalFinal), accent: true },
@@ -126,63 +126,67 @@ export default function OrcamentosPage() {
             { label: 'Sem revisao', value: semRevisao },
             { label: 'Incompletos', value: incompletos },
           ].map((card) => (
-            <div key={card.label} className={`hcard p-4 text-center ${card.accent ? 'border-hagav-gold/30' : ''}`}>
+            <div key={card.label} className={`hcard p-3.5 md:p-4 text-center ${card.accent ? 'border-hagav-gold/30' : ''}`}>
               <p className="text-[10px] text-hagav-gray uppercase tracking-wider mb-1">{card.label}</p>
-              <p className={`text-lg font-bold ${card.accent ? 'text-hagav-gold' : 'text-hagav-white'}`}>{card.value}</p>
+              <p className={`text-base md:text-lg font-bold ${card.accent ? 'text-hagav-gold' : 'text-hagav-white'}`}>{card.value}</p>
             </div>
           ))}
         </div>
       )}
 
-      <div className="flex flex-wrap gap-2">
-        <div className="relative flex-1 min-w-[220px]">
-          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-hagav-gray pointer-events-none" />
-          <input
-            type="text"
-            placeholder="Buscar nome, WhatsApp, servico, resumo..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="hinput w-full pl-8 text-sm"
-          />
+      <div className="hcard p-3.5 md:p-4">
+        <div className="grid grid-cols-1 md:grid-cols-[minmax(240px,1fr)_repeat(3,minmax(0,180px))] gap-2">
+          <div className="relative">
+            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-hagav-gray pointer-events-none" />
+            <input
+              type="text"
+              placeholder="Buscar nome, WhatsApp, servico, resumo..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="hinput w-full pl-8 text-sm"
+            />
+          </div>
+
+          <select value={statusOrc} onChange={(e) => setStatusOrc(e.target.value)} className="hselect">
+            <option value="">Todos os status</option>
+            {ORC_FILTER_STATUSES.map((value) => (
+              <option key={value} value={value}>{ORC_STATUS_LABELS[value] || value}</option>
+            ))}
+          </select>
+
+          <select value={urgencia} onChange={(e) => setUrgencia(e.target.value)} className="hselect">
+            <option value="">Urgencia</option>
+            <option value="alta">Alta</option>
+            <option value="media">Media</option>
+            <option value="baixa">Baixa</option>
+          </select>
+
+          <select value={prioridade} onChange={(e) => setPrioridade(e.target.value)} className="hselect">
+            <option value="">Prioridade</option>
+            <option value="alta">Alta</option>
+            <option value="media">Media</option>
+            <option value="baixa">Baixa</option>
+          </select>
         </div>
 
-        <select value={statusOrc} onChange={(e) => setStatusOrc(e.target.value)} className="hselect">
-          <option value="">Todos os status</option>
-          {ORC_FILTER_STATUSES.map((value) => (
-            <option key={value} value={value}>{ORC_STATUS_LABELS[value] || value}</option>
-          ))}
-        </select>
+        <div className="mt-2.5 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => setIncompletoOnly((prev) => !prev)}
+            className={`btn-ghost btn-sm ${incompletoOnly ? 'border-hagav-gold/40 text-hagav-gold' : ''}`}
+          >
+            <ClipboardList size={12} />
+            Campos incompletos
+          </button>
 
-        <select value={urgencia} onChange={(e) => setUrgencia(e.target.value)} className="hselect">
-          <option value="">Urgencia</option>
-          <option value="alta">Alta</option>
-          <option value="media">Media</option>
-          <option value="baixa">Baixa</option>
-        </select>
-
-        <select value={prioridade} onChange={(e) => setPrioridade(e.target.value)} className="hselect">
-          <option value="">Prioridade</option>
-          <option value="alta">Alta</option>
-          <option value="media">Media</option>
-          <option value="baixa">Baixa</option>
-        </select>
-
-        <button
-          type="button"
-          onClick={() => setIncompletoOnly((prev) => !prev)}
-          className={`btn-ghost btn-sm ${incompletoOnly ? 'border-hagav-gold/40 text-hagav-gold' : ''}`}
-        >
-          <ClipboardList size={12} />
-          Campos incompletos
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setAbertosOnly((prev) => !prev)}
-          className={`btn-ghost btn-sm ${abertosOnly ? 'border-hagav-gold/40 text-hagav-gold' : ''}`}
-        >
-          Orcamentos ativos
-        </button>
+          <button
+            type="button"
+            onClick={() => setAbertosOnly((prev) => !prev)}
+            className={`btn-ghost btn-sm ${abertosOnly ? 'border-hagav-gold/40 text-hagav-gold' : ''}`}
+          >
+            Orcamentos ativos
+          </button>
+        </div>
       </div>
 
       {loadError && (

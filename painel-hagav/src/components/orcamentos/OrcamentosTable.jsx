@@ -11,8 +11,8 @@ export default function OrcamentosTable({ orcamentos, onSelect }) {
   }
 
   return (
-    <div className="overflow-x-auto rounded-xl border border-hagav-border">
-      <table className="htable min-w-[1360px]">
+    <div className="overflow-x-auto rounded-2xl border border-hagav-border bg-hagav-surface/30 shadow-card">
+      <table className="htable min-w-[1280px]">
         <thead>
           <tr>
             <th>Cliente</th>
@@ -30,7 +30,11 @@ export default function OrcamentosTable({ orcamentos, onSelect }) {
         </thead>
         <tbody>
           {orcamentos.map((orc) => (
-            <tr key={orc.id} onClick={() => onSelect(orc)} className={orc.incompleto ? 'bg-yellow-500/5' : ''}>
+            <tr
+              key={orc.id}
+              onClick={() => onSelect(orc)}
+              className={`transition-colors ${orc.incompleto ? 'bg-yellow-500/5' : ''}`}
+            >
               {(() => {
                 const itens = Array.isArray(orc.itens_servico) ? orc.itens_servico : [];
                 const servicoResumo = itens.length > 0
@@ -48,7 +52,7 @@ export default function OrcamentosTable({ orcamentos, onSelect }) {
                     <td className="text-xs">
                       <span className="badge bg-hagav-muted/40 border-hagav-border text-hagav-light">{orc.fluxo || '—'}</span>
                     </td>
-                    <td className="text-hagav-light text-xs max-w-[180px]" title={servicoResumo}>
+                    <td className="text-hagav-light text-xs max-w-[220px]" title={servicoResumo}>
                       {truncate(servicoResumo, 68)}
                     </td>
                   </>

@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import {
   buildDashboardInsights,
+  deriveFinancialMetricsFromFinalPrice,
   enrichLeadRecord,
   enrichOrcamentoRecord,
   COMMERCIAL_DEFAULTS,
@@ -89,6 +90,7 @@ function mapDealToContratoRecord(raw) {
   const deal = normalizeDealRecord(raw);
   const detalhes = safeParseJsonObject(deal?.detalhes);
   const contrato = safeParseJsonObject(detalhes?.contrato);
+  const comercial = safeParseJsonObject(detalhes?.comercial);
   const vencimento = contrato?.vencimento || deal?.validade_ate || null;
   const renovacaoEm = contrato?.renovacao_alerta_em || deal?.proximo_followup_em || null;
   const valorContrato = Number(
@@ -132,8 +134,11 @@ function mapDealToContratoRecord(raw) {
     : null;
   const renovacaoProxima = statusContrato !== 'encerrado'
     && (Number.isFinite(diasParaVencimento) && diasParaVencimento <= 15);
-  const propostaLink = String(deal?.link_pdf || '').trim();
+  const dealLink = String(deal?.link_pdf || '').trim();
   const contratoLink = String(contrato?.link_pdf || '').trim();
+  const propostaFromComercial = String(comercial?.proposta_link || comercial?.link_pdf || '').trim();
+  const propostaLink = propostaFromComercial || (contratoLink ? '' : dealLink);
+  const genericLink = contratoLink || dealLink || propostaLink;
 
   return {
     ...deal,
@@ -154,8 +159,8 @@ function mapDealToContratoRecord(raw) {
     plano_servico: deal?.pacote_sugerido || deal?.servico || '',
     proposta_gerada_em: deal?.proposta_gerada_em || null,
     proposta_link_pdf: propostaLink,
-    contrato_link_pdf: contratoLink || propostaLink,
-    link_pdf: contratoLink || propostaLink,
+    contrato_link_pdf: contratoLink,
+    link_pdf: genericLink,
   };
 }
 
@@ -375,6 +380,10 @@ export async function updateOrcamento(id, patch) {
   if (!client) throw new Error('Supabase nao configurado');
 
   const payload = normalizeOrcamentoPatchToDeals(patch);
+  const hasPrecoFinalPatch = Object.prototype.hasOwnProperty.call(payload, 'preco_final');
+  const hasMargemPatch = Object.prototype.hasOwnProperty.call(payload, 'margem_estimada');
+  const hasValorEstimadoPatch = Object.prototype.hasOwnProperty.call(payload, 'valor_estimado');
+  const shouldSyncPriceDerived = hasPrecoFinalPatch && (!hasMargemPatch || !hasValorEstimadoPatch);
   const shouldRecalculatePricing = Boolean(payload?.recalcular_pricing);
   delete payload.recalcular_pricing;
 
@@ -429,6 +438,30 @@ export async function updateOrcamento(id, patch) {
       nextRecord = enrichOrcamentoRecord(mapDealToOrcamentoRecord(recalcData));
     } else if (recalcError) {
       console.warn('[Orcamentos][Recalculo]', recalcError);
+    }
+  } else if (shouldSyncPriceDerived) {
+    const derived = deriveFinancialMetricsFromFinalPrice(nextRecord, payload.preco_final);
+    const recalcPatch = {
+      margem_estimada: Number(derived.margem_estimada || 0),
+      valor_estimado: Number(derived.valor_estimado || 0),
+    };
+
+    const { data: recalcData, error: recalcError } = await client
+      .from('deals')
+      .update(recalcPatch)
+      .eq('id', id)
+      .select('*')
+      .single();
+
+    if (!recalcError && recalcData) {
+      nextRecord = enrichOrcamentoRecord(mapDealToOrcamentoRecord(recalcData));
+    } else if (recalcError) {
+      console.warn('[Orcamentos][PrecoFinal]', recalcError);
+    } else {
+      nextRecord = {
+        ...nextRecord,
+        ...recalcPatch,
+      };
     }
   }
 
@@ -485,26 +518,62 @@ async function generatePdfDocument(endpoint, id, { adminKey } = {}) {
   let response = await request(endpoint);
   let parsed = await response.json().catch(() => ({}));
 
-  // Fallback operacional: ambientes antigos podem nao ter rota dedicada de contrato.
-  if (
-    endpoint === '/api/admin-contratos-pdf'
-    && !response.ok
-    && Number(response.status) === 404
-  ) {
-    response = await request('/api/admin-orcamentos-pdf');
-    parsed = await response.json().catch(() => ({}));
-  }
-
   if (!response.ok || parsed?.ok === false) {
     const reason = String(parsed?.error || '').trim();
+    const stage = String(parsed?.stage || '').trim();
+    const requestId = String(parsed?.request_id || '').trim();
+    const uploadReason = String(parsed?.upload_reason || '').trim();
+    const detail = String(parsed?.detail || '').trim();
+
+    console.error('[PDF][Runtime]', {
+      endpoint,
+      status: Number(response.status || 0),
+      reason,
+      stage,
+      request_id: requestId,
+      upload_reason: uploadReason,
+      detail,
+      has_admin_key_header: Boolean(key),
+      has_session_token: Boolean(token),
+    });
+
+    const withMeta = (baseMessage) => {
+      const parts = [baseMessage];
+      if (stage) parts.push(`Etapa: ${stage}.`);
+      if (requestId) parts.push(`RID: ${requestId}.`);
+      if (uploadReason) parts.push(`Upload: ${uploadReason}.`);
+      if (detail) parts.push(`Detalhe: ${detail}.`);
+      return parts.join(' ');
+    };
+
     if (reason === 'admin_key_not_configured_or_session_missing') {
-      throw new Error('Sessao sem autorizacao para PDF. Configure ADMIN_DASHBOARD_KEY no deploy ou refaca login no painel.');
+      throw new Error(withMeta('Sessao sem autorizacao para PDF. Configure ADMIN_DASHBOARD_KEY no deploy ou refaca login no painel.'));
     }
     if (reason === 'unauthorized') {
-      throw new Error('Sem autorizacao para gerar PDF. Verifique chave admin ou sessao autenticada.');
+      throw new Error(withMeta('Sem autorizacao para gerar PDF. Verifique chave admin ou sessao autenticada.'));
     }
-    throw new Error(reason || `Falha ao gerar PDF (${response.status})`);
+    if (reason === 'supabase_not_configured') {
+      throw new Error(withMeta('Supabase nao configurado no endpoint de PDF.'));
+    }
+    if (reason === 'pdf_upload_failed') {
+      throw new Error(withMeta('Falha no upload do PDF para o bucket configurado.'));
+    }
+    if (reason === 'deal_link_update_failed') {
+      throw new Error(withMeta('PDF gerado, mas falhou ao salvar link_pdf no deal.'));
+    }
+    if (reason === 'template_not_found') {
+      throw new Error(withMeta('Template oficial de PDF nao encontrado no deploy. Verifique publicacao em /templates.'));
+    }
+    throw new Error(withMeta(reason || `Falha ao gerar PDF (${response.status})`));
   }
+
+  console.info('[PDF][Runtime][Sucesso]', {
+    endpoint,
+    id,
+    request_id: String(parsed?.request_id || ''),
+    template_source: String(parsed?.template_source || ''),
+    has_link_pdf: Boolean(String(parsed?.link_pdf || '').trim()),
+  });
 
   return parsed;
 }

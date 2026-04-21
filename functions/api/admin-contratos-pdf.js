@@ -25,11 +25,11 @@ function logPdf(requestId, stage, message, extra = {}) {
     stage,
     ...extra,
   };
-  console.log(`[HAGAV][PDF][PROPOSTA] ${message}`, payload);
+  console.log(`[HAGAV][PDF][CONTRATO] ${message}`, payload);
 }
 
 function fail(requestId, stage, error, status, extra = {}) {
-  logPdf(requestId, stage, "Falha no fluxo de proposta PDF", {
+  logPdf(requestId, stage, "Falha no fluxo de contrato PDF", {
     error,
     status,
     ...extra,
@@ -76,6 +76,16 @@ function getBearerToken(request) {
   return stripDangerousText(raw.replace(/^bearer\s+/i, ""), 240);
 }
 
+async function parseJsonSafe(response) {
+  const text = await response.text();
+  if (!text) return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
+
 async function hasAuthenticatedSession(config, request) {
   const token = getBearerToken(request);
   if (!token || !config?.url) return false;
@@ -118,16 +128,6 @@ async function isAuthorized(request, env, config) {
     return { ok: false, reason: "admin_key_not_configured_or_session_missing", status: 401 };
   }
   return { ok: false, reason: "unauthorized", status: 401 };
-}
-
-async function parseJsonSafe(response) {
-  const text = await response.text();
-  if (!text) return null;
-  try {
-    return JSON.parse(text);
-  } catch {
-    return null;
-  }
 }
 
 async function fetchSupabase(config, path, options = {}) {
@@ -295,58 +295,52 @@ function readDetalhes(row) {
 
 function buildTemplateValues(row) {
   const detalhes = readDetalhes(row);
+  const contrato = (detalhes?.contrato && typeof detalhes.contrato === "object") ? detalhes.contrato : {};
   const dataHojeIso = new Date().toISOString();
-  const servico = normalizePdfText(row?.servico || detalhes?.servicoOuOperacao || "-", 180);
-  const quantidade = normalizePdfText(detalhes?.quantidade || "-", 120);
-  const material = normalizePdfText(detalhes?.materialGravado || row?.material_gravado || "-", 120);
-  const tempo = normalizePdfText(detalhes?.tempoBruto || row?.tempo_bruto || "-", 120);
-  const prazo = normalizePdfText(detalhes?.prazo || row?.prazo || "-", 120);
-  const referencia = normalizePdfText(detalhes?.referencia || row?.referencia || "-", 220);
-  const observacoesCliente = normalizePdfText(detalhes?.observacoes || row?.observacoes || "-", 300);
-  const observacoesInternas = normalizePdfText(row?.observacoes_internas || "-", 300);
-  const precoBase = Number(row?.preco_base || 0);
-  const precoFinal = Number(row?.preco_final || row?.valor_sugerido || row?.preco_base || 0);
-  const valorSugerido = Number(row?.valor_sugerido || row?.preco_final || row?.preco_base || 0);
-  const origem = normalizePdfText(row?.origem || "-", 180);
-  const fluxo = normalizePdfText(detalhes?.fluxo || row?.fluxo || "-", 80);
-  const escopo = normalizePdfText(row?.resumo_orcamento || "-", 360);
-  const pacote = normalizePdfText(row?.pacote_sugerido || "-", 120);
+  const valorFinal = Number(
+    contrato?.valor_final
+    ?? row?.valor_fechado
+    ?? row?.preco_final
+    ?? row?.valor_sugerido
+    ?? 0
+  );
+  const dataInicio = String(contrato?.data_inicio || "");
+  const vencimento = String(contrato?.vencimento || row?.validade_ate || "");
+  const duracaoMeses = String(contrato?.duracao_meses || "12");
+  const formaPagamento = normalizePdfText(contrato?.forma_pagamento || "A combinar", 180);
+  const responsavel = normalizePdfText(contrato?.responsavel || row?.responsavel || "Time HAGAV", 120);
+  const recorrente = contrato?.recorrente ? "Sim" : "Nao";
+  const servico = normalizePdfText(row?.servico || row?.pacote_sugerido || "-", 180);
+  const observacoes = normalizePdfText(contrato?.observacoes || row?.observacoes_internas || "-", 300);
   const clienteNome = normalizePdfText(row?.nome || "-", 120);
   const whatsapp = normalizePdfText(row?.whatsapp || "-", 40);
-  const propostaNumero = normalizePdfText(`PROP-${row?.id || "-"}`, 80);
+  const contratoNumero = normalizePdfText(`CONT-${row?.id || "-"}`, 80);
 
   const base = {
     id: normalizePdfText(row?.id || "-", 80),
-    proposta_numero: propostaNumero,
-    numero_proposta: propostaNumero,
+    contrato_numero: contratoNumero,
+    numero_contrato: contratoNumero,
     data_emissao: formatDateBr(dataHojeIso),
     data_hoje: formatDateBr(dataHojeIso),
-    data_criacao: formatDateBr(row?.created_at || dataHojeIso),
     cliente_nome: clienteNome,
     nome: clienteNome,
     whatsapp,
-    fluxo,
-    origem,
-    servico,
     servico_plano: servico,
     plano_servico: servico,
-    escopo,
-    resumo_orcamento: escopo,
-    quantidade,
-    material_gravado: material,
-    tempo_bruto: tempo,
-    prazo,
-    referencia,
-    preco_base: formatMoney(precoBase),
-    valor_base: formatMoney(precoBase),
-    preco_final: formatMoney(precoFinal),
-    valor_final: formatMoney(precoFinal),
-    valor_sugerido: formatMoney(valorSugerido),
-    pacote_sugerido: pacote,
-    observacoes_cliente: observacoesCliente,
-    observacoes: observacoesCliente,
-    observacoes_internas: observacoesInternas,
-    validade_dias: "7",
+    servico,
+    valor_contrato: formatMoney(valorFinal),
+    valor_final: formatMoney(valorFinal),
+    preco_final: formatMoney(valorFinal),
+    data_inicio: normalizePdfText(dataInicio || "-", 30),
+    inicio: normalizePdfText(dataInicio || "-", 30),
+    vencimento: normalizePdfText(vencimento || "-", 30),
+    duracao_meses: normalizePdfText(duracaoMeses, 20),
+    recorrente,
+    forma_pagamento: formaPagamento,
+    responsavel,
+    observacoes: observacoes,
+    observacoes_contrato: observacoes,
+    status_contrato: normalizePdfText(contrato?.status || row?.status_contrato || "ativo", 40),
   };
 
   const expanded = {};
@@ -357,10 +351,10 @@ function buildTemplateValues(row) {
   return expanded;
 }
 
-const PROPOSTA_TEMPLATE_PATH = "/templates/proposta-hagav-template.html";
+const CONTRATO_TEMPLATE_PATH = "/templates/contrato-hagav-template.html";
 
-async function loadOfficialPropostaTemplate(request, env) {
-  const templateUrl = new URL(PROPOSTA_TEMPLATE_PATH, request.url).toString();
+async function loadOfficialContratoTemplate(request, env) {
+  const templateUrl = new URL(CONTRATO_TEMPLATE_PATH, request.url).toString();
   const readErrors = [];
 
   if (env?.ASSETS && typeof env.ASSETS.fetch === "function") {
@@ -369,7 +363,7 @@ async function loadOfficialPropostaTemplate(request, env) {
       if (response?.ok) {
         const html = await response.text();
         if (String(html || "").trim()) {
-          return { html, source: "assets", templatePath: PROPOSTA_TEMPLATE_PATH };
+          return { html, source: "assets", templatePath: CONTRATO_TEMPLATE_PATH };
         }
       }
       readErrors.push(`assets_http_${response?.status || 0}`);
@@ -383,7 +377,7 @@ async function loadOfficialPropostaTemplate(request, env) {
     if (response?.ok) {
       const html = await response.text();
       if (String(html || "").trim()) {
-        return { html, source: "http", templatePath: PROPOSTA_TEMPLATE_PATH };
+        return { html, source: "http", templatePath: CONTRATO_TEMPLATE_PATH };
       }
     }
     readErrors.push(`http_${response?.status || 0}`);
@@ -391,14 +385,14 @@ async function loadOfficialPropostaTemplate(request, env) {
     readErrors.push(`http_fetch_${stripDangerousText(String(err?.message || "erro_desconhecido"), 120)}`);
   }
 
-  const error = new Error(`template_not_found:${PROPOSTA_TEMPLATE_PATH}:${readErrors.join("|")}`);
+  const error = new Error(`template_not_found:${CONTRATO_TEMPLATE_PATH}:${readErrors.join("|")}`);
   error.code = "template_not_found";
-  error.templatePath = PROPOSTA_TEMPLATE_PATH;
+  error.templatePath = CONTRATO_TEMPLATE_PATH;
   throw error;
 }
 
-async function renderPropostaTemplateToLines(row, request, env) {
-  const templateInfo = await loadOfficialPropostaTemplate(request, env);
+async function renderContratoTemplateToLines(row, request, env) {
+  const templateInfo = await loadOfficialContratoTemplate(request, env);
   const values = buildTemplateValues(row);
   const renderedHtml = applyTemplatePlaceholders(templateInfo.html, values);
   const lines = htmlToPdfLines(renderedHtml);
@@ -414,7 +408,7 @@ async function uploadPdfIfPossible(config, env, pdfContent, fileName) {
   const bucket = firstEnvValue(env, ["SUPABASE_PDF_BUCKET", "SUPABASE_STORAGE_BUCKET"]);
   if (!bucket) return { ok: false, reason: "pdf_bucket_not_configured" };
 
-  const filePath = `orcamentos/${fileName}`;
+  const filePath = `contratos/${fileName}`;
   const encodedPath = encodeURIComponent(filePath).replace(/%2F/g, "/");
   const response = await fetch(`${config.url}/storage/v1/object/${bucket}/${encodedPath}`, {
     method: "POST",
@@ -441,31 +435,27 @@ async function uploadPdfIfPossible(config, env, pdfContent, fileName) {
   };
 }
 
-async function updatePdfLink(config, row, linkPdf) {
+async function updateContractLink(config, row, linkPdf) {
   const detalhes = readDetalhes(row);
-  const comercial = (detalhes?.comercial && typeof detalhes.comercial === "object")
-    ? detalhes.comercial
-    : {};
+  const contratoAtual = (detalhes?.contrato && typeof detalhes.contrato === "object") ? detalhes.contrato : {};
   const nowIso = new Date().toISOString();
 
   return fetchSupabase(
     config,
-    `/rest/v1/deals?id=eq.${encodeURIComponent(row.id)}&select=id,link_pdf,proposta_gerada_em,detalhes,status`,
+    `/rest/v1/deals?id=eq.${encodeURIComponent(row.id)}&select=id,detalhes,status`,
     {
       method: "PATCH",
       headers: { prefer: "return=representation" },
       body: {
-        link_pdf: linkPdf || "",
-        proposta_gerada_em: nowIso,
         detalhes: {
           ...detalhes,
-          comercial: {
-            ...comercial,
-            proposta_link: linkPdf || "",
-            proposta_gerada_em: nowIso,
-            atualizado_em: nowIso,
-          },
-        },
+          contrato: {
+            ...contratoAtual,
+            link_pdf: linkPdf || "",
+            contrato_gerado_em: nowIso,
+            atualizado_em: nowIso
+          }
+        }
       }
     }
   );
@@ -476,7 +466,7 @@ export async function onRequestPost(context) {
   const requestId = createRequestId();
   const config = getSupabaseConfig(env);
   const hasAdminKey = Boolean(getAdminKey(env));
-  logPdf(requestId, "start", "Inicio da geracao de proposta PDF", {
+  logPdf(requestId, "start", "Inicio da geracao de contrato PDF", {
     has_supabase_url: Boolean(config.url),
     has_service_role: Boolean(config.serviceRoleKey),
     has_anon_key: Boolean(config.anonKey),
@@ -508,19 +498,19 @@ export async function onRequestPost(context) {
 
   const getResult = await fetchSupabase(
     config,
-    `/rest/v1/deals?id=eq.${encodeURIComponent(id)}&select=id,created_at,nome,whatsapp,servico,resumo_orcamento,preco_base,preco_final,pacote_sugerido,status,observacoes_internas,link_pdf,detalhes,origem&limit=1`
+    `/rest/v1/deals?id=eq.${encodeURIComponent(id)}&select=id,nome,whatsapp,servico,pacote_sugerido,valor_fechado,preco_final,valor_sugerido,responsavel,validade_ate,observacoes_internas,detalhes,status&limit=1`
   );
   if (!getResult.ok) {
     return fail(requestId, "fetch_deal", getResult.reason || "deal_fetch_failed", 502);
   }
   const row = Array.isArray(getResult.data) ? (getResult.data[0] || null) : null;
   if (!row) {
-    return fail(requestId, "fetch_deal", "orcamento_nao_encontrado", 404);
+    return fail(requestId, "fetch_deal", "deal_nao_encontrado", 404);
   }
 
   let rendered;
   try {
-    rendered = await renderPropostaTemplateToLines(row, request, env);
+    rendered = await renderContratoTemplateToLines(row, request, env);
   } catch (err) {
     const reason = String(err?.code || "").toLowerCase() === "template_not_found"
       || String(err?.message || "").includes("template_not_found")
@@ -528,18 +518,18 @@ export async function onRequestPost(context) {
       : "template_render_failed";
     return fail(requestId, "template_render", reason, 500, {
       detail: stripDangerousText(String(err?.message || ""), 200),
-      template_path: PROPOSTA_TEMPLATE_PATH,
+      template_path: CONTRATO_TEMPLATE_PATH,
     });
   }
   const { lines, templateSource, templatePath } = rendered;
-  logPdf(requestId, "template_render", "Template renderizado para proposta", {
+  logPdf(requestId, "template_render", "Template renderizado para contrato", {
     template_source: templateSource,
     template_path: templatePath,
     lines_count: Array.isArray(lines) ? lines.length : 0,
   });
 
   const pdfContent = createPdfFromLines(lines);
-  const fileName = `orcamento-${id}-${Date.now()}.pdf`;
+  const fileName = `contrato-${id}-${Date.now()}.pdf`;
   const uploadResult = await uploadPdfIfPossible(config, env, pdfContent, fileName);
   if (!uploadResult.ok) {
     return fail(requestId, "upload", "pdf_upload_failed", 502, {
@@ -552,7 +542,7 @@ export async function onRequestPost(context) {
 
   let linkPdf = "";
   linkPdf = stripDangerousText(uploadResult.link || "", 1000);
-  const updateResult = await updatePdfLink(config, row, linkPdf);
+  const updateResult = await updateContractLink(config, row, linkPdf);
   if (!updateResult.ok) {
     return fail(requestId, "persist_link", "deal_link_update_failed", 502, {
       detail: stripDangerousText(String(updateResult.reason || "deal_update_failed"), 180),
@@ -562,7 +552,7 @@ export async function onRequestPost(context) {
       template_path: templatePath,
     });
   }
-  logPdf(requestId, "persist_link", "Link da proposta salvo no deal", {
+  logPdf(requestId, "persist_link", "Link do contrato salvo no deal", {
     deal_id: id,
     file_name: fileName,
     template_source: templateSource,

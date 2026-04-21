@@ -12,7 +12,7 @@ export default function AppShell({ children }) {
       {/* Mobile overlay */}
       {sidebarOpen && (
         <div
-          className="fixed inset-0 bg-black/60 z-20 lg:hidden"
+          className="fixed inset-0 bg-black/70 backdrop-blur-[1px] z-20 lg:hidden"
           onClick={() => setSidebarOpen(false)}
         />
       )}
@@ -23,7 +23,7 @@ export default function AppShell({ children }) {
       {/* Main */}
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
         <Topbar onMenuClick={() => setSidebarOpen(true)} />
-        <main className="flex-1 overflow-y-auto bg-hagav-black p-4 lg:p-6">
+        <main className="flex-1 overflow-y-auto bg-hagav-black px-4 py-5 md:px-5 md:py-6 xl:px-7 xl:py-7">
           {children}
         </main>
       </div>

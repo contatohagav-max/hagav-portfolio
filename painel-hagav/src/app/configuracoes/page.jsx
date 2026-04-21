@@ -174,8 +174,8 @@ export default function ConfiguracoesPage() {
     <div className="space-y-5 animate-fade-in max-w-6xl">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold text-hagav-white">Configuracoes comerciais</h1>
-          <p className="text-xs text-hagav-gray mt-0.5">Centro unico para score, pricing e status do pipeline.</p>
+          <h1 className="page-title">Configuracoes comerciais</h1>
+          <p className="page-subtitle">Centro unico para score, pricing e status do pipeline.</p>
         </div>
         <button onClick={load} disabled={loading} className="btn-ghost btn-sm">
           <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />

@@ -151,8 +151,8 @@ export default function LeadsPage() {
     <div className="space-y-5 animate-fade-in">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold text-hagav-white">Leads</h1>
-          <p className="text-xs text-hagav-gray mt-0.5">
+          <h1 className="page-title">Leads</h1>
+          <p className="page-subtitle">
             {loading ? 'Carregando...' : `${visibleLeadCount} ${showDescartados ? 'descartado' : 'lead'}${visibleLeadCount !== 1 ? 's' : ''}`}
           </p>
         </div>

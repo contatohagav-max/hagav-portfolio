@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { X, Save, Loader2, UserPlus } from 'lucide-react';
 import { createLead } from '@/lib/supabase';
 
@@ -19,6 +19,27 @@ const STATUS_OPTIONS = [
   { value: 'novo', label: 'Novo' },
   { value: 'contatado', label: 'Contatado' },
   { value: 'qualificado', label: 'Qualificado' },
+];
+
+const FLUXO_OPTIONS = [
+  { value: 'DU', label: 'Projeto pontual (DU)' },
+  { value: 'DR', label: 'Producao mensal (DR)' },
+];
+
+const PRAZO_OPTIONS_DU = ['24h', '3 dias', 'Essa semana', 'Sem pressa'];
+const PRAZO_OPTIONS_DR = ['Imediato', 'Essa semana', 'Esse mes', 'Estou analisando'];
+
+const MATERIAL_OPTIONS = [
+  { value: 'Sim', label: 'Sim' },
+  { value: 'Nao', label: 'Nao' },
+  { value: 'Parcial', label: 'Parcial' },
+];
+
+const TEMPERATURA_OPTIONS = [
+  { value: '', label: 'Automatico' },
+  { value: 'Quente', label: 'Quente' },
+  { value: 'Morno', label: 'Morno' },
+  { value: 'Frio', label: 'Frio' },
 ];
 
 function Field({ label, required, children }) {
@@ -51,17 +72,33 @@ export default function NewLeadDrawer({ onClose, onCreated }) {
   const [whatsapp, setWhatsapp] = useState('');
   const [empresa, setEmpresa] = useState('');
   const [origem, setOrigem] = useState('prospeccao_ativa');
+  const [fluxo, setFluxo] = useState('DU');
   const [servico, setServico] = useState('');
+  const [quantidade, setQuantidade] = useState('1');
+  const [materialGravado, setMaterialGravado] = useState('Sim');
+  const [tempoBruto, setTempoBruto] = useState('');
+  const [prazo, setPrazo] = useState('Essa semana');
+  const [referencia, setReferencia] = useState('');
+  const [contextoResumo, setContextoResumo] = useState('');
   const [valorEstimado, setValorEstimado] = useState('');
   const [status, setStatus] = useState('novo');
   const [prioridade, setPrioridade] = useState('media');
   const [urgencia, setUrgencia] = useState('media');
+  const [temperatura, setTemperatura] = useState('');
   const [proximaAcao, setProximaAcao] = useState('');
   const [proximoFollowup, setProximoFollowup] = useState('');
   const [responsavel, setResponsavel] = useState('');
-  const [observacoes, setObservacoes] = useState('');
+  const [observacoesInternas, setObservacoesInternas] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+
+  const prazoOptions = fluxo === 'DR' ? PRAZO_OPTIONS_DR : PRAZO_OPTIONS_DU;
+
+  useEffect(() => {
+    if (!prazoOptions.includes(prazo)) {
+      setPrazo(prazoOptions[0] || '');
+    }
+  }, [fluxo, prazo, prazoOptions]);
 
   function fromDateTimeLocal(value) {
     if (!value) return null;
@@ -91,15 +128,23 @@ export default function NewLeadDrawer({ onClose, onCreated }) {
         whatsapp: waTrimmed,
         empresa,
         origem,
+        fluxo,
         servico,
+        quantidade,
+        material_gravado_text: materialGravado,
+        tempo_bruto: tempoBruto,
+        prazo,
+        referencia_text: referencia,
+        contexto_resumo: contextoResumo,
         valor_estimado: valorEstimado ? Number(String(valorEstimado).replace(',', '.')) : 0,
         status,
         prioridade,
         urgencia,
+        temperatura,
         proxima_acao: proximaAcao,
         proximo_followup_em: fromDateTimeLocal(proximoFollowup),
         responsavel,
-        observacoes,
+        observacoes_internas: observacoesInternas,
       });
       onCreated?.(created);
       onClose();
@@ -116,7 +161,7 @@ export default function NewLeadDrawer({ onClose, onCreated }) {
 
       <aside className="drawer-panel flex flex-col">
         {/* Cabeçalho */}
-        <div className="flex items-center justify-between px-6 py-5 border-b border-hagav-border shrink-0">
+        <div className="drawer-head">
           <div>
             <div className="flex items-center gap-2 mb-1">
               <UserPlus size={15} className="text-hagav-gold" />
@@ -134,10 +179,11 @@ export default function NewLeadDrawer({ onClose, onCreated }) {
         </div>
 
         {/* Corpo */}
-        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+        <div className="drawer-body">
           <div className="grid grid-cols-2 gap-2">
             <InfoCard label="Status inicial" value={status} />
             <InfoCard label="Origem" value={origem} />
+            <InfoCard label="Fluxo" value={fluxo} />
             <InfoCard label="Prioridade" value={prioridade} />
             <InfoCard label="Urgencia" value={urgencia} />
           </div>
@@ -191,11 +237,14 @@ export default function NewLeadDrawer({ onClose, onCreated }) {
                   type="text"
                   value={servico}
                   onChange={(e) => setServico(e.target.value)}
-                  placeholder="Ex.: Reels, VSL..."
+                  placeholder="Ex.: Reels / Shorts / TikTok"
                   className="hinput w-full"
                 />
               </Field>
             </div>
+            <p className="text-[11px] text-hagav-gray/80 -mt-1">
+              Use `|` para separar mais de um servico (ex.: `YouTube | VSL ate 15 min`).
+            </p>
 
             <Field label="Valor estimado inicial (R$)">
               <input
@@ -205,6 +254,92 @@ export default function NewLeadDrawer({ onClose, onCreated }) {
                 onChange={(e) => setValorEstimado(e.target.value)}
                 placeholder="Ex.: 1500"
                 className="hinput w-full"
+              />
+            </Field>
+          </div>
+
+          <div className="gold-line" />
+
+          {/* Bloco: Detalhes comerciais */}
+          <div className="space-y-3">
+            <p className="text-[10px] text-hagav-gray uppercase tracking-wider">Detalhes comerciais</p>
+
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Fluxo">
+                <select value={fluxo} onChange={(e) => setFluxo(e.target.value)} className="hselect w-full">
+                  {FLUXO_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+              </Field>
+
+              <Field label="Quantidade">
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={quantidade}
+                  onChange={(e) => setQuantidade(e.target.value)}
+                  placeholder="Ex.: 2"
+                  className="hinput w-full"
+                />
+              </Field>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Material gravado">
+                <select value={materialGravado} onChange={(e) => setMaterialGravado(e.target.value)} className="hselect w-full">
+                  {MATERIAL_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+              </Field>
+
+              <Field label="Tempo bruto">
+                <input
+                  type="text"
+                  value={tempoBruto}
+                  onChange={(e) => setTempoBruto(e.target.value)}
+                  placeholder="Ex.: 1h, 30min"
+                  className="hinput w-full"
+                />
+              </Field>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Prazo">
+                <select value={prazo} onChange={(e) => setPrazo(e.target.value)} className="hselect w-full">
+                  {prazoOptions.map((value) => (
+                    <option key={value} value={value}>{value}</option>
+                  ))}
+                </select>
+              </Field>
+
+              <Field label="Temperatura">
+                <select value={temperatura} onChange={(e) => setTemperatura(e.target.value)} className="hselect w-full">
+                  {TEMPERATURA_OPTIONS.map((opt) => (
+                    <option key={opt.label} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+              </Field>
+            </div>
+
+            <Field label="Referencia">
+              <textarea
+                value={referencia}
+                onChange={(e) => setReferencia(e.target.value)}
+                rows={2}
+                placeholder="Link de referencia visual ou descricao"
+                className="hinput w-full resize-none"
+              />
+            </Field>
+
+            <Field label="Contexto / resumo">
+              <textarea
+                value={contextoResumo}
+                onChange={(e) => setContextoResumo(e.target.value)}
+                rows={3}
+                placeholder="Resumo comercial do contexto do cliente"
+                className="hinput w-full resize-none"
               />
             </Field>
           </div>
@@ -281,8 +416,8 @@ export default function NewLeadDrawer({ onClose, onCreated }) {
 
             <Field label="Observacoes internas">
               <textarea
-                value={observacoes}
-                onChange={(e) => setObservacoes(e.target.value)}
+                value={observacoesInternas}
+                onChange={(e) => setObservacoesInternas(e.target.value)}
                 rows={4}
                 placeholder="Contexto, historico ou observacoes sobre este lead..."
                 className="hinput w-full resize-none"
@@ -298,7 +433,7 @@ export default function NewLeadDrawer({ onClose, onCreated }) {
         </div>
 
         {/* Rodapé */}
-        <div className="px-6 py-4 border-t border-hagav-border shrink-0 flex items-center gap-3">
+        <div className="drawer-foot">
           <button
             type="button"
             onClick={onClose}

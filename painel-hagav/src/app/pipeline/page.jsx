@@ -64,8 +64,8 @@ export default function PipelinePage() {
     <div className="space-y-5 animate-fade-in h-full flex flex-col">
       <div className="flex items-center justify-between shrink-0">
         <div>
-          <h1 className="text-xl font-bold text-hagav-white">Pipeline</h1>
-          <p className="text-xs text-hagav-gray mt-0.5">
+          <h1 className="page-title">Pipeline</h1>
+          <p className="page-subtitle">
             {loading ? 'Carregando...' : `${leads.length} lead${leads.length !== 1 ? 's' : ''} no funil`}
           </p>
         </div>

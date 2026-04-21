@@ -310,8 +310,8 @@ export default function DashboardPage() {
     <div className="space-y-6 animate-fade-in">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold text-hagav-white">Dashboard comercial</h1>
-          <p className="text-xs text-hagav-gray mt-0.5">
+          <h1 className="page-title">Dashboard comercial</h1>
+          <p className="page-subtitle">
             {lastRefresh ? `Atualizado as ${lastRefresh.toLocaleTimeString('pt-BR')}` : 'Carregando...'}
           </p>
         </div>

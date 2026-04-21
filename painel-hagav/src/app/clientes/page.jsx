@@ -527,8 +527,8 @@ export default function ClientesPage() {
     <div className="space-y-5 animate-fade-in">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold text-hagav-white">Clientes</h1>
-          <p className="text-xs text-hagav-gray mt-0.5">
+          <h1 className="page-title">Clientes</h1>
+          <p className="page-subtitle">
             {loading ? 'Carregando...' : `${rows.length} contrato${rows.length !== 1 ? 's' : ''} fechado${rows.length !== 1 ? 's' : ''}`}
           </p>
         </div>
@@ -758,7 +758,7 @@ export default function ClientesPage() {
               </div>
             </div>
 
-            <div className="flex items-center gap-2 flex-wrap pt-2">
+            <div className="modal-actions">
               <button type="button" className="btn-gold btn-sm" onClick={() => handleSaveContrato('ativo', 'ativar')} disabled={saving}>
                 {saving ? <RefreshCw size={12} className="animate-spin" /> : <Power size={12} />}
                 Ativar cliente

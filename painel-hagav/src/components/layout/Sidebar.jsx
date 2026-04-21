@@ -57,7 +57,7 @@ export default function Sidebar({ open, onClose }) {
   return (
     <aside className={classNames(
       'fixed lg:static inset-y-0 left-0 z-30 flex flex-col',
-      'w-60 bg-hagav-dark border-r border-hagav-border',
+      'w-64 bg-hagav-dark/95 border-r border-hagav-border backdrop-blur-md',
       'transition-transform duration-200 ease-in-out',
       open ? 'translate-x-0' : '-translate-x-full lg:translate-x-0',
     )}>
@@ -80,7 +80,7 @@ export default function Sidebar({ open, onClose }) {
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
+      <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
         {NAV.map(({ href, label, icon: Icon }) => {
           const active = pathname === href || (href !== '/' && pathname.startsWith(href));
           const tooltip = NAV_TOOLTIPS[href];

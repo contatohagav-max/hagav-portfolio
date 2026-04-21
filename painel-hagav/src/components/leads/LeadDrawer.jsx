@@ -140,7 +140,7 @@ export default function LeadDrawer({ lead, onClose, onUpdated }) {
       <div className="drawer-overlay" onClick={onClose} />
 
       <aside className="drawer-panel flex flex-col">
-        <div className="flex items-center justify-between px-6 py-5 border-b border-hagav-border shrink-0">
+        <div className="drawer-head">
           <div>
             <p className="text-xs text-hagav-gray uppercase tracking-wider mb-1">Lead #{lead.id}</p>
             <h2 className="text-lg font-bold text-hagav-white">{lead.nome || 'Sem nome'}</h2>
@@ -151,7 +151,7 @@ export default function LeadDrawer({ lead, onClose, onUpdated }) {
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+        <div className="drawer-body">
           <div className="grid grid-cols-2 gap-2">
             <InfoCard label="WhatsApp" value={lead.whatsapp} />
             <InfoCard label="Pagina" value={lead.pagina} />
@@ -247,7 +247,7 @@ export default function LeadDrawer({ lead, onClose, onUpdated }) {
           )}
         </div>
 
-        <div className="px-6 py-4 border-t border-hagav-border shrink-0 flex items-center gap-3">
+        <div className="drawer-foot">
           {canGenerateOrcamento && (
             <button onClick={handleGenerateOrcamento} disabled={saving} className="btn-gold">
               {saving ? <Loader2 size={15} className="animate-spin" /> : <FilePlus2 size={15} />}

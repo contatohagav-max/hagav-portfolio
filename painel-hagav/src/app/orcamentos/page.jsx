@@ -103,8 +103,8 @@ export default function OrcamentosPage() {
     <div className="space-y-5 animate-fade-in">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold text-hagav-white">Orcamentos</h1>
-          <p className="text-xs text-hagav-gray mt-0.5">
+          <h1 className="page-title">Orcamentos</h1>
+          <p className="page-subtitle">
             {loading ? 'Carregando...' : `${orcamentos.length} orcamento${orcamentos.length !== 1 ? 's' : ''}`}
           </p>
         </div>

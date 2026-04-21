@@ -447,7 +447,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
     <>
       <div className="drawer-overlay" onClick={onClose} />
       <aside className="drawer-panel flex flex-col">
-        <div className="flex items-center justify-between px-6 py-5 border-b border-hagav-border shrink-0">
+        <div className="drawer-head">
           <div>
             <p className="text-xs text-hagav-gray uppercase tracking-wider mb-1">Orcamento #{orc.id}</p>
             <h2 className="text-lg font-bold text-hagav-white">{orc.nome || 'Sem nome'}</h2>
@@ -458,7 +458,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+        <div className="drawer-body">
           <div className="grid grid-cols-2 gap-3">
             <div className="bg-hagav-surface border border-hagav-border rounded-xl p-4 text-center">
               <p className="text-[10px] text-hagav-gray uppercase tracking-wider mb-1">Preco base</p>
@@ -683,7 +683,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
           )}
         </div>
 
-        <div className="px-6 py-4 border-t border-hagav-border shrink-0 flex items-center gap-2 flex-wrap">
+        <div className="drawer-foot flex-wrap gap-2">
           <EduTooltip {...SEND_PROPOSTA_TOOLTIP} className="w-auto">
             <span className="inline-flex">
               <button

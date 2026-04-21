@@ -67,24 +67,24 @@ export default function Topbar({ onMenuClick }) {
   }
 
   return (
-    <header className="h-14 flex items-center gap-3 px-4 lg:px-6 bg-hagav-dark border-b border-hagav-border shrink-0">
+    <header className="h-16 flex items-center gap-3 px-4 lg:px-6 bg-hagav-dark/95 border-b border-hagav-border shrink-0 backdrop-blur-md">
       {/* Mobile menu */}
       <button
         onClick={onMenuClick}
-        className="lg:hidden text-hagav-gray hover:text-hagav-white p-1.5 rounded-lg hover:bg-hagav-muted/30"
+        className="lg:hidden text-hagav-gray hover:text-hagav-white p-2 rounded-lg hover:bg-hagav-muted/30 transition-colors"
       >
         <Menu size={18} />
       </button>
 
       {/* Search */}
-      <form onSubmit={handleGlobalSearch} className="flex-1 max-w-md relative">
+      <form onSubmit={handleGlobalSearch} className="flex-1 max-w-xl relative">
         <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-hagav-gray pointer-events-none" />
         <input
           type="text"
           placeholder="Buscar e Enter (ou use lead:, orc:, cliente:)"
           value={searchVal}
           onChange={e => setSearchVal(e.target.value)}
-          className="hinput w-full pl-8 py-1.5 text-sm"
+          className="hinput w-full pl-8 text-sm"
         />
       </form>
 
@@ -95,7 +95,7 @@ export default function Topbar({ onMenuClick }) {
         type="button"
         disabled
         title="Notificacoes em breve"
-        className="relative text-hagav-gray/60 p-2 rounded-lg cursor-not-allowed"
+        className="relative text-hagav-gray/60 p-2 rounded-lg cursor-not-allowed border border-hagav-border/70 bg-hagav-surface/45"
       >
         <Bell size={17} />
       </button>
@@ -104,7 +104,7 @@ export default function Topbar({ onMenuClick }) {
       <div className="relative pl-2 border-l border-hagav-border" ref={menuRef}>
         <button
           onClick={() => setMenuOpen(v => !v)}
-          className="flex items-center gap-2 cursor-pointer group"
+          className="flex items-center gap-2 cursor-pointer group rounded-xl px-2.5 py-1.5 hover:bg-hagav-muted/25 transition-colors"
         >
           <div className="w-7 h-7 rounded-full bg-hagav-gold/20 border border-hagav-gold/30 flex items-center justify-center">
             <User size={13} className="text-hagav-gold" />
@@ -116,7 +116,7 @@ export default function Topbar({ onMenuClick }) {
         </button>
 
         {menuOpen && (
-          <div className="absolute right-0 top-10 w-52 bg-hagav-dark border border-hagav-border rounded-xl shadow-modal z-50 animate-fade-in overflow-hidden">
+          <div className="absolute right-0 top-12 w-56 bg-hagav-dark border border-hagav-border rounded-xl shadow-modal z-50 animate-fade-in overflow-hidden">
             <div className="px-4 py-3 border-b border-hagav-border">
               <p className="text-xs text-hagav-gray">Conectado como</p>
               <p className="text-sm font-medium text-hagav-white truncate">{email}</p>

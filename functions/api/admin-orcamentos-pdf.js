@@ -402,11 +402,13 @@ async function renderPropostaTemplateToLines(row, request, env) {
   const values = buildTemplateValues(row);
   const renderedHtml = applyTemplatePlaceholders(templateInfo.html, values);
   const lines = htmlToPdfLines(renderedHtml);
+  const firstCharsRendered = renderedHtml.slice(0, 120).replace(/\s+/g, " ").trim();
 
   return {
     lines,
     templateSource: templateInfo.source,
     templatePath: templateInfo.templatePath,
+    firstCharsRendered,
   };
 }
 
@@ -531,11 +533,12 @@ export async function onRequestPost(context) {
       template_path: PROPOSTA_TEMPLATE_PATH,
     });
   }
-  const { lines, templateSource, templatePath } = rendered;
+  const { lines, templateSource, templatePath, firstCharsRendered } = rendered;
   logPdf(requestId, "template_render", "Template renderizado para proposta", {
     template_source: templateSource,
     template_path: templatePath,
     lines_count: Array.isArray(lines) ? lines.length : 0,
+    first_120_chars: firstCharsRendered,
   });
 
   const pdfContent = createPdfFromLines(lines);
@@ -578,6 +581,7 @@ export async function onRequestPost(context) {
     upload_reason: uploadResult.ok ? "" : uploadResult.reason,
     template_source: templateSource,
     template_path: templatePath,
+    first_120_chars_rendered: firstCharsRendered,
     request_id: requestId,
     pdf_base64: typeof btoa === "function" ? btoa(pdfContent) : ""
   });

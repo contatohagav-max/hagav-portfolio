@@ -22,6 +22,9 @@ cp -r thumbnail    dist/ 2>/dev/null || true
 cp _headers        dist/ 2>/dev/null || true
 cp _redirects      dist/ 2>/dev/null || true
 
+# Templates de PDF (proposta + contrato)
+cp -r templates     dist/ 2>/dev/null || true
+
 # Manifests e favicons
 cp site.webmanifest dist/ 2>/dev/null || true
 cp *.png            dist/ 2>/dev/null || true

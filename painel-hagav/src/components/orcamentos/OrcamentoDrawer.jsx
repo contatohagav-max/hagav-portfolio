@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { X, Save, Loader2, MessageCircle, ExternalLink, AlertTriangle, CheckCircle2, Send, Ban, RotateCw } from 'lucide-react';
 import { OrcStatusBadge, PrioridadeBadge, UrgenciaBadge, TemperaturaBadge } from '@/components/ui/StatusBadge';
 import EduTooltip from '@/components/ui/EduTooltip';
 import { generateDealPdf, updateOrcamento } from '@/lib/supabase';
+import { deriveFinancialMetricsFromFinalPrice } from '@/lib/commercial';
 import { fmtDateTime, fmtBRL, whatsappLink, ORC_STATUS_LABELS } from '@/lib/utils';
 
 const ORC_STATUSES = ['orcamento', 'proposta_enviada', 'ajustando', 'aprovado', 'perdido'];
@@ -104,6 +105,31 @@ function downloadPdfFromBase64(base64, fileName) {
   setTimeout(() => URL.revokeObjectURL(url), 2000);
 }
 
+function openPrintWindow(html) {
+  if (typeof window === 'undefined' || !html) return;
+  const win = window.open('', '_blank', 'width=960,height=800,menubar=no,toolbar=no');
+  if (!win) {
+    // fallback: blob URL se popup bloqueado
+    const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.target = '_blank';
+    a.rel = 'noreferrer';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+    return;
+  }
+  win.document.open();
+  win.document.write(html);
+  win.document.close();
+  win.focus();
+  // aguarda CSS/fontes renderizarem antes de disparar print
+  setTimeout(() => { win.print(); }, 900);
+}
+
 export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
   const [statusOrc, setStatusOrc] = useState(orc?.status_orcamento ?? 'orcamento');
   const [precoFinal, setPrecoFinal] = useState(orc?.preco_final ?? 0);
@@ -169,8 +195,35 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
     : observacoesText;
   const statusOptions = Array.from(new Set([...ORC_STATUSES, statusOrc || 'orcamento']));
   const canApproveOrcamento = ['orcamento', 'proposta_enviada', 'ajustando'].includes(String(statusOrc || '').toLowerCase());
-  const canSendProposta = Boolean(propostaLink);
   const hasWhatsapp = Boolean(normalizeText(orc.whatsapp));
+  const canSendProposta = Boolean(propostaLink) && hasWhatsapp;
+  const financialMetrics = useMemo(
+    () => deriveFinancialMetricsFromFinalPrice(orc, precoFinal),
+    [orc, precoFinal]
+  );
+
+  function buildFinancialPersistencePatch() {
+    const detalhesAtual = parseDetalhes(orc?.detalhes);
+    const comercialAtual = parseDetalhes(detalhesAtual?.comercial);
+    const nowIso = new Date().toISOString();
+
+    return {
+      preco_final: Number(financialMetrics.preco_final || 0),
+      margem_estimada: Number(financialMetrics.margem_estimada || 0),
+      valor_estimado: Number(financialMetrics.valor_estimado || 0),
+      detalhes: {
+        ...detalhesAtual,
+        comercial: {
+          ...comercialAtual,
+          margem_percentual: Number(financialMetrics.margem_percentual || 0),
+          lucro_estimado: Number(financialMetrics.lucro_estimado || 0),
+          potencial_total: Number(financialMetrics.potencial_total || financialMetrics.valor_estimado || 0),
+          preco_final: Number(financialMetrics.preco_final || 0),
+          atualizado_em: nowIso,
+        },
+      },
+    };
+  }
 
   useEffect(() => {
     setStatusOrc(orc?.status_orcamento ?? 'orcamento');
@@ -204,7 +257,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
     try {
       const updated = await updateOrcamento(orc.id, {
         status_orcamento: statusOrc,
-        preco_final: Number(precoFinal),
+        ...buildFinancialPersistencePatch(),
         observacoes_internas: obsInternas,
         urgencia,
         prioridade,
@@ -213,7 +266,8 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
         proximo_followup_em: fromDateTimeLocal(followup),
       });
       onUpdated?.(updated);
-      onClose();
+      setPrecoFinal(updated?.preco_final ?? Number(financialMetrics.preco_final || 0));
+      setInfo('Orcamento salvo com campos financeiros atualizados.');
     } catch (err) {
       setError(err.message ?? 'Erro ao salvar.');
     } finally {
@@ -229,7 +283,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
     try {
       const updated = await updateOrcamento(orc.id, {
         status_orcamento: nextStatus,
-        preco_final: Number(precoFinal),
+        ...buildFinancialPersistencePatch(),
         observacoes_internas: obsInternas,
         urgencia,
         prioridade,
@@ -252,13 +306,37 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
     setInfo('');
     try {
       const result = await generateDealPdf(orc.id);
-      if (result?.pdf_base64) {
+      console.info('[Orcamentos][PDF][Resultado]', {
+        deal_id: orc.id,
+        request_id: String(result?.request_id || ''),
+        template_source: String(result?.template_source || ''),
+        uploaded: Boolean(result?.uploaded),
+        upload_reason: String(result?.upload_reason || ''),
+        has_link_pdf: Boolean(String(result?.link_pdf || '').trim()),
+      });
+      // rendered_html = HTML completo preenchido → janela de impressao do browser (layout premium)
+      if (result?.rendered_html) {
+        openPrintWindow(result.rendered_html);
+      } else if (result?.pdf_base64) {
+        // fallback: download do PDF texto (sem layout) se rendered_html ausente
         downloadPdfFromBase64(result.pdf_base64, result.fileName || `proposta-${orc.id}.pdf`);
       }
 
       const nextLink = String(result?.link_pdf || '').trim();
+      const uploadReason = String(result?.upload_reason || '').trim();
       if (!nextLink) {
-        setError('Proposta gerada sem link publico. Verifique SUPABASE_PDF_BUCKET e tente novamente.');
+        // sem link no storage mas proposta aberta para impressao — nao e um erro
+        if (result?.rendered_html) {
+          setInfo('Proposta aberta para impressao. Use "Salvar como PDF" no dialogo do browser. Para link publico, configure SUPABASE_PDF_BUCKET no deploy.');
+          return;
+        }
+        if (uploadReason === 'pdf_bucket_not_configured') {
+          setError('Proposta gerada sem link publico. Configure SUPABASE_PDF_BUCKET (ou SUPABASE_STORAGE_BUCKET) no deploy.');
+        } else if (uploadReason) {
+          setError(`Proposta gerada sem upload no storage (${uploadReason}).`);
+        } else {
+          setError('Proposta gerada sem link publico. Verifique SUPABASE_PDF_BUCKET e tente novamente.');
+        }
         return;
       }
       const nowIso = new Date().toISOString();
@@ -274,8 +352,12 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
         proposta_gerada_em: nowIso,
       });
 
-      setInfo('Proposta PDF gerada com sucesso. O envio no WhatsApp foi habilitado.');
+      setInfo('Proposta aberta para impressao e link gerado. Use "Salvar como PDF" no browser. Envio no WhatsApp habilitado.');
     } catch (err) {
+      console.error('[Orcamentos][PDF][Erro]', {
+        deal_id: orc.id,
+        message: String(err?.message || ''),
+      });
       setError(err.message || 'Falha ao gerar PDF.');
     } finally {
       setPdfLoading(false);
@@ -283,7 +365,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
   }
 
   async function handleEnviarProposta() {
-    if (!canSendProposta) {
+    if (!propostaLink) {
       setError('Gere a proposta PDF antes de enviar no WhatsApp.');
       return;
     }
@@ -390,9 +472,10 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-            <InfoRow label="Preco final editavel" value={fmtBRL(precoFinal || orc.preco_base)} />
-            <InfoRow label="Margem estimada" value={`${Number(orc.margem_estimada || 0).toFixed(1)}%`} />
-            <InfoRow label="Valor potencial" value={fmtBRL(orc.valor_estimado || orc.preco_final || orc.preco_base)} />
+            <InfoRow label="Preco final editavel" value={fmtBRL(financialMetrics.preco_final || 0)} />
+            <InfoRow label="Margem estimada" value={`${Number(financialMetrics.margem_percentual || 0).toFixed(1)}%`} />
+            <InfoRow label="Lucro estimado" value={fmtBRL(financialMetrics.lucro_estimado || 0)} />
+            <InfoRow label="Valor potencial" value={fmtBRL(financialMetrics.valor_estimado || orc.preco_final || orc.preco_base)} />
             <InfoRow label="Pacote sugerido" value={orc.pacote_sugerido || '—'} />
             <InfoRow label="Faixa sugerida" value={orc.faixa_sugerida || '—'} />
             <InfoRow label="Proposta PDF" value={propostaLink ? 'Gerada' : 'Pendente'} />

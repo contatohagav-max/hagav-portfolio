@@ -406,6 +406,7 @@ async function renderPropostaTemplateToLines(row, request, env) {
 
   return {
     lines,
+    renderedHtml,
     templateSource: templateInfo.source,
     templatePath: templateInfo.templatePath,
     firstCharsRendered,
@@ -533,7 +534,7 @@ export async function onRequestPost(context) {
       template_path: PROPOSTA_TEMPLATE_PATH,
     });
   }
-  const { lines, templateSource, templatePath, firstCharsRendered } = rendered;
+  const { lines, renderedHtml, templateSource, templatePath, firstCharsRendered } = rendered;
   logPdf(requestId, "template_render", "Template renderizado para proposta", {
     template_source: templateSource,
     template_path: templatePath,
@@ -582,6 +583,7 @@ export async function onRequestPost(context) {
     template_source: templateSource,
     template_path: templatePath,
     first_120_chars_rendered: firstCharsRendered,
+    rendered_html: renderedHtml,
     request_id: requestId,
     pdf_base64: typeof btoa === "function" ? btoa(pdfContent) : ""
   });

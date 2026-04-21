@@ -121,6 +121,29 @@ function downloadPdfFromBase64(base64, fileName) {
   setTimeout(() => URL.revokeObjectURL(url), 2000);
 }
 
+function openPrintWindow(html) {
+  if (typeof window === 'undefined' || !html) return;
+  const win = window.open('', '_blank', 'width=960,height=800,menubar=no,toolbar=no');
+  if (!win) {
+    const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.target = '_blank';
+    a.rel = 'noreferrer';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+    return;
+  }
+  win.document.open();
+  win.document.write(html);
+  win.document.close();
+  win.focus();
+  setTimeout(() => { win.print(); }, 900);
+}
+
 function BadgeContrato({ status }) {
   const key = String(status || '').toLowerCase();
   const label = STATUS_CONTRATO_LABELS[key] || 'Ativo';
@@ -251,24 +274,49 @@ export default function ClientesPage() {
     try {
       setFeedback('Gerando PDF do contrato...');
       const result = await generateContractPdf(row.id);
-      if (result?.pdf_base64) {
+      console.info('[Clientes][PDF][Resultado]', {
+        deal_id: row.id,
+        request_id: String(result?.request_id || ''),
+        template_source: String(result?.template_source || ''),
+        uploaded: Boolean(result?.uploaded),
+        upload_reason: String(result?.upload_reason || ''),
+        has_link_pdf: Boolean(String(result?.link_pdf || '').trim()),
+      });
+      // rendered_html = HTML completo preenchido → janela de impressao do browser (layout premium)
+      if (result?.rendered_html) {
+        openPrintWindow(result.rendered_html);
+      } else if (result?.pdf_base64) {
         downloadPdfFromBase64(result.pdf_base64, result.fileName || `contrato-${row.id}.pdf`);
       }
       const linkPdf = String(result?.link_pdf || '').trim();
+      const uploadReason = String(result?.upload_reason || '').trim();
       if (linkPdf) {
         setRows((prev) => prev.map((item) => (
           item.id === row.id
-            ? { ...item, contrato_link_pdf: linkPdf, link_pdf: linkPdf }
+            ? { ...item, contrato_link_pdf: linkPdf }
             : item
         )));
         if (selected?.id === row.id) {
-          setSelected((prev) => cloneSelectedRow({ ...prev, contrato_link_pdf: linkPdf, link_pdf: linkPdf }));
+          setSelected((prev) => cloneSelectedRow({ ...prev, contrato_link_pdf: linkPdf }));
         }
       }
-      setFeedback(linkPdf ? 'Contrato PDF gerado e link atualizado.' : 'Contrato PDF gerado para download local.');
+      if (linkPdf) {
+        setFeedback('Contrato aberto para impressao e link atualizado.');
+      } else if (result?.rendered_html) {
+        setFeedback('Contrato aberto para impressao. Use "Salvar como PDF" no browser. Para link publico, configure SUPABASE_PDF_BUCKET no deploy.');
+      } else if (uploadReason === 'pdf_bucket_not_configured') {
+        setFeedback('Contrato PDF gerado sem link publico. Configure SUPABASE_PDF_BUCKET (ou SUPABASE_STORAGE_BUCKET) no deploy.');
+      } else if (uploadReason) {
+        setFeedback(`Contrato PDF gerado sem upload no storage (${uploadReason}).`);
+      } else {
+        setFeedback('Contrato PDF gerado para download local.');
+      }
       setTimeout(() => setFeedback(''), 3000);
     } catch (err) {
-      console.error('[Clientes][ContratoPDF]', err);
+      console.error('[Clientes][ContratoPDF][Erro]', {
+        deal_id: row.id,
+        message: String(err?.message || ''),
+      });
       setFeedback(err.message || 'Falha ao gerar contrato PDF.');
       setTimeout(() => setFeedback(''), 3200);
     }
@@ -276,7 +324,7 @@ export default function ClientesPage() {
 
   async function handleEnviarContratoWhatsApp(row) {
     if (!row) return;
-    const contratoLink = String(row?.contrato_link_pdf || row?.link_pdf || '').trim();
+    const contratoLink = String(row?.contrato_link_pdf || '').trim();
     if (!contratoLink) {
       setFeedback('Gere o contrato PDF antes de enviar no WhatsApp.');
       setTimeout(() => setFeedback(''), 3200);
@@ -735,16 +783,16 @@ export default function ClientesPage() {
                 type="button"
                 className="btn-ghost btn-sm"
                 onClick={() => handleEnviarContratoWhatsApp(selected)}
-                disabled={saving || !(selected.contrato_link_pdf || selected.link_pdf)}
+                disabled={saving || !selected.contrato_link_pdf}
               >
                 <MessageCircle size={12} /> Enviar contrato no WhatsApp
               </button>
-              {selected.contrato_link_pdf || selected.link_pdf ? (
-                <a href={selected.contrato_link_pdf || selected.link_pdf} target="_blank" rel="noreferrer" className="btn-ghost btn-sm">
+              {selected.contrato_link_pdf ? (
+                <a href={selected.contrato_link_pdf} target="_blank" rel="noreferrer" className="btn-ghost btn-sm">
                   <ExternalLink size={12} /> Ver contrato
                 </a>
               ) : (
-                <span className="text-xs text-hagav-gray">Sem link PDF salvo ainda.</span>
+                <span className="text-xs text-hagav-gray">Gere o contrato PDF para habilitar envio e visualizacao.</span>
               )}
             </div>
           </div>

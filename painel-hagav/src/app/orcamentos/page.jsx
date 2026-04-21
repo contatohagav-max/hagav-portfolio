@@ -10,7 +10,7 @@ import EduTooltip from '@/components/ui/EduTooltip';
 import { fetchOrcamentos } from '@/lib/supabase';
 import { ORC_STATUS_LABELS, fmtBRL } from '@/lib/utils';
 
-const ORC_VISIBLE_STATUSES = ['orcamento', 'proposta_enviada', 'ajustando', 'aprovado', 'perdido'];
+const ORC_ACTIVE_STATUSES = ['orcamento', 'proposta_enviada', 'ajustando'];
 const ORC_FILTER_STATUSES = ['orcamento', 'proposta_enviada', 'ajustando', 'aprovado', 'perdido'];
 const UPDATE_TOOLTIP = {
   title: 'Atualizar',
@@ -32,7 +32,7 @@ export default function OrcamentosPage() {
   const [urgencia, setUrgencia] = useState(searchParams.get('urgencia') || '');
   const [prioridade, setPrioridade] = useState(searchParams.get('prioridade') || '');
   const [incompletoOnly, setIncompletoOnly] = useState(searchParams.get('incompleto') === '1');
-  const [abertosOnly, setAbertosOnly] = useState(searchParams.get('abertos') === '1');
+  const [abertosOnly, setAbertosOnly] = useState(searchParams.get('abertos') !== '0');
 
   useEffect(() => {
     setSearch(searchParams.get('search') || '');
@@ -40,8 +40,15 @@ export default function OrcamentosPage() {
     setUrgencia(searchParams.get('urgencia') || '');
     setPrioridade(searchParams.get('prioridade') || '');
     setIncompletoOnly(searchParams.get('incompleto') === '1');
-    setAbertosOnly(searchParams.get('abertos') === '1');
+    setAbertosOnly(searchParams.get('abertos') !== '0');
   }, [searchParams]);
+
+  const isActiveOrcamento = useCallback((item) => {
+    const statusDeal = String(item?.status_deal || '').toLowerCase();
+    if (statusDeal) return ORC_ACTIVE_STATUSES.includes(statusDeal);
+    const statusOrcamento = String(item?.status_orcamento || '').toLowerCase();
+    return ORC_ACTIVE_STATUSES.includes(statusOrcamento);
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -55,13 +62,8 @@ export default function OrcamentosPage() {
         incompleto: incompletoOnly || undefined,
         limit: 800,
       });
-      const rows = abertosOnly
-        ? data.filter((item) => {
-          const statusDeal = String(item.status_deal || '').toLowerCase();
-          if (statusDeal) return ['orcamento', 'proposta_enviada', 'ajustando'].includes(statusDeal);
-          const statusOrcamento = String(item.status_orcamento || '').toLowerCase();
-          return ['orcamento', 'proposta_enviada', 'ajustando'].includes(statusOrcamento);
-        })
+      const rows = abertosOnly && !statusOrc
+        ? data.filter(isActiveOrcamento)
         : data;
       setOrcamentos(rows);
     } catch (err) {
@@ -70,7 +72,7 @@ export default function OrcamentosPage() {
     } finally {
       setLoading(false);
     }
-  }, [search, statusOrc, urgencia, prioridade, incompletoOnly, abertosOnly]);
+  }, [search, statusOrc, urgencia, prioridade, incompletoOnly, abertosOnly, isActiveOrcamento]);
 
   useEffect(() => {
     const timer = setTimeout(load, 250);
@@ -80,12 +82,14 @@ export default function OrcamentosPage() {
   function handleUpdated(updated) {
     setOrcamentos((prev) => prev
       .map((item) => (item.id === updated.id ? updated : item))
-      .filter((item) => {
-        const statusDeal = String(item.status_deal || '').toLowerCase();
-        return ORC_VISIBLE_STATUSES.includes(statusDeal);
-      }));
+      .filter((item) => (abertosOnly && !statusOrc ? isActiveOrcamento(item) : true)));
+    if (selected?.id === updated?.id) {
+      const keepOpen = !(abertosOnly && !statusOrc && !isActiveOrcamento(updated));
+      setSelected(keepOpen ? updated : null);
+    }
     setFeedback('Orcamento salvo com sucesso.');
     setTimeout(() => setFeedback(''), 2500);
+    load();
   }
 
   const totalBase = orcamentos.reduce((sum, item) => sum + Number(item.preco_base || 0), 0);
@@ -177,7 +181,7 @@ export default function OrcamentosPage() {
           onClick={() => setAbertosOnly((prev) => !prev)}
           className={`btn-ghost btn-sm ${abertosOnly ? 'border-hagav-gold/40 text-hagav-gold' : ''}`}
         >
-          Orcamentos em aberto
+          Orcamentos ativos
         </button>
       </div>
 

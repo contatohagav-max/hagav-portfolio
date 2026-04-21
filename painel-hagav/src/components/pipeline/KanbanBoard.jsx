@@ -63,12 +63,35 @@ const PIPELINE_STAGE_TOOLTIPS = {
 function resolvePipelineColumnStatus(status) {
   const normalized = String(status || '').toLowerCase();
   if (normalized === 'chamado' || normalized === 'em_contato') return 'contatado';
-  if (normalized === 'proposta enviada') return 'proposta_enviada';
+  if (normalized === 'proposta enviada' || normalized === 'proposta' || normalized === 'em_negociacao' || normalized === 'negociacao') return 'proposta_enviada';
   if (normalized === 'descartado') return 'perdido';
   if (normalized === 'orcamento' || normalized === 'ajustando' || normalized === 'aprovado') {
     return 'proposta_enviada';
   }
   return normalized;
+}
+
+function mapColumnToPersistedStatus(activeLead, targetColId) {
+  const target = String(targetColId || '').toLowerCase();
+  if (target === 'proposta_enviada') {
+    return 'orcamento';
+  }
+  if (target === 'perdido') {
+    return 'perdido';
+  }
+  if (target === 'fechado') {
+    return 'fechado';
+  }
+  if (target === 'qualificado') {
+    return 'qualificado';
+  }
+  if (target === 'contatado') {
+    return 'contatado';
+  }
+  if (target === 'novo') {
+    return 'novo';
+  }
+  return resolvePipelineColumnStatus(activeLead?.status);
 }
 
 function DroppableColumn({ column, leads, onSelectLead }) {
@@ -162,17 +185,18 @@ export default function KanbanBoard({
 
     const activeCol = resolvePipelineColumnStatus(activeLead.status);
     if (targetColId === activeCol) return;
+    const persistedStatus = mapColumnToPersistedStatus(activeLead, targetColId);
 
     // Optimistic update
     setLeads((prev) => {
-      const next = prev.map((l) => (String(l.id) === activeLeadId ? { ...l, status: targetColId } : l));
+      const next = prev.map((l) => (String(l.id) === activeLeadId ? { ...l, status: persistedStatus } : l));
       onLeadsChange?.(next);
       return next;
     });
 
     // Persist
     try {
-      await updateLead(activeLead.id, { status: targetColId });
+      await updateLead(activeLead.id, { status: persistedStatus });
       const label = KANBAN_COLUMNS.find((item) => item.id === targetColId)?.label || targetColId;
       onStatusPersist?.({ type: 'success', message: `Lead #${activeLeadId} movido para ${label}.` });
     } catch (err) {

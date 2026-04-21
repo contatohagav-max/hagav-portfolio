@@ -34,7 +34,7 @@ const NAV_TOOLTIPS = {
   '/orcamentos': {
     title: 'Orçamentos',
     whatIs: 'Etapa comercial de proposta, ajuste e fechamento.',
-    purpose: 'Precificar, negociar e fechar contrato.',
+    purpose: 'Precificar, negociar e aprovar proposta comercial.',
     observe: 'Mantenha foco em proposta_enviada, ajustando e aprovado.',
   },
   '/clientes': {

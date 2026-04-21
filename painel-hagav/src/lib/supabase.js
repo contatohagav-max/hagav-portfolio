@@ -102,10 +102,25 @@ function mapDealToContratoRecord(raw) {
   const now = new Date();
   const vencimentoDate = parseDateSafe(vencimento ? `${vencimento}T23:59:59` : null);
   const statusRaw = String(contrato?.status || '').toLowerCase();
+  const hasContratoData = Boolean(
+    statusRaw
+    || contrato?.data_inicio
+    || contrato?.vencimento
+    || contrato?.forma_pagamento
+    || contrato?.responsavel
+    || contrato?.observacoes
+    || contrato?.assinado_em
+    || contrato?.ativado_em
+    || contrato?.renovado_em
+    || contrato?.encerrado_em
+    || valorContrato > 0
+  );
 
   let statusContrato = statusRaw;
   if (!statusContrato) {
-    if (vencimentoDate && vencimentoDate.getTime() < now.getTime()) {
+    if (deal.status === DEAL_STATUS.APROVADO && !hasContratoData) {
+      statusContrato = 'aguardando_contrato';
+    } else if (vencimentoDate && vencimentoDate.getTime() < now.getTime()) {
       statusContrato = 'vencido';
     } else {
       statusContrato = 'ativo';
@@ -117,6 +132,8 @@ function mapDealToContratoRecord(raw) {
     : null;
   const renovacaoProxima = statusContrato !== 'encerrado'
     && (Number.isFinite(diasParaVencimento) && diasParaVencimento <= 15);
+  const propostaLink = String(deal?.link_pdf || '').trim();
+  const contratoLink = String(contrato?.link_pdf || '').trim();
 
   return {
     ...deal,
@@ -126,14 +143,19 @@ function mapDealToContratoRecord(raw) {
     valor_contrato: valorContrato,
     vencimento_contrato: vencimento,
     inicio_contrato: contrato?.data_inicio || null,
-    recorrente_contrato: typeof contrato?.recorrente === 'boolean' ? contrato.recorrente : false,
+    recorrente_contrato: typeof contrato?.recorrente === 'boolean'
+      ? contrato.recorrente
+      : Boolean(contrato?.recorrente ?? deal?.recorrente),
     responsavel_contrato: contrato?.responsavel || deal?.responsavel || '',
     forma_pagamento_contrato: contrato?.forma_pagamento || '',
     renovacao_alerta_em: renovacaoEm,
     renovacao_proxima: renovacaoProxima,
     dias_para_vencimento: Number.isFinite(diasParaVencimento) ? diasParaVencimento : null,
     plano_servico: deal?.pacote_sugerido || deal?.servico || '',
-    link_pdf: deal?.link_pdf || '',
+    proposta_gerada_em: deal?.proposta_gerada_em || null,
+    proposta_link_pdf: propostaLink,
+    contrato_link_pdf: contratoLink || propostaLink,
+    link_pdf: contratoLink || propostaLink,
   };
 }
 
@@ -353,6 +375,9 @@ export async function updateOrcamento(id, patch) {
   if (!client) throw new Error('Supabase nao configurado');
 
   const payload = normalizeOrcamentoPatchToDeals(patch);
+  const shouldRecalculatePricing = Boolean(payload?.recalcular_pricing);
+  delete payload.recalcular_pricing;
+
   const { data, error } = await client
     .from('deals')
     .update(payload)
@@ -361,7 +386,53 @@ export async function updateOrcamento(id, patch) {
     .single();
 
   if (error) throw error;
-  return enrichOrcamentoRecord(mapDealToOrcamentoRecord(data));
+
+  let nextRecord = enrichOrcamentoRecord(mapDealToOrcamentoRecord(data));
+
+  if (shouldRecalculatePricing) {
+    const recomputeSeed = mapDealToOrcamentoRecord({
+      ...data,
+      margem_estimada: undefined,
+      revisao_manual: undefined,
+      faixa_sugerida: undefined,
+      valor_estimado: undefined,
+      desconto_volume_percent: undefined,
+      multiplicador_urgencia: undefined,
+      multiplicador_complexidade: undefined,
+      complexidade_nivel: undefined,
+      ajuste_referencia_percent: undefined,
+      ajuste_multicamera_percent: undefined,
+    });
+    const recomputed = enrichOrcamentoRecord(recomputeSeed);
+
+    const recalcPatch = {
+      margem_estimada: Number(recomputed.margem_estimada || 0),
+      revisao_manual: Boolean(recomputed.revisao_manual),
+      valor_estimado: Number(recomputed.valor_estimado || 0),
+      faixa_sugerida: String(recomputed.faixa_sugerida || ''),
+      desconto_volume_percent: Number(recomputed.desconto_volume_percent || 0),
+      multiplicador_urgencia: Number(recomputed.multiplicador_urgencia || 0),
+      multiplicador_complexidade: Number(recomputed.multiplicador_complexidade || 0),
+      complexidade_nivel: String(recomputed.complexidade_nivel || ''),
+      ajuste_referencia_percent: Number(recomputed.ajuste_referencia_percent || 0),
+      ajuste_multicamera_percent: Number(recomputed.ajuste_multicamera_percent || 0),
+    };
+
+    const { data: recalcData, error: recalcError } = await client
+      .from('deals')
+      .update(recalcPatch)
+      .eq('id', id)
+      .select('*')
+      .single();
+
+    if (!recalcError && recalcData) {
+      nextRecord = enrichOrcamentoRecord(mapDealToOrcamentoRecord(recalcData));
+    } else if (recalcError) {
+      console.warn('[Orcamentos][Recalculo]', recalcError);
+    }
+  }
+
+  return nextRecord;
 }
 
 function getAdminApiKey(explicitKey) {
@@ -384,27 +455,66 @@ function getAdminApiKey(explicitKey) {
   }
 }
 
-export async function generateDealPdf(id, { adminKey } = {}) {
-  const key = getAdminApiKey(adminKey);
-  if (!key) {
-    throw new Error('Chave admin nao configurada para gerar PDF.');
+async function getSupabaseSessionToken() {
+  const client = getSupabase();
+  if (!client) return '';
+  try {
+    const { data } = await client.auth.getSession();
+    return String(data?.session?.access_token || '').trim();
+  } catch {
+    return '';
   }
+}
 
-  const response = await fetch('/api/admin-orcamentos-pdf', {
+async function generatePdfDocument(endpoint, id, { adminKey } = {}) {
+  const key = getAdminApiKey(adminKey);
+  const token = await getSupabaseSessionToken();
+
+  const headers = {
+    'content-type': 'application/json; charset=utf-8',
+  };
+  if (key) headers['x-admin-key'] = key;
+  if (token) headers.authorization = `Bearer ${token}`;
+
+  const request = async (targetEndpoint) => fetch(targetEndpoint, {
     method: 'POST',
-    headers: {
-      'content-type': 'application/json; charset=utf-8',
-      'x-admin-key': key,
-    },
+    headers,
+    credentials: 'include',
     body: JSON.stringify({ id }),
   });
-  const parsed = await response.json().catch(() => ({}));
+  let response = await request(endpoint);
+  let parsed = await response.json().catch(() => ({}));
+
+  // Fallback operacional: ambientes antigos podem nao ter rota dedicada de contrato.
+  if (
+    endpoint === '/api/admin-contratos-pdf'
+    && !response.ok
+    && Number(response.status) === 404
+  ) {
+    response = await request('/api/admin-orcamentos-pdf');
+    parsed = await response.json().catch(() => ({}));
+  }
 
   if (!response.ok || parsed?.ok === false) {
-    throw new Error(parsed?.error || `Falha ao gerar PDF (${response.status})`);
+    const reason = String(parsed?.error || '').trim();
+    if (reason === 'admin_key_not_configured_or_session_missing') {
+      throw new Error('Sessao sem autorizacao para PDF. Configure ADMIN_DASHBOARD_KEY no deploy ou refaca login no painel.');
+    }
+    if (reason === 'unauthorized') {
+      throw new Error('Sem autorizacao para gerar PDF. Verifique chave admin ou sessao autenticada.');
+    }
+    throw new Error(reason || `Falha ao gerar PDF (${response.status})`);
   }
 
   return parsed;
+}
+
+export async function generateDealPdf(id, { adminKey } = {}) {
+  return generatePdfDocument('/api/admin-orcamentos-pdf', id, { adminKey });
+}
+
+export async function generateContractPdf(id, { adminKey } = {}) {
+  return generatePdfDocument('/api/admin-contratos-pdf', id, { adminKey });
 }
 
 export async function fetchClientesContratos({
@@ -421,7 +531,7 @@ export async function fetchClientesContratos({
   let query = client
     .from('deals')
     .select('*')
-    .eq('status', DEAL_STATUS.FECHADO)
+    .in('status', [DEAL_STATUS.APROVADO, DEAL_STATUS.FECHADO])
     .order('updated_at', { ascending: false })
     .limit(limit);
 

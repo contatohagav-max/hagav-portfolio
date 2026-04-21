@@ -6,6 +6,7 @@ import {
   Download,
   ExternalLink,
   FileText,
+  MessageCircle,
   Power,
   RefreshCw,
   RotateCw,
@@ -18,7 +19,7 @@ import EmptyState from '@/components/ui/EmptyState';
 import EduTooltip from '@/components/ui/EduTooltip';
 import {
   fetchClientesContratos,
-  generateDealPdf,
+  generateContractPdf,
   updateDeal,
 } from '@/lib/supabase';
 import {
@@ -28,9 +29,11 @@ import {
   fmtDateTime,
   fmtRelative,
   truncate,
+  whatsappLink,
 } from '@/lib/utils';
 
 const STATUS_CONTRATO_LABELS = {
+  aguardando_contrato: 'Aguardando contrato',
   ativo: 'Ativo',
   vencendo: 'Vencendo',
   vencido: 'Vencido',
@@ -38,6 +41,7 @@ const STATUS_CONTRATO_LABELS = {
 };
 
 const STATUS_CONTRATO_COLORS = {
+  aguardando_contrato: 'bg-sky-500/15 text-sky-300 border-sky-500/30',
   ativo: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30',
   vencendo: 'bg-hagav-gold/20 text-hagav-gold border-hagav-gold/35',
   vencido: 'bg-amber-500/15 text-amber-300 border-amber-500/30',
@@ -61,6 +65,36 @@ function parseDetalhes(value) {
   } catch {
     return {};
   }
+}
+
+function cloneSelectedRow(row) {
+  const detalhes = parseDetalhes(row?.detalhes);
+  const contratoFromDetalhes = parseDetalhes(detalhes?.contrato);
+  const contratoFromRow = parseDetalhes(row?.contrato);
+  return {
+    ...(row || {}),
+    detalhes,
+    contrato: {
+      ...contratoFromDetalhes,
+      ...contratoFromRow,
+    },
+  };
+}
+
+function isoDate(value) {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toISOString().slice(0, 10);
+}
+
+function addMonthsIso(baseDate, monthsToAdd = 0) {
+  const base = new Date(`${String(baseDate || '').slice(0, 10)}T12:00:00`);
+  if (Number.isNaN(base.getTime())) return '';
+  const safeMonths = Math.max(0, Number.parseInt(String(monthsToAdd || '0'), 10) || 0);
+  const target = new Date(base);
+  target.setMonth(target.getMonth() + safeMonths);
+  return target.toISOString().slice(0, 10);
 }
 
 function toIsoRenewAlert(vencimento) {
@@ -97,6 +131,7 @@ function BadgeContrato({ status }) {
 function resolveDisplayStatusContrato(row) {
   if (!row) return 'ativo';
   const base = String(row.status_contrato || '').toLowerCase();
+  if (base === 'aguardando_contrato') return 'aguardando_contrato';
   if (base === 'vencendo') return 'vencendo';
   if (base === 'ativo' && Number.isFinite(row.dias_para_vencimento) && row.dias_para_vencimento >= 0 && row.dias_para_vencimento <= 15) {
     return 'vencendo';
@@ -104,6 +139,13 @@ function resolveDisplayStatusContrato(row) {
   if (base === 'vencido') return 'vencido';
   if (base === 'encerrado') return 'encerrado';
   return 'ativo';
+}
+
+function appendContratoHistorico(contratoAtual, evento) {
+  const historicoAtual = Array.isArray(contratoAtual?.historico)
+    ? contratoAtual.historico.filter((item) => item && typeof item === 'object')
+    : [];
+  return [...historicoAtual, evento].slice(-30);
 }
 
 export default function ClientesPage() {
@@ -157,16 +199,33 @@ export default function ClientesPage() {
   useEffect(() => {
     if (!selected) return;
     const contrato = selected?.contrato || {};
-    setValorFinal(String(contrato?.valor_final || selected?.valor_contrato || 0));
-    setDataInicio(String(contrato?.data_inicio || selected?.inicio_contrato || '').slice(0, 10));
-    setDuracaoMeses(String(contrato?.duracao_meses || 12));
-    setVencimento(String(contrato?.vencimento || selected?.vencimento_contrato || '').slice(0, 10));
-    setResponsavel(String(contrato?.responsavel || selected?.responsavel_contrato || selected?.responsavel || ''));
-    setFormaPagamento(String(contrato?.forma_pagamento || selected?.forma_pagamento_contrato || ''));
+    const hoje = isoDate(new Date().toISOString());
+    const inicioDefault = isoDate(contrato?.data_inicio || selected?.inicio_contrato) || hoje;
+    const duracaoDefault = String(contrato?.duracao_meses || 12);
+    const vencimentoDefault = isoDate(contrato?.vencimento || selected?.vencimento_contrato)
+      || addMonthsIso(inicioDefault, duracaoDefault)
+      || inicioDefault;
+
+    setValorFinal(String(contrato?.valor_final || selected?.valor_contrato || selected?.preco_final || selected?.valor_sugerido || 0));
+    setDataInicio(inicioDefault);
+    setDuracaoMeses(duracaoDefault);
+    setVencimento(vencimentoDefault);
+    setResponsavel(String(contrato?.responsavel || selected?.responsavel_contrato || selected?.responsavel || 'Time HAGAV'));
+    setFormaPagamento(String(contrato?.forma_pagamento || selected?.forma_pagamento_contrato || 'A combinar'));
     setObsContrato(String(contrato?.observacoes || ''));
     setRecorrente(typeof contrato?.recorrente === 'boolean' ? contrato.recorrente : Boolean(selected?.recorrente_contrato));
-    setStatusEdicao(String(contrato?.status || selected?.status_contrato || 'ativo'));
+    setStatusEdicao(String(contrato?.status || resolveDisplayStatusContrato(selected) || 'ativo'));
   }, [selected]);
+
+  useEffect(() => {
+    if (!selected?.id) return;
+    const current = rows.find((row) => row.id === selected.id);
+    if (!current) return;
+    setSelected((prev) => {
+      if (!prev || prev.id !== current.id) return prev;
+      return cloneSelectedRow({ ...prev, ...current });
+    });
+  }, [rows, selected?.id]);
 
   const metrics = useMemo(() => {
     const ativos = rows.filter((item) => resolveDisplayStatusContrato(item) === 'ativo').length;
@@ -188,28 +247,91 @@ export default function ClientesPage() {
     };
   }, [rows]);
 
-  async function handleGeneratePdf(row) {
+  async function handleGenerateContractPdf(row) {
     try {
       setFeedback('Gerando PDF do contrato...');
-      const result = await generateDealPdf(row.id);
+      const result = await generateContractPdf(row.id);
       if (result?.pdf_base64) {
         downloadPdfFromBase64(result.pdf_base64, result.fileName || `contrato-${row.id}.pdf`);
       }
       const linkPdf = String(result?.link_pdf || '').trim();
       if (linkPdf) {
-        setRows((prev) => prev.map((item) => (item.id === row.id ? { ...item, link_pdf: linkPdf } : item)));
-        if (selected?.id === row.id) setSelected((prev) => ({ ...prev, link_pdf: linkPdf }));
+        setRows((prev) => prev.map((item) => (
+          item.id === row.id
+            ? { ...item, contrato_link_pdf: linkPdf, link_pdf: linkPdf }
+            : item
+        )));
+        if (selected?.id === row.id) {
+          setSelected((prev) => cloneSelectedRow({ ...prev, contrato_link_pdf: linkPdf, link_pdf: linkPdf }));
+        }
       }
-      setFeedback(linkPdf ? 'PDF gerado e link atualizado.' : 'PDF gerado para download local.');
+      setFeedback(linkPdf ? 'Contrato PDF gerado e link atualizado.' : 'Contrato PDF gerado para download local.');
       setTimeout(() => setFeedback(''), 3000);
     } catch (err) {
-      console.error('[Clientes][PDF]', err);
-      setFeedback(err.message || 'Falha ao gerar PDF.');
+      console.error('[Clientes][ContratoPDF]', err);
+      setFeedback(err.message || 'Falha ao gerar contrato PDF.');
       setTimeout(() => setFeedback(''), 3200);
     }
   }
 
-  async function handleSaveContrato(statusOverride) {
+  async function handleEnviarContratoWhatsApp(row) {
+    if (!row) return;
+    const contratoLink = String(row?.contrato_link_pdf || row?.link_pdf || '').trim();
+    if (!contratoLink) {
+      setFeedback('Gere o contrato PDF antes de enviar no WhatsApp.');
+      setTimeout(() => setFeedback(''), 3200);
+      return;
+    }
+
+    const whatsapp = String(row?.whatsapp || '').trim();
+    if (!whatsapp) {
+      setFeedback('WhatsApp do cliente indisponivel para envio do contrato.');
+      setTimeout(() => setFeedback(''), 3200);
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const nowIso = new Date().toISOString();
+      const detalhesAtual = parseDetalhes(row?.detalhes);
+      const contratoAtual = parseDetalhes(detalhesAtual?.contrato);
+      const mensagem = `Ola, ${row.nome || 'cliente'}. Segue o contrato da HAGAV para assinatura: ${contratoLink}. Qualquer duvida, me chama aqui.`;
+
+      if (typeof window !== 'undefined') {
+        const target = whatsappLink(whatsapp, mensagem);
+        window.open(target, '_blank', 'noopener,noreferrer');
+      }
+
+      const updated = await updateDeal(row.id, {
+        ultimo_contato_em: nowIso,
+        detalhes: {
+          ...detalhesAtual,
+          contrato: {
+            ...contratoAtual,
+            link_pdf: contratoLink,
+            contrato_enviado_em: nowIso,
+            atualizado_em: nowIso,
+          },
+        },
+      });
+
+      setRows((prev) => prev.map((item) => (item.id === row.id ? { ...item, ...updated } : item)));
+      if (selected?.id === row.id) {
+        setSelected((prev) => cloneSelectedRow({ ...prev, ...updated }));
+      }
+
+      setFeedback('Contrato enviado no WhatsApp com sucesso.');
+      setTimeout(() => setFeedback(''), 3000);
+    } catch (err) {
+      console.error('[Clientes][EnviarContratoWhatsApp]', err);
+      setFeedback(err.message || 'Falha ao enviar contrato no WhatsApp.');
+      setTimeout(() => setFeedback(''), 3200);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleSaveContrato(statusOverride, acao = 'salvar') {
     if (!selected) return;
 
     const valor = Number(valorFinal);
@@ -218,8 +340,15 @@ export default function ClientesPage() {
       return;
     }
 
-    if (!dataInicio || !duracaoMeses || !vencimento || !responsavel || !formaPagamento || !obsContrato.trim()) {
-      setFeedback('Preencha todos os campos obrigatorios do contrato.');
+    const inicioSafe = isoDate(dataInicio) || isoDate(selected?.inicio_contrato) || isoDate(new Date().toISOString());
+    const duracaoSafe = Math.max(1, Number.parseInt(String(duracaoMeses || '12'), 10) || 12);
+    const vencimentoSafe = isoDate(vencimento) || addMonthsIso(inicioSafe, duracaoSafe) || inicioSafe;
+    const responsavelSafe = String(responsavel || '').trim() || String(selected?.responsavel || '').trim() || 'Time HAGAV';
+    const formaPagamentoSafe = String(formaPagamento || '').trim() || 'A combinar';
+    const observacoesSafe = String(obsContrato || '').trim();
+
+    if (!inicioSafe || !vencimentoSafe) {
+      setFeedback('Preencha inicio e vencimento para salvar o contrato.');
       return;
     }
 
@@ -227,31 +356,54 @@ export default function ClientesPage() {
     const nextStatus = String(statusOverride || statusEdicao || 'ativo').toLowerCase();
     const detalhesAtual = parseDetalhes(selected?.detalhes);
     const contratoAtual = parseDetalhes(detalhesAtual?.contrato);
-    const renovacaoAlerta = toIsoRenewAlert(vencimento);
+    const renovacaoAlerta = toIsoRenewAlert(vencimentoSafe);
+    const statusDeal = nextStatus === 'aguardando_contrato' ? 'aprovado' : 'fechado';
+
+    let tipoHistorico = 'atualizacao';
+    if (acao === 'ativar') tipoHistorico = 'ativacao';
+    if (acao === 'renovar') tipoHistorico = 'renovacao';
+    if (acao === 'encerrar') tipoHistorico = 'encerramento';
+
+    const eventoHistorico = {
+      tipo: tipoHistorico,
+      em: nowIso,
+      status_anterior: String(contratoAtual?.status || selected?.status_contrato || ''),
+      status_novo: nextStatus,
+      vencimento_anterior: String(contratoAtual?.vencimento || selected?.vencimento_contrato || ''),
+      vencimento_novo: vencimentoSafe,
+      valor_novo: valor,
+      responsavel: responsavelSafe,
+    };
 
     const detalhesContrato = {
       ...contratoAtual,
       valor_final: valor,
-      data_inicio: dataInicio,
-      duracao_meses: Number(duracaoMeses || 0) || null,
-      vencimento,
-      observacoes: obsContrato.trim(),
-      responsavel: responsavel.trim(),
-      forma_pagamento: formaPagamento.trim(),
+      data_inicio: inicioSafe,
+      duracao_meses: duracaoSafe,
+      vencimento: vencimentoSafe,
+      observacoes: observacoesSafe,
+      responsavel: responsavelSafe,
+      forma_pagamento: formaPagamentoSafe,
       recorrente: Boolean(recorrente),
       status: nextStatus,
       atualizado_em: nowIso,
       renovacao_alerta_em: renovacaoAlerta,
+      ativado_em: (acao === 'ativar' || nextStatus === 'ativo')
+        ? (contratoAtual?.ativado_em || nowIso)
+        : (contratoAtual?.ativado_em || null),
+      renovado_em: acao === 'renovar' ? nowIso : (contratoAtual?.renovado_em || null),
       encerrado_em: nextStatus === 'encerrado' ? nowIso : null,
+      historico: appendContratoHistorico(contratoAtual, eventoHistorico),
     };
 
     setSaving(true);
     try {
       const updated = await updateDeal(selected.id, {
+        status: statusDeal,
         preco_final: valor,
         valor_fechado: valor,
-        validade_ate: vencimento,
-        responsavel: responsavel.trim(),
+        validade_ate: vencimentoSafe,
+        responsavel: responsavelSafe,
         proximo_followup_em: nextStatus === 'encerrado' ? null : renovacaoAlerta,
         detalhes: {
           ...detalhesAtual,
@@ -260,8 +412,16 @@ export default function ClientesPage() {
       });
 
       setRows((prev) => prev.map((item) => (item.id === selected.id ? { ...item, ...updated } : item)));
-      setSelected((prev) => ({ ...prev, ...updated }));
-      setFeedback(nextStatus === 'encerrado' ? 'Contrato encerrado com sucesso.' : 'Contrato atualizado com sucesso.');
+      setSelected((prev) => cloneSelectedRow({ ...prev, ...updated }));
+      if (nextStatus === 'encerrado') {
+        setFeedback('Contrato encerrado com sucesso.');
+      } else if (acao === 'ativar') {
+        setFeedback('Cliente ativado com sucesso.');
+      } else if (acao === 'renovar') {
+        setFeedback('Contrato renovado com sucesso.');
+      } else {
+        setFeedback('Contrato atualizado com sucesso.');
+      }
       setTimeout(() => setFeedback(''), 2800);
     } catch (err) {
       console.error('[Clientes][Save]', err);
@@ -280,9 +440,16 @@ export default function ClientesPage() {
       const nowIso = new Date().toISOString();
       const detalhesAtual = parseDetalhes(selected?.detalhes);
       const contratoAtual = parseDetalhes(detalhesAtual?.contrato);
+      const historico = appendContratoHistorico(contratoAtual, {
+        tipo: 'reabertura_negociacao',
+        em: nowIso,
+        status_anterior: String(contratoAtual?.status || selected?.status_contrato || ''),
+        status_novo: 'encerrado',
+      });
 
       await updateDeal(selected.id, {
         status: 'orcamento',
+        proximo_followup_em: nowIso,
         detalhes: {
           ...detalhesAtual,
           contrato: {
@@ -290,6 +457,7 @@ export default function ClientesPage() {
             status: 'encerrado',
             encerrado_em: nowIso,
             atualizado_em: nowIso,
+            historico,
           },
         },
       });
@@ -365,6 +533,7 @@ export default function ClientesPage() {
 
         <select value={statusContrato} onChange={(e) => setStatusContrato(e.target.value)} className="hselect">
           <option value="">Status contrato</option>
+          <option value="aguardando_contrato">Aguardando contrato</option>
           <option value="ativo">Ativo</option>
           <option value="vencendo">Vencendo</option>
           <option value="vencido">Vencido</option>
@@ -423,7 +592,7 @@ export default function ClientesPage() {
             </thead>
             <tbody>
               {rows.map((row) => (
-                <tr key={row.id}>
+                <tr key={row.id} className="cursor-pointer" onClick={() => setSelected(cloneSelectedRow(row))}>
                   <td>
                     <div>
                       <p className="font-medium text-hagav-white">{row.nome || 'Sem nome'}</p>
@@ -456,11 +625,11 @@ export default function ClientesPage() {
                   </td>
                   <td>
                     <div className="flex items-center gap-1.5">
-                      <button type="button" className="btn-ghost btn-sm" onClick={() => setSelected(row)}>
+                      <button type="button" className="btn-ghost btn-sm" onClick={(event) => { event.stopPropagation(); setSelected(cloneSelectedRow(row)); }}>
                         <FileText size={12} /> Ver
                       </button>
-                      <button type="button" className="btn-ghost btn-sm" onClick={() => handleGeneratePdf(row)}>
-                        <Download size={12} /> PDF
+                      <button type="button" className="btn-ghost btn-sm" onClick={(event) => { event.stopPropagation(); handleGenerateContractPdf(row); }}>
+                        <Download size={12} /> Contrato PDF
                       </button>
                     </div>
                   </td>
@@ -482,6 +651,15 @@ export default function ClientesPage() {
               <div>
                 <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">WhatsApp</label>
                 <input type="text" value={selected.whatsapp || ''} disabled className="hinput w-full opacity-80" />
+              </div>
+              <div className="md:col-span-2">
+                <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Servico/Plano</label>
+                <input
+                  type="text"
+                  value={selected.plano_servico || selected.servico || selected.pacote_sugerido || ''}
+                  disabled
+                  className="hinput w-full opacity-80"
+                />
               </div>
               <div>
                 <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Valor final (R$)</label>
@@ -510,6 +688,7 @@ export default function ClientesPage() {
               <div>
                 <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Status contrato</label>
                 <select value={statusEdicao} onChange={(e) => setStatusEdicao(e.target.value)} className="hselect w-full">
+                  <option value="aguardando_contrato">Aguardando contrato</option>
                   <option value="ativo">Ativo</option>
                   <option value="vencendo">Vencendo</option>
                   <option value="vencido">Vencido</option>
@@ -532,21 +711,36 @@ export default function ClientesPage() {
             </div>
 
             <div className="flex items-center gap-2 flex-wrap pt-2">
-              <button type="button" className="btn-gold btn-sm" onClick={() => handleSaveContrato('ativo')} disabled={saving}>
-                {saving ? <RefreshCw size={12} className="animate-spin" /> : <RotateCw size={12} />}
-                Renovar / Salvar
+              <button type="button" className="btn-gold btn-sm" onClick={() => handleSaveContrato('ativo', 'ativar')} disabled={saving}>
+                {saving ? <RefreshCw size={12} className="animate-spin" /> : <Power size={12} />}
+                Ativar cliente
               </button>
-              <button type="button" className="btn-ghost btn-sm" onClick={() => handleSaveContrato('encerrado')} disabled={saving}>
+              <button type="button" className="btn-ghost btn-sm" onClick={() => handleSaveContrato('ativo', 'renovar')} disabled={saving}>
+                {saving ? <RefreshCw size={12} className="animate-spin" /> : <RotateCw size={12} />}
+                Renovar contrato
+              </button>
+              <button type="button" className="btn-ghost btn-sm" onClick={() => handleSaveContrato(statusEdicao, 'salvar')} disabled={saving}>
+                <RefreshCw size={12} /> Salvar alteracoes
+              </button>
+              <button type="button" className="btn-ghost btn-sm" onClick={() => handleSaveContrato('encerrado', 'encerrar')} disabled={saving}>
                 <Power size={12} /> Encerrar contrato
               </button>
               <button type="button" className="btn-ghost btn-sm" onClick={handleReabrirNegociacao} disabled={saving}>
                 <Undo2 size={12} /> Reabrir negociacao
               </button>
-              <button type="button" className="btn-ghost btn-sm" onClick={() => handleGeneratePdf(selected)} disabled={saving}>
-                <Download size={12} /> Gerar PDF novamente
+              <button type="button" className="btn-ghost btn-sm" onClick={() => handleGenerateContractPdf(selected)} disabled={saving}>
+                <Download size={12} /> Gerar contrato PDF
               </button>
-              {selected.link_pdf ? (
-                <a href={selected.link_pdf} target="_blank" rel="noreferrer" className="btn-ghost btn-sm">
+              <button
+                type="button"
+                className="btn-ghost btn-sm"
+                onClick={() => handleEnviarContratoWhatsApp(selected)}
+                disabled={saving || !(selected.contrato_link_pdf || selected.link_pdf)}
+              >
+                <MessageCircle size={12} /> Enviar contrato no WhatsApp
+              </button>
+              {selected.contrato_link_pdf || selected.link_pdf ? (
+                <a href={selected.contrato_link_pdf || selected.link_pdf} target="_blank" rel="noreferrer" className="btn-ghost btn-sm">
                   <ExternalLink size={12} /> Ver contrato
                 </a>
               ) : (

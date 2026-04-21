@@ -1,10 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { X, Save, Loader2, MessageCircle, ExternalLink, AlertTriangle, CheckCircle2, Send, Ban, RotateCw } from 'lucide-react';
 import { OrcStatusBadge, PrioridadeBadge, UrgenciaBadge, TemperaturaBadge } from '@/components/ui/StatusBadge';
 import EduTooltip from '@/components/ui/EduTooltip';
-import Modal from '@/components/ui/Modal';
 import { generateDealPdf, updateOrcamento } from '@/lib/supabase';
 import { fmtDateTime, fmtBRL, whatsappLink, ORC_STATUS_LABELS } from '@/lib/utils';
 
@@ -14,6 +13,12 @@ const WHATSAPP_TOOLTIP = {
   whatIs: 'Abre o contato direto do cliente no WhatsApp.',
   purpose: 'Acelerar negociacao e confirmacoes de proposta.',
   observe: 'Use mensagem objetiva com proximo passo claro.',
+};
+const SEND_PROPOSTA_TOOLTIP = {
+  title: 'Enviar proposta',
+  whatIs: 'Envia a mensagem no WhatsApp com o link da proposta.',
+  purpose: 'Garantir envio comercial padrao e rastreavel.',
+  observe: 'Gere a proposta PDF antes de enviar no WhatsApp.',
 };
 
 function InfoRow({ label, value }) {
@@ -110,14 +115,8 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
   const [followup, setFollowup] = useState(toDateTimeLocal(orc?.proximo_followup_em));
   const [referenceExpanded, setReferenceExpanded] = useState(false);
   const [obsExpanded, setObsExpanded] = useState(false);
-  const [closeModalOpen, setCloseModalOpen] = useState(false);
-  const [contratoValorFinal, setContratoValorFinal] = useState(String(orc?.preco_final || orc?.valor_sugerido || 0));
-  const [contratoInicio, setContratoInicio] = useState('');
-  const [contratoDuracao, setContratoDuracao] = useState('12');
-  const [contratoVencimento, setContratoVencimento] = useState('');
-  const [contratoObs, setContratoObs] = useState('');
-  const [contratoFormaPagamento, setContratoFormaPagamento] = useState('');
-  const [contratoRecorrente, setContratoRecorrente] = useState(true);
+  const [propostaLink, setPropostaLink] = useState(String(orc?.link_pdf || '').trim());
+  const [propostaGeradaEm, setPropostaGeradaEm] = useState(orc?.proposta_gerada_em || null);
   const [saving, setSaving] = useState(false);
   const [pdfLoading, setPdfLoading] = useState(false);
   const [error, setError] = useState('');
@@ -169,7 +168,34 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
     ? `${observacoesText.slice(0, 220)}...`
     : observacoesText;
   const statusOptions = Array.from(new Set([...ORC_STATUSES, statusOrc || 'orcamento']));
-  const canCloseContract = ['aprovado', 'proposta_enviada', 'ajustando', 'orcamento'].includes(String(statusOrc || '').toLowerCase());
+  const canApproveOrcamento = ['orcamento', 'proposta_enviada', 'ajustando'].includes(String(statusOrc || '').toLowerCase());
+  const canSendProposta = Boolean(propostaLink);
+  const hasWhatsapp = Boolean(normalizeText(orc.whatsapp));
+
+  useEffect(() => {
+    setStatusOrc(orc?.status_orcamento ?? 'orcamento');
+    setPrecoFinal(orc?.preco_final ?? 0);
+    setObsInternas(orc?.observacoes_internas ?? '');
+    setUrgencia(orc?.urgencia ?? 'media');
+    setPrioridade(orc?.prioridade ?? 'media');
+    setProximaAcao(orc?.proxima_acao ?? '');
+    setResponsavel(orc?.responsavel ?? '');
+    setFollowup(toDateTimeLocal(orc?.proximo_followup_em));
+    setPropostaLink(String(orc?.link_pdf || '').trim());
+    setPropostaGeradaEm(orc?.proposta_gerada_em || null);
+  }, [
+    orc?.id,
+    orc?.status_orcamento,
+    orc?.preco_final,
+    orc?.observacoes_internas,
+    orc?.urgencia,
+    orc?.prioridade,
+    orc?.proxima_acao,
+    orc?.responsavel,
+    orc?.proximo_followup_em,
+    orc?.link_pdf,
+    orc?.proposta_gerada_em,
+  ]);
 
   async function handleSave() {
     setSaving(true);
@@ -231,18 +257,73 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
       }
 
       const nextLink = String(result?.link_pdf || '').trim();
-      if (nextLink) {
-        onUpdated?.({
-          ...orc,
-          link_pdf: nextLink,
-        });
+      if (!nextLink) {
+        setError('Proposta gerada sem link publico. Verifique SUPABASE_PDF_BUCKET e tente novamente.');
+        return;
       }
+      const nowIso = new Date().toISOString();
+      const updated = await updateOrcamento(orc.id, {
+        link_pdf: nextLink,
+        proposta_gerada_em: nowIso,
+      });
+      setPropostaLink(nextLink);
+      setPropostaGeradaEm(nowIso);
+      onUpdated?.({
+        ...updated,
+        link_pdf: nextLink,
+        proposta_gerada_em: nowIso,
+      });
 
-      setInfo(nextLink ? 'PDF gerado e link atualizado.' : 'PDF gerado para download local.');
+      setInfo('Proposta PDF gerada com sucesso. O envio no WhatsApp foi habilitado.');
     } catch (err) {
       setError(err.message || 'Falha ao gerar PDF.');
     } finally {
       setPdfLoading(false);
+    }
+  }
+
+  async function handleEnviarProposta() {
+    if (!canSendProposta) {
+      setError('Gere a proposta PDF antes de enviar no WhatsApp.');
+      return;
+    }
+    if (!hasWhatsapp) {
+      setError('WhatsApp do cliente indisponivel para envio da proposta.');
+      return;
+    }
+    setSaving(true);
+    setError('');
+    setInfo('');
+    try {
+      const nowIso = new Date().toISOString();
+      const detalhesAtual = parseDetalhes(orc.detalhes);
+      const comercialAtual = parseDetalhes(detalhesAtual?.comercial);
+      const mensagem = `Ola, ${orc.nome || 'cliente'}. Preparei sua proposta da HAGAV. Segue o link para visualizar: ${propostaLink}. Qualquer ajuste, me chama aqui.`;
+
+      if (typeof window !== 'undefined') {
+        const target = whatsappLink(orc.whatsapp, mensagem);
+        window.open(target, '_blank', 'noopener,noreferrer');
+      }
+
+      const updated = await updateOrcamento(orc.id, {
+        status_orcamento: 'proposta_enviada',
+        ultimo_contato_em: nowIso,
+        detalhes: {
+          ...detalhesAtual,
+          comercial: {
+            ...comercialAtual,
+            proposta_enviada_em: nowIso,
+            proposta_link: propostaLink,
+          },
+        },
+      });
+      setStatusOrc('proposta_enviada');
+      onUpdated?.(updated);
+      setInfo('Proposta enviada no WhatsApp e status atualizado.');
+    } catch (err) {
+      setError(err.message || 'Falha ao enviar proposta.');
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -260,6 +341,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
       const updated = await updateOrcamento(orc.id, {
         status_orcamento: statusOrc,
         preco_final: nextPrecoFinal,
+        recalcular_pricing: true,
         observacoes_internas: obsInternas,
         urgencia,
         prioridade,
@@ -272,88 +354,6 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
       setInfo('Valores recalculados e sincronizados.');
     } catch (err) {
       setError(err.message || 'Falha ao recalcular valores.');
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function handleCloseContract() {
-    const valorFinal = Number(contratoValorFinal);
-    if (!Number.isFinite(valorFinal) || valorFinal <= 0) {
-      setError('Informe um valor final valido para fechar o contrato.');
-      return;
-    }
-    if (!contratoInicio || !contratoDuracao || !contratoVencimento || !responsavel || !contratoFormaPagamento || !contratoObs.trim()) {
-      setError('Preencha todos os campos obrigatorios para fechar o contrato.');
-      return;
-    }
-
-    const nowIso = new Date().toISOString();
-    const detalhesAtual = parseDetalhes(orc.detalhes);
-    const renovacaoDate = contratoVencimento
-      ? (() => {
-        const date = new Date(`${contratoVencimento}T12:00:00`);
-        if (Number.isNaN(date.getTime())) return null;
-        date.setDate(date.getDate() - 15);
-        return date.toISOString();
-      })()
-      : null;
-
-    setSaving(true);
-    setError('');
-    setInfo('');
-    try {
-      const updated = await updateOrcamento(orc.id, {
-        status_orcamento: 'fechado',
-        preco_final: valorFinal,
-        valor_fechado: valorFinal,
-        fechado_em: nowIso,
-        validade_ate: contratoVencimento || null,
-        observacoes_internas: [obsInternas, contratoObs].filter(Boolean).join('\n').trim(),
-        responsavel,
-        proximo_followup_em: renovacaoDate || fromDateTimeLocal(followup),
-        detalhes: {
-          ...detalhesAtual,
-          contrato: {
-            valor_final: valorFinal,
-            data_inicio: contratoInicio,
-            duracao_meses: Number(contratoDuracao || 0) || null,
-            vencimento: contratoVencimento,
-            observacoes: contratoObs.trim(),
-            responsavel: responsavel.trim(),
-            forma_pagamento: contratoFormaPagamento.trim(),
-            recorrente: Boolean(contratoRecorrente),
-            status: 'ativo',
-            gerado_em: nowIso,
-            atualizado_em: nowIso,
-            renovacao_alerta_em: renovacaoDate,
-          },
-        },
-      });
-
-      let mergedUpdated = updated;
-      try {
-        const pdfResult = await generateDealPdf(orc.id);
-        if (pdfResult?.pdf_base64) {
-          downloadPdfFromBase64(pdfResult.pdf_base64, pdfResult.fileName || `contrato-${orc.id}.pdf`);
-        }
-        const nextLink = String(pdfResult?.link_pdf || '').trim();
-        if (nextLink) {
-          mergedUpdated = {
-            ...updated,
-            link_pdf: nextLink,
-          };
-        }
-      } catch (pdfError) {
-        setInfo('Contrato fechado. PDF nao foi gerado automaticamente; gere manualmente no botao PDF.');
-        console.error('[OrcamentoDrawer][PDF]', pdfError);
-      }
-
-      onUpdated?.(mergedUpdated);
-      setCloseModalOpen(false);
-      onClose();
-    } catch (err) {
-      setError(err.message ?? 'Erro ao fechar contrato.');
     } finally {
       setSaving(false);
     }
@@ -395,6 +395,8 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
             <InfoRow label="Valor potencial" value={fmtBRL(orc.valor_estimado || orc.preco_final || orc.preco_base)} />
             <InfoRow label="Pacote sugerido" value={orc.pacote_sugerido || '—'} />
             <InfoRow label="Faixa sugerida" value={orc.faixa_sugerida || '—'} />
+            <InfoRow label="Proposta PDF" value={propostaLink ? 'Gerada' : 'Pendente'} />
+            <InfoRow label="Proposta gerada em" value={propostaGeradaEm ? fmtDateTime(propostaGeradaEm) : '—'} />
           </div>
 
           <div className="flex flex-wrap gap-2">
@@ -599,15 +601,19 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
         </div>
 
         <div className="px-6 py-4 border-t border-hagav-border shrink-0 flex items-center gap-2 flex-wrap">
-          <button
-            type="button"
-            onClick={() => handleQuickStatus('proposta_enviada')}
-            disabled={saving || pdfLoading}
-            className="btn-ghost btn-sm"
-          >
-            <Send size={13} />
-            Enviar proposta
-          </button>
+          <EduTooltip {...SEND_PROPOSTA_TOOLTIP} className="w-auto">
+            <span className="inline-flex">
+              <button
+                type="button"
+                onClick={handleEnviarProposta}
+                disabled={saving || pdfLoading || !canSendProposta}
+                className={`btn-ghost btn-sm ${!canSendProposta ? 'opacity-60 cursor-not-allowed' : ''}`}
+              >
+                <Send size={13} />
+                Enviar proposta
+              </button>
+            </span>
+          </EduTooltip>
           <button
             type="button"
             onClick={() => handleQuickStatus('perdido')}
@@ -635,23 +641,30 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
             {saving ? <Loader2 size={13} className="animate-spin" /> : <RotateCw size={13} />}
             Recalcular valores
           </button>
-          {canCloseContract && (
+          {canApproveOrcamento && (
             <button
               type="button"
-              onClick={() => setCloseModalOpen(true)}
+              onClick={() => handleQuickStatus('aprovado')}
               disabled={saving || pdfLoading}
               className="btn-gold btn-sm"
             >
               <CheckCircle2 size={13} />
-              Fechar contrato
+              Cliente aprovou
             </button>
           )}
           <EduTooltip {...WHATSAPP_TOOLTIP} className="w-auto">
-            <a href={waLink} target="_blank" rel="noreferrer" className="btn-ghost btn-sm">
-              <MessageCircle size={13} />
-              WhatsApp
-              <ExternalLink size={11} className="opacity-50" />
-            </a>
+            {hasWhatsapp ? (
+              <a href={waLink} target="_blank" rel="noreferrer" className="btn-ghost btn-sm">
+                <MessageCircle size={13} />
+                WhatsApp
+                <ExternalLink size={11} className="opacity-50" />
+              </a>
+            ) : (
+              <span className="btn-ghost btn-sm opacity-60 cursor-not-allowed">
+                <MessageCircle size={13} />
+                WhatsApp indisponivel
+              </span>
+            )}
           </EduTooltip>
           <button onClick={handleSave} disabled={saving || pdfLoading} className="btn-gold flex-1 justify-center">
             {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
@@ -659,60 +672,6 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
           </button>
         </div>
       </aside>
-
-      <Modal open={closeModalOpen} onClose={() => setCloseModalOpen(false)} title="Fechamento comercial" width="max-w-2xl">
-        <div className="space-y-3">
-          <p className="text-xs text-hagav-gray">
-            Informe os dados comerciais para gerar contrato e mover o deal para fechado.
-          </p>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-            <div>
-              <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Valor final (R$)</label>
-              <input type="number" min="0" step="0.01" value={contratoValorFinal} onChange={(e) => setContratoValorFinal(e.target.value)} className="hinput w-full" />
-            </div>
-            <div>
-              <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Data inicio</label>
-              <input type="date" value={contratoInicio} onChange={(e) => setContratoInicio(e.target.value)} className="hinput w-full" />
-            </div>
-            <div>
-              <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Duracao (meses)</label>
-              <input type="number" min="1" step="1" value={contratoDuracao} onChange={(e) => setContratoDuracao(e.target.value)} className="hinput w-full" />
-            </div>
-            <div>
-              <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Vencimento</label>
-              <input type="date" value={contratoVencimento} onChange={(e) => setContratoVencimento(e.target.value)} className="hinput w-full" />
-            </div>
-            <div>
-              <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Responsavel</label>
-              <input type="text" value={responsavel} onChange={(e) => setResponsavel(e.target.value)} className="hinput w-full" placeholder="Ex.: Vinicius" />
-            </div>
-            <div>
-              <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Forma de pagamento</label>
-              <input type="text" value={contratoFormaPagamento} onChange={(e) => setContratoFormaPagamento(e.target.value)} className="hinput w-full" placeholder="PIX, boleto, cartao..." />
-            </div>
-            <div className="md:col-span-2">
-              <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Observacoes do contrato</label>
-              <textarea rows={3} value={contratoObs} onChange={(e) => setContratoObs(e.target.value)} className="hinput w-full resize-none" placeholder="Condicoes comerciais, observacoes e combinados." />
-            </div>
-          </div>
-          <label className="flex items-center gap-2 text-sm text-hagav-light">
-            <input
-              type="checkbox"
-              checked={contratoRecorrente}
-              onChange={(e) => setContratoRecorrente(e.target.checked)}
-              className="rounded border-hagav-border bg-hagav-surface"
-            />
-            Contrato recorrente
-          </label>
-          <div className="pt-2 flex items-center justify-end gap-2">
-            <button type="button" className="btn-ghost btn-sm" onClick={() => setCloseModalOpen(false)} disabled={saving}>Cancelar</button>
-            <button type="button" className="btn-gold btn-sm" onClick={handleCloseContract} disabled={saving}>
-              {saving ? <Loader2 size={13} className="animate-spin" /> : <CheckCircle2 size={13} />}
-              Gerar contrato
-            </button>
-          </div>
-        </div>
-      </Modal>
     </>
   );
 }

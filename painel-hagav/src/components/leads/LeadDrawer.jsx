@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { X, MessageCircle, ExternalLink, Save, Loader2, PhoneCall, FilePlus2, Ban } from 'lucide-react';
+import { X, MessageCircle, ExternalLink, Save, Loader2, FilePlus2, Ban } from 'lucide-react';
 import {
   LeadStatusBadge,
   PrioridadeBadge,
@@ -104,29 +104,6 @@ export default function LeadDrawer({ lead, onClose, onUpdated }) {
     setUltimoContato(toDateTimeLocal(now.toISOString()));
   }
 
-  async function handleMarkContato() {
-    const nowIso = new Date().toISOString();
-    const nextStatus = String(status || '').toLowerCase() === 'novo' ? 'contatado' : status;
-    setSaving(true);
-    setError('');
-    try {
-      const updated = await updateLead(lead.id, {
-        status: nextStatus,
-        observacoes: obs,
-        proxima_acao: proximaAcao,
-        prioridade,
-        urgencia,
-        ultimo_contato_em: nowIso,
-      });
-      onUpdated?.(updated);
-      onClose();
-    } catch (err) {
-      setError(err.message ?? 'Erro ao marcar contato.');
-    } finally {
-      setSaving(false);
-    }
-  }
-
   async function handleDescartar() {
     setSaving(true);
     setError('');
@@ -154,7 +131,9 @@ export default function LeadDrawer({ lead, onClose, onUpdated }) {
   ]));
   const canGenerateOrcamento = String(status || '').toLowerCase() === 'qualificado';
 
-  const waLink = whatsappLink(lead.whatsapp, `Ola ${lead.nome || ''}, aqui e a HAGAV Studio!`);
+  const waLink = lead.whatsapp
+    ? whatsappLink(lead.whatsapp, `Ola ${lead.nome || ''}, aqui e a HAGAV Studio!`)
+    : '';
 
   return (
     <>
@@ -275,17 +254,20 @@ export default function LeadDrawer({ lead, onClose, onUpdated }) {
               Gerar orcamento
             </button>
           )}
-          <EduTooltip {...WHATSAPP_TOOLTIP} className="flex-1">
-            <a href={waLink} target="_blank" rel="noreferrer" className="btn-ghost w-full justify-center">
+          {waLink ? (
+            <EduTooltip {...WHATSAPP_TOOLTIP} className="flex-1">
+              <a href={waLink} target="_blank" rel="noreferrer" className="btn-ghost w-full justify-center">
+                <MessageCircle size={15} />
+                WhatsApp
+                <ExternalLink size={12} className="opacity-50" />
+              </a>
+            </EduTooltip>
+          ) : (
+            <span className="btn-ghost flex-1 justify-center cursor-not-allowed opacity-50">
               <MessageCircle size={15} />
-              WhatsApp
-              <ExternalLink size={12} className="opacity-50" />
-            </a>
-          </EduTooltip>
-          <button type="button" onClick={handleMarkContato} disabled={saving} className="btn-ghost">
-            <PhoneCall size={15} />
-            Marcar contato
-          </button>
+              WhatsApp indisponivel
+            </span>
+          )}
           <button type="button" onClick={handleDescartar} disabled={saving} className="btn-ghost">
             <Ban size={15} />
             Descartar

@@ -5,6 +5,29 @@ import { usePathname, useRouter } from 'next/navigation';
 import { Menu, Search, Bell, LogOut, User, ChevronDown } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 
+function parseScopedSearch(raw) {
+  const value = String(raw || '').trim();
+  if (!value) return null;
+
+  const match = value.match(/^(lead|leads|orcamento|orcamentos|orc|cliente|clientes)\s*:\s*(.+)$/i);
+  if (!match) return null;
+
+  const scope = String(match[1] || '').toLowerCase();
+  const query = String(match[2] || '').trim();
+  if (!query) return null;
+
+  if (scope === 'lead' || scope === 'leads') {
+    return { targetBase: '/leads', query };
+  }
+  if (scope === 'orcamento' || scope === 'orcamentos' || scope === 'orc') {
+    return { targetBase: '/orcamentos', query };
+  }
+  if (scope === 'cliente' || scope === 'clientes') {
+    return { targetBase: '/clientes', query };
+  }
+  return null;
+}
+
 export default function Topbar({ onMenuClick }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -26,8 +49,14 @@ export default function Topbar({ onMenuClick }) {
 
   function handleGlobalSearch(event) {
     event.preventDefault();
-    const query = searchVal.trim();
+    const query = String(searchVal || '').trim();
     if (!query) return;
+
+    const scoped = parseScopedSearch(query);
+    if (scoped) {
+      router.push(`${scoped.targetBase}?search=${encodeURIComponent(scoped.query)}`);
+      return;
+    }
 
     const targetBase = pathname?.startsWith('/orcamentos')
       ? '/orcamentos'
@@ -52,7 +81,7 @@ export default function Topbar({ onMenuClick }) {
         <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-hagav-gray pointer-events-none" />
         <input
           type="text"
-          placeholder="Buscar lead, orcamento ou cliente e pressionar Enter"
+          placeholder="Buscar e Enter (ou use lead:, orc:, cliente:)"
           value={searchVal}
           onChange={e => setSearchVal(e.target.value)}
           className="hinput w-full pl-8 py-1.5 text-sm"

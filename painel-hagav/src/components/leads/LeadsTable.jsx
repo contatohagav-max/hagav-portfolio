@@ -40,7 +40,7 @@ export default function LeadsTable({ leads, onSelect }) {
         </thead>
         <tbody>
           {leads.map((lead) => (
-            <tr key={lead.id} onClick={() => onSelect(lead)}>
+            <tr key={lead.id} className="cursor-pointer" onClick={() => onSelect(lead)}>
               <td>
                 <div className="flex items-center gap-2.5">
                   <div className="w-8 h-8 rounded-full bg-hagav-muted/50 border border-hagav-border flex items-center justify-center shrink-0">

@@ -317,6 +317,45 @@ export async function fetchPipelineDeals({ search, limit = 1200 } = {}) {
   return (data ?? []).map(mapDealToLeadRecord).map(enrichLeadRecord);
 }
 
+export async function createLead(fields = {}) {
+  const client = getSupabase();
+  if (!client) throw new Error('Supabase nao configurado');
+
+  const nome = String(fields.nome || '').trim();
+  const whatsapp = String(fields.whatsapp || '').replace(/\D/g, '');
+  if (!nome) throw new Error('Nome e obrigatorio');
+  if (!whatsapp || whatsapp.length < 8) throw new Error('WhatsApp invalido');
+
+  const empresa = String(fields.empresa || '').trim();
+  const detalhes = empresa ? { empresa } : undefined;
+
+  const payload = {
+    nome,
+    whatsapp,
+    origem: String(fields.origem || 'prospeccao_ativa').trim() || 'prospeccao_ativa',
+    servico: String(fields.servico || '').trim() || null,
+    valor_estimado: Number(fields.valor_estimado) > 0 ? Number(fields.valor_estimado) : null,
+    status: mapLegacyLeadStatusToDeal(fields.status || 'novo', DEAL_STATUS.NOVO),
+    prioridade: String(fields.prioridade || 'media'),
+    urgencia: String(fields.urgencia || 'media'),
+    proxima_acao: String(fields.proxima_acao || '').trim() || null,
+    proximo_followup_em: fields.proximo_followup_em || null,
+    responsavel: String(fields.responsavel || '').trim() || null,
+    observacoes: String(fields.observacoes || '').trim() || null,
+    fluxo: 'DU',
+    ...(detalhes ? { detalhes } : {}),
+  };
+
+  const { data, error } = await client
+    .from('deals')
+    .insert(payload)
+    .select('*')
+    .single();
+
+  if (error) throw error;
+  return enrichLeadRecord(mapDealToLeadRecord(data));
+}
+
 export async function updateLead(id, patch) {
   const client = getSupabase();
   if (!client) throw new Error('Supabase nao configurado');

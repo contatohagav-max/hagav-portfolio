@@ -2,9 +2,10 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Search, RefreshCw, Users, Flame, Clock3, Target } from 'lucide-react';
+import { Search, RefreshCw, Users, Flame, Clock3, Target, UserPlus } from 'lucide-react';
 import LeadsTable from '@/components/leads/LeadsTable';
 import LeadDrawer from '@/components/leads/LeadDrawer';
+import NewLeadDrawer from '@/components/leads/NewLeadDrawer';
 import EmptyState from '@/components/ui/EmptyState';
 import EduTooltip from '@/components/ui/EduTooltip';
 import { fetchLeads } from '@/lib/supabase';
@@ -31,6 +32,7 @@ export default function LeadsPage() {
   const [loadError, setLoadError] = useState('');
   const [feedback, setFeedback] = useState('');
   const [selected, setSelected] = useState(null);
+  const [showNewLead, setShowNewLead] = useState(false);
   const [showDescartados, setShowDescartados] = useState(searchParams.get('descartados') === '1');
 
   const [search, setSearch] = useState(searchParams.get('search') || '');
@@ -96,6 +98,16 @@ export default function LeadsPage() {
     return () => clearTimeout(timer);
   }, [load]);
 
+  function handleCreated(created) {
+    if (!created) return;
+    setLeads((prev) => {
+      if (isLeadVisible(created)) return [created, ...prev];
+      return prev;
+    });
+    setFeedback('Lead criado com sucesso');
+    setTimeout(() => setFeedback(''), 2500);
+  }
+
   function handleUpdated(updated) {
     setLeads((prev) => {
       const mapped = prev.map((lead) => (lead.id === updated.id ? updated : lead));
@@ -144,12 +156,22 @@ export default function LeadsPage() {
             {loading ? 'Carregando...' : `${visibleLeadCount} ${showDescartados ? 'descartado' : 'lead'}${visibleLeadCount !== 1 ? 's' : ''}`}
           </p>
         </div>
-        <EduTooltip {...UPDATE_TOOLTIP} className="w-auto" panelClassName="left-auto right-0 translate-x-0">
-          <button onClick={load} disabled={loading} className="btn-ghost btn-sm">
-            <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
-            Atualizar
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setShowNewLead(true)}
+            className="btn-gold btn-sm"
+          >
+            <UserPlus size={13} />
+            + Novo lead
           </button>
-        </EduTooltip>
+          <EduTooltip {...UPDATE_TOOLTIP} className="w-auto" panelClassName="left-auto right-0 translate-x-0">
+            <button onClick={load} disabled={loading} className="btn-ghost btn-sm">
+              <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
+              Atualizar
+            </button>
+          </EduTooltip>
+        </div>
       </div>
 
       <div className="flex items-center gap-2">
@@ -285,6 +307,13 @@ export default function LeadsPage() {
           lead={selected}
           onClose={() => setSelected(null)}
           onUpdated={handleUpdated}
+        />
+      )}
+
+      {showNewLead && (
+        <NewLeadDrawer
+          onClose={() => setShowNewLead(false)}
+          onCreated={handleCreated}
         />
       )}
     </div>

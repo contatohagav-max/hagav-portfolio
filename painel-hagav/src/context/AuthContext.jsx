@@ -17,9 +17,19 @@ export function AuthProvider({ children }) {
       return;
     }
 
-    // Get initial session
+    // Get initial session (timeout de 4s caso Supabase não responda)
+    const timeout = setTimeout(() => {
+      setSession(null);
+      setLoading(false);
+    }, 4000);
+
     client.auth.getSession().then(({ data }) => {
+      clearTimeout(timeout);
       setSession(data?.session ?? null);
+      setLoading(false);
+    }).catch(() => {
+      clearTimeout(timeout);
+      setSession(null);
       setLoading(false);
     });
 

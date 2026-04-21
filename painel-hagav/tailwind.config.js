@@ -8,7 +8,7 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        // HAGAV Branding
+        // HAGAV Branding — laranja âmbar oficial
         hagav: {
           black:   '#0A0A0A',
           dark:    '#111111',
@@ -19,11 +19,11 @@ module.exports = {
           gray:    '#888888',
           light:   '#CCCCCC',
           white:   '#F5F5F5',
-          gold:    '#C9A84C',
-          'gold-light': '#DFC06A',
-          'gold-dark':  '#A8872E',
+          // Laranja HAGAV
+          gold:         '#F5A623',
+          'gold-light': '#FFBC50',
+          'gold-dark':  '#D4880A',
         },
-        // Status badges
         status: {
           novo:       '#3B82F6',
           chamado:    '#8B5CF6',
@@ -39,18 +39,18 @@ module.exports = {
       },
       boxShadow: {
         'card':   '0 1px 3px rgba(0,0,0,0.4), 0 1px 2px rgba(0,0,0,0.6)',
-        'gold':   '0 0 20px rgba(201,168,76,0.15)',
+        'gold':   '0 0 24px rgba(245,166,35,0.18)',
         'modal':  '0 25px 60px rgba(0,0,0,0.8)',
         'panel':  '0 4px 24px rgba(0,0,0,0.5)',
       },
       backgroundImage: {
-        'gold-gradient': 'linear-gradient(135deg, #C9A84C 0%, #DFC06A 50%, #A8872E 100%)',
+        'gold-gradient': 'linear-gradient(135deg, #F5A623 0%, #FFBC50 50%, #D4880A 100%)',
         'dark-gradient': 'linear-gradient(180deg, #161616 0%, #111111 100%)',
       },
       animation: {
-        'fade-in':    'fadeIn 0.2s ease-out',
-        'slide-in':   'slideIn 0.25s ease-out',
-        'slide-up':   'slideUp 0.25s ease-out',
+        'fade-in':  'fadeIn 0.2s ease-out',
+        'slide-in': 'slideIn 0.25s ease-out',
+        'slide-up': 'slideUp 0.25s ease-out',
       },
       keyframes: {
         fadeIn:  { from: { opacity: 0 }, to: { opacity: 1 } },

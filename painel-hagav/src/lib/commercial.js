@@ -1158,6 +1158,36 @@ function computePricingSnapshot(record) {
   };
 }
 
+export function deriveFinancialMetricsFromFinalPrice(record, precoFinalInput) {
+  const custoBase = roundCurrency(toNumber(record?.preco_base ?? record?.custo_base, 0));
+  const precoFinal = roundCurrency(toNumber(precoFinalInput ?? record?.preco_final, 0));
+  const precoFinalValido = Number.isFinite(precoFinal) && precoFinal > 0;
+
+  const margemBruta = precoFinalValido
+    ? ((precoFinal - custoBase) / precoFinal) * 100
+    : 0;
+  const margemPercentual = Number.isFinite(margemBruta) ? margemBruta : 0;
+  const lucroEstimado = precoFinalValido ? (precoFinal - custoBase) : 0;
+  const potencialTotal = precoFinalValido
+    ? precoFinal
+    : (
+      toNumber(record?.valor_estimado, 0)
+      || toNumber(record?.valor_sugerido, 0)
+      || toNumber(record?.preco_base, 0)
+      || 0
+    );
+
+  return {
+    custo_base: custoBase,
+    preco_final: precoFinalValido ? precoFinal : 0,
+    margem_percentual: Math.round(margemPercentual * 10) / 10,
+    margem_estimada: Math.round(margemPercentual * 10) / 10,
+    lucro_estimado: roundCurrency(lucroEstimado),
+    valor_estimado: roundCurrency(potencialTotal),
+    potencial_total: roundCurrency(potencialTotal),
+  };
+}
+
 export function estimateValorPotencial(record) {
   const valorSugerido = toNumber(record?.valor_sugerido, 0);
   const precoFinal = toNumber(record?.preco_final, 0);
@@ -1174,7 +1204,7 @@ export function estimateValorPotencial(record) {
 
 export function estimateMargem(record) {
   const storedMargin = toNumber(record?.margem_estimada, NaN);
-  if (Number.isFinite(storedMargin) && storedMargin > 0) return Math.min(95, Math.max(0, storedMargin));
+  if (Number.isFinite(storedMargin)) return Math.min(95, Math.max(-95, storedMargin));
   return computePricingSnapshot(record).margemEstimada;
 }
 
@@ -1306,7 +1336,6 @@ export function enrichOrcamentoRecord(record) {
   const normalizedRecord = applyStructuredFallback(record);
   const enrichedLead = enrichLeadRecord(normalizedRecord);
   const snapshot = computePricingSnapshot(enrichedLead);
-  const margem = estimateMargem(enrichedLead);
   const itensServico = Array.isArray(snapshot.itensServico) ? snapshot.itensServico : extractServiceItems(enrichedLead);
 
   const incompletoCampos = [];
@@ -1342,10 +1371,21 @@ export function enrichOrcamentoRecord(record) {
   const multipComp = toNumber(enrichedLead?.multiplicador_complexidade, NaN);
   const complexidade = normalizeText(enrichedLead?.complexidade_nivel) || snapshot.complexidadeNivel;
   const revisaoManual = typeof enrichedLead?.revisao_manual === 'boolean' ? enrichedLead.revisao_manual : snapshot.revisaoManual;
+  const financeiros = deriveFinancialMetricsFromFinalPrice(
+    {
+      ...enrichedLead,
+      preco_base: precoBase,
+      valor_estimado: valorPotencial,
+    },
+    precoFinal
+  );
 
   return {
     ...enrichedLead,
-    margem_estimada: Math.round(margem * 10) / 10,
+    margem_estimada: Math.round(Number(financeiros.margem_estimada || 0) * 10) / 10,
+    margem_percentual: Math.round(Number(financeiros.margem_percentual || 0) * 10) / 10,
+    lucro_estimado: roundCurrency(financeiros.lucro_estimado || 0),
+    potencial_total: roundCurrency(financeiros.potencial_total || financeiros.valor_estimado || 0),
     preco_base: Math.round((precoBase || 0) * 100) / 100,
     valor_sugerido: Math.round((valorSugerido || 0) * 100) / 100,
     preco_final: Math.round((precoFinal || 0) * 100) / 100,
@@ -1357,7 +1397,7 @@ export function enrichOrcamentoRecord(record) {
     revisao_manual: revisaoManual,
     ajuste_referencia_percent: toNumber(enrichedLead?.ajuste_referencia_percent, snapshot.ajusteReferenciaPercent),
     ajuste_multicamera_percent: toNumber(enrichedLead?.ajuste_multicamera_percent, snapshot.ajusteMulticameraPercent),
-    valor_estimado: Math.round((precoFinal || precoBase || valorPotencial) * 100) / 100,
+    valor_estimado: Math.round(Number(financeiros.valor_estimado || precoFinal || precoBase || valorPotencial) * 100) / 100,
     itens_servico: itensServico,
     quantidade_total: Number(snapshot.totalQuantidade || sumQuantidade(enrichedLead?.quantidade || enrichedLead?.Quantidade || '1')),
     incompleto: incompletoCampos.length > 0,

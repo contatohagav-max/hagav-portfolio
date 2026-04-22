@@ -810,14 +810,28 @@ async function generatePdfDocument(endpoint, id, { adminKey } = {}) {
     body: JSON.stringify({ id }),
   });
   let response = await request(endpoint);
-  let parsed = await response.json().catch(() => ({}));
+  let rawText = '';
+  let parsed = {};
+  try {
+    rawText = await response.text();
+    parsed = rawText ? JSON.parse(rawText) : {};
+  } catch {
+    parsed = {};
+  }
 
   if (!response.ok || parsed?.ok === false) {
     const reason = String(parsed?.error || '').trim();
     const stage = String(parsed?.stage || '').trim();
     const requestId = String(parsed?.request_id || '').trim();
     const uploadReason = String(parsed?.upload_reason || '').trim();
-    const detail = String(parsed?.detail || '').trim();
+    const rawSnippet = String(rawText || '').trim().slice(0, 300);
+    const detail = String(
+      parsed?.detail
+      || parsed?.message
+      || parsed?.error_description
+      || rawSnippet
+      || ''
+    ).trim();
 
     console.error('[PDF][Runtime]', {
       endpoint,
@@ -827,6 +841,7 @@ async function generatePdfDocument(endpoint, id, { adminKey } = {}) {
       request_id: requestId,
       upload_reason: uploadReason,
       detail,
+      raw_snippet: rawSnippet,
       has_admin_key_header: Boolean(key),
       has_session_token: Boolean(token),
     });

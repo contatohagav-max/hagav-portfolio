@@ -89,6 +89,30 @@ function parseDetalhes(value) {
   }
 }
 
+async function openOrDownloadPropostaPdf(link, fileName = 'proposta-hagav.pdf') {
+  if (typeof window === 'undefined' || !link) return 'none';
+
+  try {
+    const response = await fetch(link, { method: 'GET' });
+    if (!response.ok) throw new Error(`download_http_${response.status}`);
+    const blob = await response.blob();
+    const blobUrl = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = blobUrl;
+    anchor.download = fileName;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 4000);
+    return 'download';
+  } catch {
+    const popup = window.open(link, '_blank', 'noopener,noreferrer');
+    if (popup) return 'new_tab';
+    window.location.href = link;
+    return 'same_tab';
+  }
+}
+
 export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
   const [statusOrc, setStatusOrc] = useState(orc?.status_orcamento ?? 'orcamento');
   const [precoFinal, setPrecoFinal] = useState(orc?.preco_final ?? 0);
@@ -285,23 +309,27 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
         setError(`Falha ao gerar link da proposta PDF.${requestId ? ` RID: ${requestId}.` : ''}`);
         return;
       }
+
+      const openMode = await openOrDownloadPropostaPdf(
+        nextLink,
+        String(result?.fileName || `proposta-${orc.id}.pdf`)
+      );
+
       const nowIso = new Date().toISOString();
-      const updated = await updateOrcamento(orc.id, {
-        link_pdf: nextLink,
-        proposta_gerada_em: nowIso,
-      });
       setPropostaLink(nextLink);
       setPropostaGeradaEm(nowIso);
       onUpdated?.({
-        ...updated,
+        ...orc,
         link_pdf: nextLink,
         proposta_gerada_em: nowIso,
       });
 
-      if (typeof window !== 'undefined') {
-        window.open(nextLink, '_blank', 'noopener,noreferrer');
-      }
-      setInfo('Proposta PDF gerada com sucesso. Envio no WhatsApp habilitado.');
+      let openedLabel = 'disponibilizada para abertura';
+      if (openMode === 'download') openedLabel = 'baixada';
+      if (openMode === 'new_tab') openedLabel = 'aberta em nova aba';
+      if (openMode === 'same_tab') openedLabel = 'aberta';
+
+      setInfo(`Proposta PDF gerada com sucesso e ${openedLabel}. Envio no WhatsApp habilitado.`);
     } catch (err) {
       console.error('[Orcamentos][PDF][Erro]', {
         deal_id: orc.id,
@@ -633,6 +661,17 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
         </div>
 
         <div className="drawer-foot flex-wrap gap-2">
+          {(error || info) && (
+            <p
+              className={`w-full text-xs rounded-lg px-3 py-2 border ${
+                error
+                  ? 'text-red-300 bg-red-500/10 border-red-500/25'
+                  : 'text-hagav-light bg-hagav-surface border-hagav-border'
+              }`}
+            >
+              {error || info}
+            </p>
+          )}
           <EduTooltip {...SEND_PROPOSTA_TOOLTIP} className="w-auto">
             <span className="inline-flex">
               <button

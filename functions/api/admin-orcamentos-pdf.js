@@ -387,6 +387,220 @@ function createPdfFromLines(lines) {
   return pdf;
 }
 
+function ensureHtmlDocument(html) {
+  const base = String(html || "").trim();
+  if (!base) return "<!DOCTYPE html><html><head><meta charset=\"utf-8\" /></head><body></body></html>";
+  const withDoctype = /<!doctype html>/i.test(base) ? base : `<!DOCTYPE html>\n${base}`;
+  if (/<html[\s>]/i.test(withDoctype)) return withDoctype;
+  return `<!DOCTYPE html><html><head><meta charset="utf-8" /></head><body>${withDoctype}</body></html>`;
+}
+
+function inspectRenderedHtml(html) {
+  const source = String(html || "");
+  return {
+    htmlHasStyleTag: /<style[\s>]/i.test(source),
+    htmlHasHeaderClass: /class=["'][^"']*\bheader\b[^"']*["']/i.test(source),
+    htmlHasDoctype: /<!doctype html>/i.test(source),
+    htmlHasHtmlTag: /<html[\s>]/i.test(source),
+    htmlHasHeadTag: /<head[\s>]/i.test(source),
+    htmlHasBodyTag: /<body[\s>]/i.test(source),
+    htmlPreviewFirst300Chars: source.slice(0, 300).replace(/\s+/g, " ").trim(),
+  };
+}
+
+function utf8ToBase64(value) {
+  const bytes = new TextEncoder().encode(String(value || ""));
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += 1) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
+}
+
+function bytesToBase64(bytesLike) {
+  const bytes = bytesLike instanceof Uint8Array ? bytesLike : new Uint8Array(bytesLike || []);
+  let binary = "";
+  const CHUNK = 0x8000;
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    const chunk = bytes.subarray(i, i + CHUNK);
+    for (let j = 0; j < chunk.length; j += 1) {
+      binary += String.fromCharCode(chunk[j]);
+    }
+  }
+  return btoa(binary);
+}
+
+function getPdfRenderConfig(env) {
+  const forcedEngine = firstEnvValue(env, ["PDF_ENGINE", "PDF_RENDER_ENGINE", "PDF_PROVIDER"]).toLowerCase();
+  const pdfshiftKey = firstEnvValue(env, ["PDFSHIFT_API_KEY", "PDFSHIFT_KEY"]);
+  const browserlessToken = firstEnvValue(env, ["BROWSERLESS_TOKEN", "BROWSERLESS_API_KEY", "PDF_BROWSERLESS_TOKEN"]);
+
+  const engine = forcedEngine || (pdfshiftKey ? "pdfshift" : (browserlessToken ? "browserless" : ""));
+  return {
+    engine,
+    renderMode: "remote_html_to_pdf",
+    pdfshift: {
+      apiKey: pdfshiftKey,
+      endpoint: firstEnvValue(env, ["PDFSHIFT_ENDPOINT", "PDFSHIFT_URL"]) || "https://api.pdfshift.io/v3/convert/pdf",
+    },
+    browserless: {
+      token: browserlessToken,
+      endpoint: (firstEnvValue(env, ["BROWSERLESS_ENDPOINT", "BROWSERLESS_URL", "PDF_BROWSERLESS_ENDPOINT"]) || "https://chrome.browserless.io").replace(/\/+$/, ""),
+    },
+  };
+}
+
+async function renderPdfViaPdfshift(html, config) {
+  if (!config?.apiKey) {
+    return {
+      ok: false,
+      reason: "pdf_engine_not_configured",
+      status: 503,
+      detail: "PDFSHIFT_API_KEY ausente",
+      renderMode: "remote_html_to_pdf",
+      pdfEngine: "pdfshift",
+    };
+  }
+  const auth = btoa(`api:${config.apiKey}`);
+  const response = await fetch(config.endpoint, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json; charset=utf-8",
+      authorization: `Basic ${auth}`,
+    },
+    body: JSON.stringify({
+      source: html,
+      print_background: true,
+      use_print: true,
+      format: "A4",
+      margin: "0",
+    }),
+  });
+
+  if (!response.ok) {
+    const text = stripDangerousText(await response.text().catch(() => ""), 240);
+    return {
+      ok: false,
+      reason: "pdf_render_failed",
+      status: 502,
+      detail: text || `pdfshift_http_${response.status}`,
+      renderMode: "remote_html_to_pdf",
+      pdfEngine: "pdfshift",
+    };
+  }
+
+  const buffer = await response.arrayBuffer();
+  return {
+    ok: true,
+    pdfBytes: new Uint8Array(buffer),
+    renderMode: "remote_html_to_pdf",
+    pdfEngine: "pdfshift",
+  };
+}
+
+async function renderPdfViaBrowserless(html, config) {
+  if (!config?.token) {
+    return {
+      ok: false,
+      reason: "pdf_engine_not_configured",
+      status: 503,
+      detail: "BROWSERLESS_TOKEN ausente",
+      renderMode: "remote_html_to_pdf",
+      pdfEngine: "browserless",
+    };
+  }
+
+  const endpoint = `${config.endpoint}/pdf?token=${encodeURIComponent(config.token)}`;
+  const commonOptions = {
+    format: "A4",
+    printBackground: true,
+    preferCSSPageSize: true,
+    margin: { top: "0.2in", right: "0.2in", bottom: "0.2in", left: "0.2in" },
+  };
+  const attempts = [
+    {
+      label: "html_payload",
+      payload: {
+        html,
+        waitUntil: "networkidle0",
+        options: commonOptions,
+      },
+    },
+    {
+      label: "data_url",
+      payload: {
+        url: `data:text/html;base64,${utf8ToBase64(html)}`,
+        waitUntil: "networkidle0",
+        options: commonOptions,
+      },
+    },
+  ];
+
+  const errors = [];
+  for (const attempt of attempts) {
+    try {
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: { "content-type": "application/json; charset=utf-8" },
+        body: JSON.stringify(attempt.payload),
+      });
+      if (!response.ok) {
+        const text = stripDangerousText(await response.text().catch(() => ""), 240);
+        errors.push(`${attempt.label}:${text || `http_${response.status}`}`);
+        continue;
+      }
+      const buffer = await response.arrayBuffer();
+      return {
+        ok: true,
+        pdfBytes: new Uint8Array(buffer),
+        renderMode: "remote_html_to_pdf",
+        pdfEngine: "browserless",
+      };
+    } catch (err) {
+      errors.push(`${attempt.label}:${stripDangerousText(String(err?.message || "erro_desconhecido"), 180)}`);
+    }
+  }
+
+  return {
+    ok: false,
+    reason: "pdf_render_failed",
+    status: 502,
+    detail: errors.join("|").slice(0, 500),
+    renderMode: "remote_html_to_pdf",
+    pdfEngine: "browserless",
+  };
+}
+
+async function renderHtmlToPdf(html, env) {
+  const config = getPdfRenderConfig(env);
+  if (!config.engine) {
+    return {
+      ok: false,
+      reason: "pdf_engine_not_configured",
+      status: 503,
+      detail: "Configure PDFSHIFT_API_KEY ou BROWSERLESS_TOKEN",
+      renderMode: config.renderMode,
+      pdfEngine: "not_configured",
+    };
+  }
+
+  if (config.engine === "pdfshift") {
+    return renderPdfViaPdfshift(html, config.pdfshift);
+  }
+  if (config.engine === "browserless") {
+    return renderPdfViaBrowserless(html, config.browserless);
+  }
+
+  return {
+    ok: false,
+    reason: "pdf_engine_not_supported",
+    status: 400,
+    detail: `Engine nao suportada: ${config.engine}`,
+    renderMode: config.renderMode,
+    pdfEngine: config.engine,
+  };
+}
+
 function readDetalhes(row) {
   if (row?.detalhes && typeof row.detalhes === "object" && !Array.isArray(row.detalhes)) {
     return row.detalhes;
@@ -651,19 +865,17 @@ async function renderPropostaTemplateToLines(row, request, env) {
   const templateInfo = await loadOfficialPropostaTemplate(request, env);
   const values = buildTemplateValues(row, env);
   const rendered = applyTemplatePlaceholders(templateInfo.html, values);
-  const renderedHtml = rendered.html;
-  const lines = htmlToPdfLines(renderedHtml);
-  const htmlRenderedPreview = renderedHtml.slice(0, 240).replace(/\s+/g, " ").trim();
+  const renderedHtml = ensureHtmlDocument(rendered.html);
+  const htmlDiagnostics = inspectRenderedHtml(renderedHtml);
 
   return {
-    lines,
     renderedHtml,
+    htmlDiagnostics,
     placeholdersTotal: rendered.placeholdersTotal,
     placeholdersSubstituidos: rendered.placeholdersSubstituidos,
     placeholdersRestantes: rendered.placeholdersRestantes,
     templateSource: templateInfo.source,
     templatePath: templateInfo.templatePath,
-    htmlRenderedPreview,
   };
 }
 
@@ -789,22 +1001,36 @@ export async function onRequestPost(context) {
     });
   }
   const {
-    lines,
+    renderedHtml,
+    htmlDiagnostics,
     placeholdersTotal,
     placeholdersSubstituidos,
     placeholdersRestantes,
     templateSource,
-    templatePath,
-    htmlRenderedPreview
+    templatePath
   } = rendered;
+  const {
+    htmlHasStyleTag,
+    htmlHasHeaderClass,
+    htmlPreviewFirst300Chars,
+    htmlHasDoctype,
+    htmlHasHtmlTag,
+    htmlHasHeadTag,
+    htmlHasBodyTag,
+  } = htmlDiagnostics || {};
   logPdf(requestId, "template_render", "Template renderizado para proposta", {
     template_source: templateSource,
     template_path: templatePath,
-    lines_count: Array.isArray(lines) ? lines.length : 0,
     placeholders_total: Number(placeholdersTotal || 0),
     placeholders_substituidos: Number(placeholdersSubstituidos || 0),
     placeholders_restantes: Array.isArray(placeholdersRestantes) ? placeholdersRestantes : [],
-    html_rendered_preview: htmlRenderedPreview,
+    html_has_style_tag: Boolean(htmlHasStyleTag),
+    html_has_header_class: Boolean(htmlHasHeaderClass),
+    html_has_doctype: Boolean(htmlHasDoctype),
+    html_has_html_tag: Boolean(htmlHasHtmlTag),
+    html_has_head_tag: Boolean(htmlHasHeadTag),
+    html_has_body_tag: Boolean(htmlHasBodyTag),
+    html_preview_first_300_chars: String(htmlPreviewFirst300Chars || ""),
   });
   if (Array.isArray(placeholdersRestantes) && placeholdersRestantes.length > 0) {
     logPdf(requestId, "template_placeholder_warning", "Placeholders restantes apos renderizacao", {
@@ -812,14 +1038,31 @@ export async function onRequestPost(context) {
     });
   }
 
-  const pdfContent = createPdfFromLines(lines);
-  const pdfBytes = (() => {
-    try {
-      return new TextEncoder().encode(pdfContent).length;
-    } catch {
-      return String(pdfContent || "").length;
-    }
-  })();
+  const pdfRender = await renderHtmlToPdf(renderedHtml, env);
+  if (!pdfRender.ok) {
+    return fail(requestId, "pdf_render", pdfRender.reason || "pdf_render_failed", pdfRender.status || 502, {
+      detail: stripDangerousText(String(pdfRender.detail || "html_to_pdf_render_failed"), 220),
+      template_source: templateSource,
+      template_path: templatePath,
+      render_mode: String(pdfRender.renderMode || "remote_html_to_pdf"),
+      pdf_engine: String(pdfRender.pdfEngine || "unknown"),
+      html_has_style_tag: Boolean(htmlHasStyleTag),
+      html_has_header_class: Boolean(htmlHasHeaderClass),
+      html_preview_first_300_chars: String(htmlPreviewFirst300Chars || ""),
+    });
+  }
+  const pdfContent = pdfRender.pdfBytes;
+  const pdfBytes = Number(pdfContent?.byteLength || 0);
+  const renderMode = String(pdfRender.renderMode || "remote_html_to_pdf");
+  const pdfEngine = String(pdfRender.pdfEngine || "unknown");
+  logPdf(requestId, "pdf_render", "HTML renderizado em PDF com engine real", {
+    render_mode: renderMode,
+    pdf_engine: pdfEngine,
+    pdf_bytes: pdfBytes,
+    html_has_style_tag: Boolean(htmlHasStyleTag),
+    html_has_header_class: Boolean(htmlHasHeaderClass),
+  });
+
   const fileName = `orcamento-${id}-${Date.now()}.pdf`;
   const uploadResult = await uploadPdfIfPossible(config, env, pdfContent, fileName);
   if (!uploadResult.ok) {
@@ -828,6 +1071,11 @@ export async function onRequestPost(context) {
       file_name: fileName,
       template_source: templateSource,
       template_path: templatePath,
+      render_mode: renderMode,
+      pdf_engine: pdfEngine,
+      html_has_style_tag: Boolean(htmlHasStyleTag),
+      html_has_header_class: Boolean(htmlHasHeaderClass),
+      html_preview_first_300_chars: String(htmlPreviewFirst300Chars || ""),
     });
   }
 
@@ -859,13 +1107,18 @@ export async function onRequestPost(context) {
     upload_reason: uploadResult.ok ? "" : uploadResult.reason,
     template_source: templateSource,
     template_path: templatePath,
-    html_rendered_preview: htmlRenderedPreview,
+    render_mode: renderMode,
+    pdf_engine: pdfEngine,
+    html_has_style_tag: Boolean(htmlHasStyleTag),
+    html_has_header_class: Boolean(htmlHasHeaderClass),
+    html_preview_first_300_chars: String(htmlPreviewFirst300Chars || ""),
+    html_rendered_preview: String(htmlPreviewFirst300Chars || ""),
     placeholders_total: Number(placeholdersTotal || 0),
     placeholders_substituidos: Number(placeholdersSubstituidos || 0),
     placeholders_restantes: Array.isArray(placeholdersRestantes) ? placeholdersRestantes : [],
     pdf_bytes: pdfBytes,
     request_id: requestId,
-    pdf_base64: typeof btoa === "function" ? btoa(pdfContent) : ""
+    pdf_base64: bytesToBase64(pdfContent)
   });
 }
 

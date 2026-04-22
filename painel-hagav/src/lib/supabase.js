@@ -4,6 +4,10 @@ import {
   deriveFinancialMetricsFromFinalPrice,
   enrichLeadRecord,
   enrichOrcamentoRecord,
+  estimateLeadScore,
+  inferUrgencia,
+  priorityByScore,
+  temperatureByScore,
   COMMERCIAL_DEFAULTS,
   isLeadFollowupLate,
   DEAL_STATUS,
@@ -317,6 +321,147 @@ export async function fetchPipelineDeals({ search, limit = 1200 } = {}) {
   return (data ?? []).map(mapDealToLeadRecord).map(enrichLeadRecord);
 }
 
+function normalizeLeadText(value, maxLen = 300) {
+  return String(value || '').trim().slice(0, maxLen);
+}
+
+function normalizeLeadFlow(value) {
+  const raw = normalizeLeadText(value, 40)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+  if (raw === 'dr' || raw.includes('mensal') || raw.includes('recorrente')) return 'DR';
+  return 'DU';
+}
+
+function parseLeadQuantity(value, fallback = 1) {
+  const match = String(value || '').match(/(\d+)/);
+  if (!match || !match[1]) return fallback;
+  const parsed = Number(match[1]);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.max(1, Math.round(parsed));
+}
+
+function normalizeLeadMaterialState(value) {
+  const raw = normalizeLeadText(value, 40)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+  if (raw.startsWith('sim')) return 'Sim';
+  if (raw.startsWith('nao')) return 'Nao';
+  if (raw.startsWith('parcial')) return 'Parcial';
+  return '';
+}
+
+function splitLeadServices(rawValue) {
+  return normalizeLeadText(rawValue, 700)
+    .split(/\||\n|;/)
+    .map((item) => normalizeLeadText(item, 120))
+    .filter(Boolean)
+    .slice(0, 12);
+}
+
+function summarizeByService(services, value) {
+  const safeValue = normalizeLeadText(value, 120);
+  if (!safeValue) return '';
+  if (!Array.isArray(services) || services.length === 0) return safeValue;
+  return services.map((service) => `${service}: ${safeValue}`).join(' | ');
+}
+
+function buildLeadResumoOrcamento({
+  fluxo,
+  servicoResumo,
+  quantidadeResumo,
+  materialResumo,
+  prazo,
+  referencia,
+}) {
+  const parts = [
+    fluxo || '-',
+    `Servico: ${servicoResumo || '-'}`,
+    `Quantidade: ${quantidadeResumo || '-'}`,
+    `Material gravado: ${materialResumo || '-'}`,
+    `Prazo: ${prazo || '-'}`,
+  ];
+  if (referencia) parts.push(`Referencia: ${referencia}`);
+  return parts.join(' | ');
+}
+
+function buildLeadAnswersPayload({
+  flow,
+  nome,
+  whatsapp,
+  empresa,
+  services,
+  quantityByService,
+  materialState,
+  tempoBruto,
+  prazo,
+  referencia,
+  contextoResumo,
+}) {
+  const flowSelection = { selected: services, outro: '' };
+  const flowContratacao = flow === 'DR' ? 'Producao mensal' : 'Projeto pontual';
+
+  const base = {
+    nome,
+    whatsapp,
+    empresa: empresa || '',
+    extras: contextoResumo || '',
+    flow_servicos: flowSelection,
+    flow_quantidades: quantityByService,
+    flow_material_gravado: materialState,
+    flow_tempo_bruto: tempoBruto || '',
+    flow_prazo: prazo || '',
+    flow_referencia: referencia || '',
+    flow_tipo_contratacao: flowContratacao,
+  };
+
+  if (flow === 'DR') {
+    const firstService = services[0] || '';
+    return {
+      ...base,
+      rec_operacoes: flowSelection,
+      rec_quantidades: quantityByService,
+      rec_gravado_por_tipo: services.reduce((acc, service) => {
+        acc[service] = materialState || '';
+        return acc;
+      }, {}),
+      rec_tempo_bruto_por_tipo: tempoBruto
+        ? services.reduce((acc, service) => {
+          acc[service] = tempoBruto;
+          return acc;
+        }, {})
+        : {},
+      rec_inicio: prazo || '',
+      rec_referencia: referencia || '',
+      rec_gravado: materialState || '',
+      rec_tempo_bruto: tempoBruto || '',
+      rec_tipo_operacao: firstService,
+      rec_volume: String(quantityByService[firstService] || ''),
+      rec_objetivo: contextoResumo ? normalizeLeadText(contextoResumo, 200) : '',
+    };
+  }
+
+  return {
+    ...base,
+    unica_servicos: flowSelection,
+    unica_quantidades: quantityByService,
+    unica_gravado: services.reduce((acc, service) => {
+      acc[service] = materialState || '';
+      return acc;
+    }, {}),
+    unica_tempo_bruto: tempoBruto
+      ? services.reduce((acc, service) => {
+        acc[service] = tempoBruto;
+        return acc;
+      }, {})
+      : {},
+    unica_referencia: referencia || '',
+    unica_prazo: prazo || '',
+  };
+}
+
 export async function createLead(fields = {}) {
   const client = getSupabase();
   if (!client) throw new Error('Supabase nao configurado');
@@ -326,24 +471,134 @@ export async function createLead(fields = {}) {
   if (!nome) throw new Error('Nome e obrigatorio');
   if (!whatsapp || whatsapp.length < 8) throw new Error('WhatsApp invalido');
 
-  const empresa = String(fields.empresa || '').trim();
-  const detalhes = empresa ? { empresa } : undefined;
+  const empresa = normalizeLeadText(fields.empresa, 120);
+  const origem = normalizeLeadText(fields.origem, 120) || 'prospeccao_ativa';
+  const flow = normalizeLeadFlow(fields.fluxo || fields.tipo_contratacao);
+  const prazo = normalizeLeadText(fields.prazo, 80) || (flow === 'DR' ? 'Esse mes' : 'Essa semana');
+  const services = splitLeadServices(fields.servico);
+  const servicoResumo = services.join(' | ') || normalizeLeadText(fields.servico, 300);
+  const quantidadeBase = parseLeadQuantity(fields.quantidade, 1);
+  const quantityByService = services.reduce((acc, service) => {
+    acc[service] = quantidadeBase;
+    return acc;
+  }, {});
+  const quantidadeResumo = services.length > 0
+    ? services.map((service) => `${service}: ${quantidadeBase}`).join(' | ')
+    : String(quantidadeBase);
+  const materialState = normalizeLeadMaterialState(fields.material_gravado_text || fields.material_gravado);
+  const materialResumo = summarizeByService(services, materialState) || materialState;
+  const tempoBruto = normalizeLeadText(fields.tempo_bruto, 120);
+  const tempoResumo = summarizeByService(services, tempoBruto) || tempoBruto;
+  const referenciaText = normalizeLeadText(fields.referencia_text || fields.referencia, 700);
+  const contextoResumo = normalizeLeadText(fields.contexto_resumo, 1200);
+  const observacoesCliente = normalizeLeadText(fields.observacoes, 1200);
+  const observacoesInternas = normalizeLeadText(fields.observacoes_internas, 1200);
+  const observacoes = [contextoResumo, observacoesCliente].filter(Boolean).join('\n\n').trim();
+  const multicamera = /(multicamera|multi camera|3 camera|tres camera)/i.test(`${referenciaText} ${contextoResumo}`);
+
+  const resumoOrcamento = buildLeadResumoOrcamento({
+    fluxo: flow,
+    servicoResumo: servicoResumo || '-',
+    quantidadeResumo: quantidadeResumo || '-',
+    materialResumo: materialResumo || '-',
+    prazo: prazo || '-',
+    referencia: referenciaText || '',
+  });
+
+  const leadForScore = {
+    fluxo: flow,
+    servico: servicoResumo || '',
+    quantidade: quantidadeResumo || String(quantidadeBase),
+    material_gravado: materialResumo || materialState || '',
+    tempo_bruto: tempoResumo || tempoBruto || '',
+    prazo: prazo || '',
+    referencia: referenciaText || '',
+    observacoes: observacoes || '',
+  };
+
+  const scoreRaw = Number(fields.score_lead);
+  const scoreLead = Number.isFinite(scoreRaw) && scoreRaw > 0
+    ? Math.round(scoreRaw)
+    : estimateLeadScore(leadForScore);
+  const urgenciaField = normalizeLeadText(fields.urgencia, 20).toLowerCase();
+  const urgencia = ['alta', 'media', 'baixa'].includes(urgenciaField)
+    ? urgenciaField
+    : inferUrgencia(prazo);
+  const prioridadeField = normalizeLeadText(fields.prioridade, 20).toLowerCase();
+  const prioridade = ['alta', 'media', 'baixa'].includes(prioridadeField)
+    ? prioridadeField
+    : priorityByScore(scoreLead, urgencia);
+  const temperaturaField = normalizeLeadText(fields.temperatura, 20);
+  const temperatura = ['Quente', 'Morno', 'Frio'].includes(temperaturaField)
+    ? temperaturaField
+    : temperatureByScore(scoreLead);
+
+  const resumoComercial = `${flow} | Servico: ${servicoResumo || '-'} | Qtd: ${quantidadeResumo || '-'} | Material: ${materialResumo || '-'} | Prazo: ${prazo || '-'} | Score: ${scoreLead}`;
+  const valorEstimadoInput = Number(fields.valor_estimado);
+  const valorEstimado = Number.isFinite(valorEstimadoInput) && valorEstimadoInput > 0
+    ? valorEstimadoInput
+    : null;
+  const respostasCompletas = buildLeadAnswersPayload({
+    flow,
+    nome,
+    whatsapp,
+    empresa,
+    services,
+    quantityByService,
+    materialState,
+    tempoBruto,
+    prazo,
+    referencia: referenciaText,
+    contextoResumo,
+  });
+  const detalhes = {
+    fluxo: flow,
+    pagina: 'orcamento',
+    origem,
+    servicoOuOperacao: servicoResumo || '',
+    quantidade: quantidadeResumo || '',
+    materialGravado: materialResumo || '',
+    tempoBruto: tempoResumo || '',
+    prazo: prazo || '',
+    referencia: referenciaText || '',
+    observacoes: observacoes || '',
+    respostasCompletas,
+    answers: respostasCompletas,
+    comercial: {
+      origem_manual: true,
+      criado_via: 'admin_novo_lead',
+      contexto_resumo: contextoResumo || '',
+    },
+    ...(empresa ? { empresa } : {}),
+  };
 
   const payload = {
     nome,
     whatsapp,
-    origem: String(fields.origem || 'prospeccao_ativa').trim() || 'prospeccao_ativa',
-    servico: String(fields.servico || '').trim() || null,
-    valor_estimado: Number(fields.valor_estimado) > 0 ? Number(fields.valor_estimado) : null,
+    origem,
+    fluxo: flow,
+    pagina: 'orcamento',
+    servico: servicoResumo || null,
+    quantidade: quantidadeBase,
+    material_gravado: null,
+    tempo_bruto: tempoResumo || tempoBruto || null,
+    prazo: prazo || null,
+    referencia: null,
+    multicamera,
+    observacoes: observacoes || null,
+    detalhes,
+    resumo_orcamento: resumoOrcamento,
+    resumo_comercial: resumoComercial,
+    score_lead: scoreLead,
+    valor_estimado: valorEstimado,
     status: mapLegacyLeadStatusToDeal(fields.status || 'novo', DEAL_STATUS.NOVO),
-    prioridade: String(fields.prioridade || 'media'),
-    urgencia: String(fields.urgencia || 'media'),
+    prioridade,
+    urgencia,
+    temperatura,
     proxima_acao: String(fields.proxima_acao || '').trim() || null,
     proximo_followup_em: fields.proximo_followup_em || null,
     responsavel: String(fields.responsavel || '').trim() || null,
-    observacoes: String(fields.observacoes || '').trim() || null,
-    fluxo: 'DU',
-    ...(detalhes ? { detalhes } : {}),
+    observacoes_internas: observacoesInternas || null,
   };
 
   const { data, error } = await client
@@ -596,6 +851,15 @@ async function generatePdfDocument(endpoint, id, { adminKey } = {}) {
     }
     if (reason === 'pdf_upload_failed') {
       throw new Error(withMeta('Falha no upload do PDF para o bucket configurado.'));
+    }
+    if (reason === 'pdf_engine_not_configured') {
+      throw new Error(withMeta('Engine de renderizacao PDF nao configurada no deploy. Defina PDFSHIFT_API_KEY ou BROWSERLESS_TOKEN.'));
+    }
+    if (reason === 'pdf_engine_not_supported') {
+      throw new Error(withMeta('Engine de renderizacao PDF nao suportada no deploy.'));
+    }
+    if (reason === 'pdf_render_failed') {
+      throw new Error(withMeta('Falha ao renderizar HTML/CSS em PDF no endpoint.'));
     }
     if (reason === 'deal_link_update_failed') {
       throw new Error(withMeta('PDF gerado, mas falhou ao salvar link_pdf no deal.'));

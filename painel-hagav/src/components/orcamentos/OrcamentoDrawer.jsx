@@ -89,47 +89,6 @@ function parseDetalhes(value) {
   }
 }
 
-function downloadPdfFromBase64(base64, fileName) {
-  if (!base64) return;
-  const bytes = atob(base64);
-  const arr = new Uint8Array(bytes.length);
-  for (let i = 0; i < bytes.length; i += 1) arr[i] = bytes.charCodeAt(i);
-  const blob = new Blob([arr], { type: 'application/pdf' });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = fileName || 'proposta-hagav.pdf';
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 2000);
-}
-
-function openPrintWindow(html) {
-  if (typeof window === 'undefined' || !html) return;
-  const win = window.open('', '_blank', 'width=960,height=800,menubar=no,toolbar=no');
-  if (!win) {
-    // fallback: blob URL se popup bloqueado
-    const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.target = '_blank';
-    a.rel = 'noreferrer';
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 4000);
-    return;
-  }
-  win.document.open();
-  win.document.write(html);
-  win.document.close();
-  win.focus();
-  // aguarda CSS/fontes renderizarem antes de disparar print
-  setTimeout(() => { win.print(); }, 900);
-}
-
 export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
   const [statusOrc, setStatusOrc] = useState(orc?.status_orcamento ?? 'orcamento');
   const [precoFinal, setPrecoFinal] = useState(orc?.preco_final ?? 0);
@@ -309,34 +268,21 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
       console.info('[Orcamentos][PDF][Resultado]', {
         deal_id: orc.id,
         request_id: String(result?.request_id || ''),
+        template_path: String(result?.template_path || ''),
         template_source: String(result?.template_source || ''),
+        placeholders_total: Number(result?.placeholders_total || 0),
+        placeholders_substituidos: Number(result?.placeholders_substituidos || 0),
+        placeholders_restantes: Array.isArray(result?.placeholders_restantes) ? result.placeholders_restantes : [],
+        html_rendered_preview: String(result?.html_rendered_preview || ''),
         uploaded: Boolean(result?.uploaded),
         upload_reason: String(result?.upload_reason || ''),
         has_link_pdf: Boolean(String(result?.link_pdf || '').trim()),
       });
-      // rendered_html = HTML completo preenchido → janela de impressao do browser (layout premium)
-      if (result?.rendered_html) {
-        openPrintWindow(result.rendered_html);
-      } else if (result?.pdf_base64) {
-        // fallback: download do PDF texto (sem layout) se rendered_html ausente
-        downloadPdfFromBase64(result.pdf_base64, result.fileName || `proposta-${orc.id}.pdf`);
-      }
 
       const nextLink = String(result?.link_pdf || '').trim();
-      const uploadReason = String(result?.upload_reason || '').trim();
       if (!nextLink) {
-        // sem link no storage mas proposta aberta para impressao — nao e um erro
-        if (result?.rendered_html) {
-          setInfo('Proposta aberta para impressao. Use "Salvar como PDF" no dialogo do browser. Para link publico, configure SUPABASE_PDF_BUCKET no deploy.');
-          return;
-        }
-        if (uploadReason === 'pdf_bucket_not_configured') {
-          setError('Proposta gerada sem link publico. Configure SUPABASE_PDF_BUCKET (ou SUPABASE_STORAGE_BUCKET) no deploy.');
-        } else if (uploadReason) {
-          setError(`Proposta gerada sem upload no storage (${uploadReason}).`);
-        } else {
-          setError('Proposta gerada sem link publico. Verifique SUPABASE_PDF_BUCKET e tente novamente.');
-        }
+        const requestId = String(result?.request_id || '').trim();
+        setError(`Falha ao gerar link da proposta PDF.${requestId ? ` RID: ${requestId}.` : ''}`);
         return;
       }
       const nowIso = new Date().toISOString();
@@ -352,7 +298,10 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
         proposta_gerada_em: nowIso,
       });
 
-      setInfo('Proposta aberta para impressao e link gerado. Use "Salvar como PDF" no browser. Envio no WhatsApp habilitado.');
+      if (typeof window !== 'undefined') {
+        window.open(nextLink, '_blank', 'noopener,noreferrer');
+      }
+      setInfo('Proposta PDF gerada com sucesso. Envio no WhatsApp habilitado.');
     } catch (err) {
       console.error('[Orcamentos][PDF][Erro]', {
         deal_id: orc.id,

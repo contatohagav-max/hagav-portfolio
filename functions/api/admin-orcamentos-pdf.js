@@ -607,50 +607,43 @@ function buildTemplateValues(row, env) {
   return expanded;
 }
 
-const PROPOSTA_TEMPLATE_CANDIDATES = [
-  "/templates/proposta-hagav-template.html.html",
-  "/templates/proposta-hagav-template.html",
-  "/proposta-hagav-template.html",
-];
+const PROPOSTA_TEMPLATE_PATH = "/templates/proposta-hagav-template.html";
 
 async function loadOfficialPropostaTemplate(request, env) {
+  const templateUrl = new URL(PROPOSTA_TEMPLATE_PATH, request.url).toString();
   const readErrors = [];
 
-  for (const templatePath of PROPOSTA_TEMPLATE_CANDIDATES) {
-    const templateUrl = new URL(templatePath, request.url).toString();
-
-    if (env?.ASSETS && typeof env.ASSETS.fetch === "function") {
-      try {
-        const response = await env.ASSETS.fetch(new Request(templateUrl, { method: "GET" }));
-        if (response?.ok) {
-          const html = await response.text();
-          if (String(html || "").trim()) {
-            return { html, source: "assets", templatePath };
-          }
-        }
-        readErrors.push(`${templatePath}:assets_http_${response?.status || 0}`);
-      } catch (err) {
-        readErrors.push(`${templatePath}:assets_fetch_${stripDangerousText(String(err?.message || "erro_desconhecido"), 120)}`);
-      }
-    }
-
+  if (env?.ASSETS && typeof env.ASSETS.fetch === "function") {
     try {
-      const response = await fetch(templateUrl, { method: "GET" });
+      const response = await env.ASSETS.fetch(new Request(templateUrl, { method: "GET" }));
       if (response?.ok) {
         const html = await response.text();
         if (String(html || "").trim()) {
-          return { html, source: "http", templatePath };
+          return { html, source: "assets", templatePath: PROPOSTA_TEMPLATE_PATH };
         }
       }
-      readErrors.push(`${templatePath}:http_${response?.status || 0}`);
+      readErrors.push(`assets_http_${response?.status || 0}`);
     } catch (err) {
-      readErrors.push(`${templatePath}:http_fetch_${stripDangerousText(String(err?.message || "erro_desconhecido"), 120)}`);
+      readErrors.push(`assets_fetch_${stripDangerousText(String(err?.message || "erro_desconhecido"), 120)}`);
     }
   }
 
-  const error = new Error(`template_not_found:${PROPOSTA_TEMPLATE_CANDIDATES.join(",")}:${readErrors.join("|")}`);
+  try {
+    const response = await fetch(templateUrl, { method: "GET" });
+    if (response?.ok) {
+      const html = await response.text();
+      if (String(html || "").trim()) {
+        return { html, source: "http", templatePath: PROPOSTA_TEMPLATE_PATH };
+      }
+    }
+    readErrors.push(`http_${response?.status || 0}`);
+  } catch (err) {
+    readErrors.push(`http_fetch_${stripDangerousText(String(err?.message || "erro_desconhecido"), 120)}`);
+  }
+
+  const error = new Error(`template_not_found:${PROPOSTA_TEMPLATE_PATH}:${readErrors.join("|")}`);
   error.code = "template_not_found";
-  error.templatePath = PROPOSTA_TEMPLATE_CANDIDATES[0];
+  error.templatePath = PROPOSTA_TEMPLATE_PATH;
   throw error;
 }
 
@@ -660,7 +653,7 @@ async function renderPropostaTemplateToLines(row, request, env) {
   const rendered = applyTemplatePlaceholders(templateInfo.html, values);
   const renderedHtml = rendered.html;
   const lines = htmlToPdfLines(renderedHtml);
-  const firstCharsRendered = renderedHtml.slice(0, 120).replace(/\s+/g, " ").trim();
+  const htmlRenderedPreview = renderedHtml.slice(0, 240).replace(/\s+/g, " ").trim();
 
   return {
     lines,
@@ -670,7 +663,7 @@ async function renderPropostaTemplateToLines(row, request, env) {
     placeholdersRestantes: rendered.placeholdersRestantes,
     templateSource: templateInfo.source,
     templatePath: templateInfo.templatePath,
-    firstCharsRendered,
+    htmlRenderedPreview,
   };
 }
 
@@ -792,18 +785,17 @@ export async function onRequestPost(context) {
       : "template_render_failed";
     return fail(requestId, "template_render", reason, 500, {
       detail: stripDangerousText(String(err?.message || ""), 200),
-      template_path: PROPOSTA_TEMPLATE_CANDIDATES[0],
+      template_path: PROPOSTA_TEMPLATE_PATH,
     });
   }
   const {
     lines,
-    renderedHtml,
     placeholdersTotal,
     placeholdersSubstituidos,
     placeholdersRestantes,
     templateSource,
     templatePath,
-    firstCharsRendered
+    htmlRenderedPreview
   } = rendered;
   logPdf(requestId, "template_render", "Template renderizado para proposta", {
     template_source: templateSource,
@@ -812,7 +804,7 @@ export async function onRequestPost(context) {
     placeholders_total: Number(placeholdersTotal || 0),
     placeholders_substituidos: Number(placeholdersSubstituidos || 0),
     placeholders_restantes: Array.isArray(placeholdersRestantes) ? placeholdersRestantes : [],
-    first_120_chars: firstCharsRendered,
+    html_rendered_preview: htmlRenderedPreview,
   });
   if (Array.isArray(placeholdersRestantes) && placeholdersRestantes.length > 0) {
     logPdf(requestId, "template_placeholder_warning", "Placeholders restantes apos renderizacao", {
@@ -867,12 +859,11 @@ export async function onRequestPost(context) {
     upload_reason: uploadResult.ok ? "" : uploadResult.reason,
     template_source: templateSource,
     template_path: templatePath,
-    first_120_chars_rendered: firstCharsRendered,
+    html_rendered_preview: htmlRenderedPreview,
     placeholders_total: Number(placeholdersTotal || 0),
     placeholders_substituidos: Number(placeholdersSubstituidos || 0),
     placeholders_restantes: Array.isArray(placeholdersRestantes) ? placeholdersRestantes : [],
     pdf_bytes: pdfBytes,
-    rendered_html: renderedHtml,
     request_id: requestId,
     pdf_base64: typeof btoa === "function" ? btoa(pdfContent) : ""
   });

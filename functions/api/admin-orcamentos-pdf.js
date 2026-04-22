@@ -434,11 +434,19 @@ function getPdfRenderConfig(env) {
   const forcedEngine = firstEnvValue(env, ["PDF_ENGINE", "PDF_RENDER_ENGINE", "PDF_PROVIDER"]).toLowerCase();
   const pdfshiftKey = firstEnvValue(env, ["PDFSHIFT_API_KEY", "PDFSHIFT_KEY"]);
   const browserlessToken = firstEnvValue(env, ["BROWSERLESS_TOKEN", "BROWSERLESS_API_KEY", "PDF_BROWSERLESS_TOKEN"]);
+  const allowNativeFallbackRaw = firstEnvValue(env, ["PDF_NATIVE_FALLBACK", "PDF_ALLOW_NATIVE_FALLBACK"]);
+  const allowNativeFallback = allowNativeFallbackRaw
+    ? !/^(0|false|no)$/i.test(allowNativeFallbackRaw)
+    : true;
 
-  const engine = forcedEngine || (pdfshiftKey ? "pdfshift" : (browserlessToken ? "browserless" : ""));
+  const autoEngine = browserlessToken ? "browserless" : (pdfshiftKey ? "pdfshift" : "native_text");
+  const normalizedForced = forcedEngine && forcedEngine !== "auto" ? forcedEngine : "";
+  const engine = normalizedForced || autoEngine;
+
   return {
     engine,
-    renderMode: "remote_html_to_pdf",
+    renderMode: engine === "native_text" ? "native_text_fallback" : "remote_html_to_pdf",
+    allowNativeFallback,
     pdfshift: {
       apiKey: pdfshiftKey,
       endpoint: firstEnvValue(env, ["PDFSHIFT_ENDPOINT", "PDFSHIFT_URL"]) || "https://api.pdfshift.io/v3/convert/pdf",
@@ -447,6 +455,18 @@ function getPdfRenderConfig(env) {
       token: browserlessToken,
       endpoint: (firstEnvValue(env, ["BROWSERLESS_ENDPOINT", "BROWSERLESS_URL", "PDF_BROWSERLESS_ENDPOINT"]) || "https://chrome.browserless.io").replace(/\/+$/, ""),
     },
+  };
+}
+
+function renderPdfViaNativeText(html) {
+  const lines = htmlToPdfLines(html);
+  const pdfText = createPdfFromLines(lines);
+  const pdfBytes = new TextEncoder().encode(pdfText);
+  return {
+    ok: true,
+    pdfBytes,
+    renderMode: "native_text_fallback",
+    pdfEngine: "native_text",
   };
 }
 
@@ -573,32 +593,39 @@ async function renderPdfViaBrowserless(html, config) {
 
 async function renderHtmlToPdf(html, env) {
   const config = getPdfRenderConfig(env);
-  if (!config.engine) {
-    return {
+  if (config.engine === "native_text") {
+    return renderPdfViaNativeText(html);
+  }
+
+  let primaryResult = null;
+  if (config.engine === "pdfshift") {
+    primaryResult = await renderPdfViaPdfshift(html, config.pdfshift);
+  } else if (config.engine === "browserless") {
+    primaryResult = await renderPdfViaBrowserless(html, config.browserless);
+  } else {
+    primaryResult = {
       ok: false,
-      reason: "pdf_engine_not_configured",
-      status: 503,
-      detail: "Configure PDFSHIFT_API_KEY ou BROWSERLESS_TOKEN",
+      reason: "pdf_engine_not_supported",
+      status: 400,
+      detail: `Engine nao suportada: ${config.engine}`,
       renderMode: config.renderMode,
-      pdfEngine: "not_configured",
+      pdfEngine: config.engine,
     };
   }
 
-  if (config.engine === "pdfshift") {
-    return renderPdfViaPdfshift(html, config.pdfshift);
-  }
-  if (config.engine === "browserless") {
-    return renderPdfViaBrowserless(html, config.browserless);
+  if (primaryResult?.ok) return primaryResult;
+
+  if (config.allowNativeFallback) {
+    const fallback = renderPdfViaNativeText(html);
+    return {
+      ...fallback,
+      fallbackFrom: String(primaryResult?.pdfEngine || config.engine || "unknown"),
+      fallbackReason: String(primaryResult?.reason || "pdf_render_failed"),
+      fallbackDetail: stripDangerousText(String(primaryResult?.detail || ""), 240),
+    };
   }
 
-  return {
-    ok: false,
-    reason: "pdf_engine_not_supported",
-    status: 400,
-    detail: `Engine nao suportada: ${config.engine}`,
-    renderMode: config.renderMode,
-    pdfEngine: config.engine,
-  };
+  return primaryResult;
 }
 
 function readDetalhes(row) {
@@ -1055,10 +1082,14 @@ export async function onRequestPost(context) {
   const pdfBytes = Number(pdfContent?.byteLength || 0);
   const renderMode = String(pdfRender.renderMode || "remote_html_to_pdf");
   const pdfEngine = String(pdfRender.pdfEngine || "unknown");
-  logPdf(requestId, "pdf_render", "HTML renderizado em PDF com engine real", {
+  const fallbackUsed = Boolean(pdfRender?.fallbackFrom);
+  logPdf(requestId, "pdf_render", "PDF gerado a partir do HTML renderizado", {
     render_mode: renderMode,
     pdf_engine: pdfEngine,
     pdf_bytes: pdfBytes,
+    fallback_used: fallbackUsed,
+    fallback_from: String(pdfRender?.fallbackFrom || ""),
+    fallback_reason: String(pdfRender?.fallbackReason || ""),
     html_has_style_tag: Boolean(htmlHasStyleTag),
     html_has_header_class: Boolean(htmlHasHeaderClass),
   });
@@ -1073,6 +1104,9 @@ export async function onRequestPost(context) {
       template_path: templatePath,
       render_mode: renderMode,
       pdf_engine: pdfEngine,
+      pdf_fallback_used: fallbackUsed,
+      pdf_fallback_from: String(pdfRender?.fallbackFrom || ""),
+      pdf_fallback_reason: String(pdfRender?.fallbackReason || ""),
       html_has_style_tag: Boolean(htmlHasStyleTag),
       html_has_header_class: Boolean(htmlHasHeaderClass),
       html_preview_first_300_chars: String(htmlPreviewFirst300Chars || ""),
@@ -1109,6 +1143,9 @@ export async function onRequestPost(context) {
     template_path: templatePath,
     render_mode: renderMode,
     pdf_engine: pdfEngine,
+    pdf_fallback_used: fallbackUsed,
+    pdf_fallback_from: String(pdfRender?.fallbackFrom || ""),
+    pdf_fallback_reason: String(pdfRender?.fallbackReason || ""),
     html_has_style_tag: Boolean(htmlHasStyleTag),
     html_has_header_class: Boolean(htmlHasHeaderClass),
     html_preview_first_300_chars: String(htmlPreviewFirst300Chars || ""),

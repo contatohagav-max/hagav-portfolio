@@ -27,7 +27,6 @@ const DDD_VALIDOS = new Set(['11','12','13','14','15','16','17','18','19','21','
       'Reels / Shorts / TikTok',
       'Criativo para Ads',
       'Corte Podcast / Clipe',
-      'Vídeo médio',
       'Depoimento',
       'Videoaula / Módulo',
       'YouTube',
@@ -36,6 +35,15 @@ const DDD_VALIDOS = new Set(['11','12','13','14','15','16','17','18','19','21','
       'Motion / Vinheta',
       'Outro'
     ];
+    const MOTION_SERVICE_LABEL='Motion / Vinheta';
+    const MOTION_PRAZO_OPTIONS=[
+      'Até 3 dias úteis',
+      'Até 5 dias úteis',
+      'Até 10 dias úteis',
+      'Sem pressa / podemos alinhar'
+    ];
+    const REFERENCIA_VISUAL_TITLE='Tem alguma referência visual ou estilo que você gostaria de seguir?';
+    const REFERENCIA_VISUAL_HINT='(Pode ser link de vídeo, Instagram, site ou até uma explicação rápida) (Ex: vinheta, animação de logo, estilo de edição, etc.)';
     const CONTRATACAO_OPTIONS=['Projeto pontual','Produção mensal'];
     function mapTipoContratacaoToInternal(value){
       if(value==='Projeto pontual') return 'unica';
@@ -103,19 +111,35 @@ const DDD_VALIDOS = new Set(['11','12','13','14','15','16','17','18','19','21','
       const map=state.answers.rec_gravado_por_tipo||{};
       return selected.filter((service)=>map[service]==='Sim');
     }
+    function isMotionFlowSelection(selected){
+      const services=Array.isArray(selected)?selected:[];
+      return services.length===1&&services[0]===MOTION_SERVICE_LABEL;
+    }
     function getUnifiedBaseSteps(selected){
       const stepServices=Array.isArray(selected)?selected:[];
-      return [
-        {id:'flow_servicos',label:'Serviços',title:'Qual tipo de conteúdo você precisa?',hint:'Selecione todos os formatos que fazem sentido para o seu pedido.',type:'multi',required:true,options:UNIFIED_SERVICE_OPTIONS,outro:true},
+      const base=[
+        {id:'flow_servicos',label:'Serviços',title:'Qual tipo de conteúdo você precisa?',hint:'Selecione todos os formatos que fazem sentido para o seu pedido.',type:'multi',required:true,options:UNIFIED_SERVICE_OPTIONS,outro:true}
+      ];
+      if(isMotionFlowSelection(stepServices)) return base;
+      return base.concat([
         {id:'flow_quantidades',label:'Quantidade',title:'Quantos vídeos/peças você precisa?',hint:'Preencha a quantidade para cada serviço selecionado.',type:'quantityByService',required:true,services:stepServices},
         {id:'flow_tipo_contratacao',label:'Tipo de contratação',title:'Como você quer contratar?',hint:'Escolha o formato para seguirmos com as próximas perguntas.',type:'single',required:true,options:CONTRATACAO_OPTIONS}
+      ]);
+    }
+    function getStepsMotionTail(){
+      return [
+        {id:'unica_referencia',label:'Referência visual',title:REFERENCIA_VISUAL_TITLE,hint:REFERENCIA_VISUAL_HINT,type:'textarea',required:false,placeholder:'Cole links ou descreva referências...'},
+        {id:'unica_prazo',label:'Prazo ideal',title:'Qual o prazo ideal para entrega?',hint:'O prazo pode variar de acordo com a complexidade do projeto.',type:'single',required:true,options:MOTION_PRAZO_OPTIONS},
+        {id:'extras',label:'Observações extras',title:'Observações extras',type:'textarea',required:false,placeholder:'Algo que você queira complementar...'},
+        {id:'nome',label:'Nome',title:'Qual é o seu nome?',type:'text',required:true,placeholder:'Digite seu nome'},
+        {id:'whatsapp',label:'WhatsApp',title:'Qual o seu WhatsApp?',type:'phone',required:true,placeholder:'(00) 00000-0000'}
       ];
     }
     function getStepsUnicaTail(selected,withYes){
       return [
         {id:'unica_gravado',label:'Material gravado',title:'O material já está gravado?',hint:'Responda para cada serviço selecionado.',type:'yesNoByService',required:true,services:selected},
         {id:'unica_tempo_bruto',label:'Tempo de material bruto',title:'Quanto tempo de material bruto para edição?',hint:'Somente para serviços com material gravado.',type:'durationByService',required:withYes.length>0,optionalWhenEmpty:true,services:withYes},
-        {id:'unica_referencia',label:'Referência visual',title:'Tem referência visual?',hint:'Envie link de referência do Instagram, YouTube, TikTok ou Meta Ads. Ou pule.',type:'textarea',required:false,placeholder:'Cole links ou descreva referências...'},
+        {id:'unica_referencia',label:'Referência visual',title:REFERENCIA_VISUAL_TITLE,hint:REFERENCIA_VISUAL_HINT,type:'textarea',required:false,placeholder:'Cole links ou descreva referências...'},
         {id:'unica_prazo',label:'Prazo ideal',title:'Qual o prazo ideal?',type:'single',required:true,options:['24h','3 dias','Essa semana','Sem pressa']},
         {id:'extras',label:'Observações extras',title:'Observações extras',type:'textarea',required:false,placeholder:'Algo que você queira complementar...'},
         {id:'nome',label:'Nome',title:'Qual é o seu nome?',type:'text',required:true,placeholder:'Digite seu nome'},
@@ -135,6 +159,9 @@ const DDD_VALIDOS = new Set(['11','12','13','14','15','16','17','18','19','21','
     function getSteps(){
       const selected=getFlowSelectedServices();
       const baseSteps=getUnifiedBaseSteps(selected);
+      if(isMotionFlowSelection(selected)){
+        return baseSteps.concat(getStepsMotionTail());
+      }
       const tipoEscolhido=mapTipoContratacaoToInternal(state.answers.flow_tipo_contratacao||'')||state.tipo;
       if(tipoEscolhido==='unica'){
         const withYes=getRecordedYesServices();
@@ -158,11 +185,11 @@ const DDD_VALIDOS = new Set(['11','12','13','14','15','16','17','18','19','21','
         const submitCard=document.createElement('article');
         submitCard.className='step-active';
         submitCard.innerHTML='<button class=\"step-back\" type=\"button\" id=\"go-back-final\">Voltar</button>'+
-          '<h2 class=\"step-title\">'+(state.tipo==='unica'?'Tudo certo para enviar seu orçamento':'Tudo certo para enviar sua proposta')+'</h2>'+
-          '<p class=\"step-hint\">Revise rapidamente e clique para concluir o envio.</p>'+
+          '<h2 class=\"step-title\">Tudo certo para enviar sua solicitação</h2>'+
+          '<p class=\"step-hint\">Está tudo certo! Agora é só enviar sua solicitação.</p>'+
           '<div class=\"bot-trap\" aria-hidden=\"true\"><input type=\"text\" id=\"spam-trap\" tabindex=\"-1\" autocomplete=\"off\" inputmode=\"text\" /></div>'+
           '<div class=\"error\" id=\"submit-error\"></div>'+
-          '<button class=\"btn-submit\" type=\"button\" id=\"final-submit\">'+(state.tipo==='unica'?'Concluir pedido de orçamento':'Concluir pedido de proposta')+'</button>';
+          '<button class=\"btn-submit\" type=\"button\" id=\"final-submit\">Enviar solicitação</button>';
         stepsEl.appendChild(submitCard);
         submitCard.querySelector('#go-back-final').addEventListener('click',()=>{state.readyToSubmit=false;state.currentIndex=Math.max(0,steps.length-1);state.finalError='';render();});
         submitCard.querySelector('#final-submit').addEventListener('click',()=>{ handleFinalSubmit(submitCard); });
@@ -191,7 +218,7 @@ const DDD_VALIDOS = new Set(['11','12','13','14','15','16','17','18','19','21','
       success.className='budget-success';
       success.innerHTML=
         '<h2 class="budget-success-title">Recebemos sua solicitação com sucesso!</h2>'+
-        '<p class="budget-success-text">Nossa equipe vai analisar suas informações e entrar em contato o mais breve possível no seu WhatsApp.</p>'+
+        '<p class="budget-success-text">Agora nossa equipe vai analisar seu pedido e entrar em contato com você pelo WhatsApp o mais breve possível.</p>'+
         '<button class="budget-success-btn" type="button" id="budget-success-home">Voltar ao início</button>';
       stepsEl.appendChild(success);
       const btn=success.querySelector('#budget-success-home');
@@ -253,7 +280,25 @@ const DDD_VALIDOS = new Set(['11','12','13','14','15','16','17','18','19','21','
       }
       if(step.type==='multi'){
         const buttons=[...container.querySelectorAll('[data-multi]')];
-        buttons.forEach((btn)=>{btn.addEventListener('click',()=>{btn.classList.toggle('active');if(step.outro){const activeOutro=buttons.find((item)=>item.getAttribute('data-multi')==='Outro'&&item.classList.contains('active'));const wrap=container.querySelector('#multi-outro-wrap');if(wrap)wrap.style.display=activeOutro?'':'none';}errorEl.style.display='none';});});
+        buttons.forEach((btn)=>{btn.addEventListener('click',()=>{
+          btn.classList.toggle('active');
+          if(step.id==='flow_servicos'){
+            const optionValue=btn.getAttribute('data-multi');
+            const motionBtn=buttons.find((item)=>item.getAttribute('data-multi')===MOTION_SERVICE_LABEL);
+            if(optionValue===MOTION_SERVICE_LABEL&&btn.classList.contains('active')){
+              buttons.forEach((item)=>{if(item!==btn) item.classList.remove('active');});
+            }
+            if(optionValue!==MOTION_SERVICE_LABEL&&btn.classList.contains('active')&&motionBtn){
+              motionBtn.classList.remove('active');
+            }
+          }
+          if(step.outro){
+            const activeOutro=buttons.find((item)=>item.getAttribute('data-multi')==='Outro'&&item.classList.contains('active'));
+            const wrap=container.querySelector('#multi-outro-wrap');
+            if(wrap)wrap.style.display=activeOutro?'':'none';
+          }
+          errorEl.style.display='none';
+        });});
       }
       if(step.type==='yesNoByService'){
         const buttons=[...container.querySelectorAll('[data-yn]')];

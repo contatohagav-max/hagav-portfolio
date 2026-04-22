@@ -20,7 +20,7 @@ export default function OrcamentosTable({ orcamentos, onSelect }) {
             <th>Servico / Operacao</th>
             <th>Potencial</th>
             <th>Preco final</th>
-            <th>Margem</th>
+            <th>Margem (Auto/Com.)</th>
             <th>Revisao</th>
             <th>Status</th>
             <th>Urgencia</th>
@@ -62,7 +62,9 @@ export default function OrcamentosTable({ orcamentos, onSelect }) {
               <td className={`font-semibold ${Number(orc.preco_final) > 0 ? 'text-hagav-gold' : 'text-hagav-gray'}`}>
                 {Number(orc.preco_final) > 0 ? fmtBRL(orc.preco_final) : '—'}
               </td>
-              <td className="text-xs text-hagav-light">{Number(orc.margem_estimada ?? orc.margem_percentual ?? 0).toFixed(1)}%</td>
+              <td className="text-xs text-hagav-light">
+                {`${Number(orc.margem_automatica ?? orc.margem_estimada ?? 0).toFixed(1)}% / ${Number(orc.margem_comercial ?? orc.margem_percentual ?? 0).toFixed(1)}%`}
+              </td>
               <td className="text-xs">
                 <span className={`badge ${orc.revisao_manual ? 'bg-yellow-500/15 text-yellow-300 border-yellow-500/30' : 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'}`}>
                   {orc.revisao_manual ? 'Manual' : 'Auto'}

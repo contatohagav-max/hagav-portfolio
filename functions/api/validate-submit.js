@@ -226,9 +226,43 @@ function validateWhatsapp(raw) {
   return { ok: true, value: digits };
 }
 
+function containsMotionKeyword(value) {
+  const normalized = stripDangerousText(String(value || ""), LIMITS.service)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+  return /(motion|vinheta)/.test(normalized);
+}
+
+function selectionToList(rawSelection) {
+  if (Array.isArray(rawSelection)) return rawSelection;
+  if (rawSelection && typeof rawSelection === "object" && Array.isArray(rawSelection.selected)) {
+    return rawSelection.selected;
+  }
+  return [];
+}
+
+function isMotionOnlySelection(rawSelection) {
+  const selected = selectionToList(rawSelection)
+    .map((item) => stripDangerousText(String(item || ""), LIMITS.service))
+    .filter(Boolean);
+  if (selected.length !== 1) return false;
+  return containsMotionKeyword(selected[0]);
+}
+
+function shouldForceDuForMotion(answers = {}) {
+  if (!answers || typeof answers !== "object") return false;
+  return (
+    isMotionOnlySelection(answers?.flow_servicos)
+    || isMotionOnlySelection(answers?.unica_servicos)
+    || isMotionOnlySelection(answers?.rec_operacoes)
+  );
+}
+
 function normalizeTipoValue(rawTipo, answers = {}) {
   const tipoRaw = stripDangerousText(String(rawTipo || ""), 40).toLowerCase();
   const tipoAscii = tipoRaw.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  if (shouldForceDuForMotion(answers)) return "unica";
   if (tipoAscii === "du" || tipoAscii.includes("pontual") || tipoAscii.includes("unica")) return "unica";
   if (tipoAscii === "dr" || tipoAscii.includes("mensal") || tipoAscii.includes("recorrente")) return "recorrente";
 

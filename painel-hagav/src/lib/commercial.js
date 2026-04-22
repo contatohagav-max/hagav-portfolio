@@ -576,15 +576,41 @@ function getDrOfficialItemTotal(serviceKey, qty) {
   return total;
 }
 
-function getUrgencyMultiplier(flow, prazo, serviceKey) {
+function readUrgencyMultiplier(flowTable, key) {
+  const normalizedKey = normalizeServiceKey(key);
+  if (!normalizedKey) return 1;
+  for (const [rawKey, rawValue] of Object.entries(flowTable || {})) {
+    if (normalizeServiceKey(rawKey) !== normalizedKey) continue;
+    const parsed = Number(rawValue);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
+  }
+  return 1;
+}
+
+function getUrgencyContext(flow, prazo, serviceKey) {
   const key = canonicalPrazoKey(prazo);
   const urgencia = DEFAULT_PRICING_RULES.urgencia;
   const flowTable = flow === 'DR' ? urgencia.DR : urgencia.DU;
-  let multiplier = Number(flowTable[key] || 1);
-  if ((serviceKey === 'vsl_15' || serviceKey === 'vsl_longa') && key === '3 dias') {
-    multiplier = Math.max(multiplier, Number(urgencia.VSL['3 dias'] || 1.4));
+  const vslTable = urgencia.VSL || {};
+  let multiplier = readUrgencyMultiplier(flowTable, key);
+  let forcedManual = false;
+
+  if ((serviceKey === 'vsl_15' || serviceKey === 'vsl_longa') && key === '24h') {
+    multiplier = 1;
+    forcedManual = true;
+  } else if ((serviceKey === 'vsl_15' || serviceKey === 'vsl_longa') && key === '3 dias') {
+    multiplier = Math.max(multiplier, readUrgencyMultiplier(vslTable, '3 dias') || 1.4);
   }
-  return multiplier;
+
+  if (flow === 'DU' && key === '24h') {
+    const allow24h = serviceKey === 'reels_shorts_tiktok' || serviceKey === 'criativo_trafego_pago';
+    if (!allow24h) forcedManual = true;
+  }
+
+  return {
+    multiplier: Number.isFinite(multiplier) && multiplier > 0 ? multiplier : 1,
+    forcedManual,
+  };
 }
 
 function getVolumeDiscount(totalQty) {
@@ -1046,6 +1072,8 @@ function computePricingSnapshot(record) {
   let estimatedHours = 0;
   let hasManualService = false;
   let hasN3 = false;
+  let hasForcedManualUrgency = false;
+  let hasVslRawAbove30 = false;
   let hasNoReference = false;
   let faixaMinTotal = 0;
   let faixaMaxTotal = 0;
@@ -1062,7 +1090,8 @@ function computePricingSnapshot(record) {
     const serviceKey = mapServiceCatalog(servico);
     const baseUnit = getUnitPriceFromRules(flow, serviceKey);
     const complexidade = getComplexidadeByMinutes(parseHours(tempoBruto) * 60);
-    const urgenciaMultiplier = getUrgencyMultiplier(flow, prazo || fallbackPrazo, serviceKey);
+    const urgenciaContext = getUrgencyContext(flow, prazo || fallbackPrazo, serviceKey);
+    const urgenciaMultiplier = urgenciaContext.multiplier;
     const drOfficialTotal = flow === 'DR' ? getDrOfficialItemTotal(serviceKey, quantidade) : null;
 
     const baseItem = drOfficialTotal ?? (baseUnit * quantidade);
@@ -1092,6 +1121,7 @@ function computePricingSnapshot(record) {
     totalQuantidade += quantidade;
     weightedComplexity += complexidade.multiplicador * quantidade;
     maxUrgenciaMultiplier = Math.max(maxUrgenciaMultiplier, urgenciaMultiplier);
+    hasForcedManualUrgency = hasForcedManualUrgency || Boolean(urgenciaContext.forcedManual);
 
     const serviceHours = itemHoursByService[serviceKey] || itemHoursByService.default;
     estimatedHours += (serviceHours * complexidade.multiplicador) * quantidade;
@@ -1100,11 +1130,10 @@ function computePricingSnapshot(record) {
     faixaMinTotal += suggestedItem * (1 - spread);
     faixaMaxTotal += suggestedItem * (1 + spread);
 
-    hasManualService = hasManualService
-      || serviceKey === 'youtube'
-      || serviceKey === 'vsl_15'
-      || serviceKey === 'vsl_longa'
-      || serviceKey === 'motion';
+    const tempoMinutes = parseHours(tempoBruto) * 60;
+    hasManualService = hasManualService || serviceKey === 'motion';
+    hasVslRawAbove30 = hasVslRawAbove30
+      || ((serviceKey === 'vsl_15' || serviceKey === 'vsl_longa') && tempoMinutes > 30);
     hasN3 = hasN3 || complexidade.nivel === 'N3';
 
     return {
@@ -1139,6 +1168,8 @@ function computePricingSnapshot(record) {
   const revisaoManual = totalQuantidade > Number(DEFAULT_PRICING_RULES.pacotes.revisaoCapacidadeAcimaQtd || 30)
     || hasManualService
     || hasN3
+    || hasForcedManualUrgency
+    || hasVslRawAbove30
     || margemEstimada < Number(DEFAULT_PRICING_RULES.margem.recusaAbaixo || 55);
 
   return {
@@ -1182,6 +1213,7 @@ export function deriveFinancialMetricsFromFinalPrice(record, precoFinalInput) {
     preco_final: precoFinalValido ? precoFinal : 0,
     margem_percentual: Math.round(margemPercentual * 10) / 10,
     margem_estimada: Math.round(margemPercentual * 10) / 10,
+    margem_comercial: Math.round(margemPercentual * 10) / 10,
     lucro_estimado: roundCurrency(lucroEstimado),
     valor_estimado: roundCurrency(potencialTotal),
     potencial_total: roundCurrency(potencialTotal),
@@ -1371,6 +1403,16 @@ export function enrichOrcamentoRecord(record) {
   const multipComp = toNumber(enrichedLead?.multiplicador_complexidade, NaN);
   const complexidade = normalizeText(enrichedLead?.complexidade_nivel) || snapshot.complexidadeNivel;
   const revisaoManual = typeof enrichedLead?.revisao_manual === 'boolean' ? enrichedLead.revisao_manual : snapshot.revisaoManual;
+  const detalhesParsed = parseJsonSafe(enrichedLead?.detalhes);
+  const margemAutomaticaDetalhes = toNumber(detalhesParsed?.calculoAutomatico?.margemEstimada, NaN);
+  const margemAutomaticaSalva = toNumber(enrichedLead?.margem_estimada, NaN);
+  const margemAutomatica = Number.isFinite(margemAutomaticaDetalhes)
+    ? Math.min(95, Math.max(-95, margemAutomaticaDetalhes))
+    : (
+      Number.isFinite(margemAutomaticaSalva)
+        ? Math.min(95, Math.max(-95, margemAutomaticaSalva))
+        : Math.round(Number(snapshot.margemEstimada || 0) * 10) / 10
+    );
   const financeiros = deriveFinancialMetricsFromFinalPrice(
     {
       ...enrichedLead,
@@ -1379,11 +1421,14 @@ export function enrichOrcamentoRecord(record) {
     },
     precoFinal
   );
+  const margemComercial = Math.round(Number(financeiros.margem_percentual || 0) * 10) / 10;
 
   return {
     ...enrichedLead,
-    margem_estimada: Math.round(Number(financeiros.margem_estimada || 0) * 10) / 10,
-    margem_percentual: Math.round(Number(financeiros.margem_percentual || 0) * 10) / 10,
+    margem_automatica: Math.round(margemAutomatica * 10) / 10,
+    margem_comercial: margemComercial,
+    margem_estimada: Math.round(margemAutomatica * 10) / 10,
+    margem_percentual: margemComercial,
     lucro_estimado: roundCurrency(financeiros.lucro_estimado || 0),
     potencial_total: roundCurrency(financeiros.potencial_total || financeiros.valor_estimado || 0),
     preco_base: Math.round((precoBase || 0) * 100) / 100,

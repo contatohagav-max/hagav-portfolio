@@ -675,9 +675,8 @@ export async function updateOrcamento(id, patch) {
 
   const payload = normalizeOrcamentoPatchToDeals(patch);
   const hasPrecoFinalPatch = Object.prototype.hasOwnProperty.call(payload, 'preco_final');
-  const hasMargemPatch = Object.prototype.hasOwnProperty.call(payload, 'margem_estimada');
   const hasValorEstimadoPatch = Object.prototype.hasOwnProperty.call(payload, 'valor_estimado');
-  const shouldSyncPriceDerived = hasPrecoFinalPatch && (!hasMargemPatch || !hasValorEstimadoPatch);
+  const shouldSyncPriceDerived = hasPrecoFinalPatch && !hasValorEstimadoPatch;
   const shouldRecalculatePricing = Boolean(payload?.recalcular_pricing);
   delete payload.recalcular_pricing;
 
@@ -736,7 +735,6 @@ export async function updateOrcamento(id, patch) {
   } else if (shouldSyncPriceDerived) {
     const derived = deriveFinancialMetricsFromFinalPrice(nextRecord, payload.preco_final);
     const recalcPatch = {
-      margem_estimada: Number(derived.margem_estimada || 0),
       valor_estimado: Number(derived.valor_estimado || 0),
     };
 

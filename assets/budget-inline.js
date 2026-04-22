@@ -115,6 +115,19 @@ const DDD_VALIDOS = new Set(['11','12','13','14','15','16','17','18','19','21','
       const services=Array.isArray(selected)?selected:[];
       return services.length===1&&services[0]===MOTION_SERVICE_LABEL;
     }
+    function getTipoInternoFromAnswers(rawAnswers){
+      const source=rawAnswers&&typeof rawAnswers==='object'?rawAnswers:{};
+      const flowSelection=source.flow_servicos&&Array.isArray(source.flow_servicos.selected)
+        ? source.flow_servicos
+        : (source.unica_servicos&&Array.isArray(source.unica_servicos.selected)
+          ? source.unica_servicos
+          : (source.rec_operacoes&&Array.isArray(source.rec_operacoes.selected)
+            ? source.rec_operacoes
+            : {selected:[],outro:''}));
+      const flowServices=Array.isArray(flowSelection.selected)?flowSelection.selected:[];
+      if(isMotionFlowSelection(flowServices)) return 'unica';
+      return state.tipo||mapTipoContratacaoToInternal(source.flow_tipo_contratacao||'')||'unica';
+    }
     function getUnifiedBaseSteps(selected){
       const stepServices=Array.isArray(selected)?selected:[];
       const base=[
@@ -162,7 +175,7 @@ const DDD_VALIDOS = new Set(['11','12','13','14','15','16','17','18','19','21','
       if(isMotionFlowSelection(selected)){
         return baseSteps.concat(getStepsMotionTail());
       }
-      const tipoEscolhido=mapTipoContratacaoToInternal(state.answers.flow_tipo_contratacao||'')||state.tipo;
+      const tipoEscolhido=getTipoInternoFromAnswers(state.answers);
       if(tipoEscolhido==='unica'){
         const withYes=getRecordedYesServices();
         return baseSteps.concat(getStepsUnicaTail(selected,withYes));
@@ -314,6 +327,16 @@ const DDD_VALIDOS = new Set(['11','12','13','14','15','16','17','18','19','21','
         if(!result.ok){errorEl.textContent=result.error;errorEl.style.display='block';return;}
         state.answers[step.id]=result.value;
         if(result.extra){Object.keys(result.extra).forEach((key)=>{state.answers[key]=result.extra[key];});}
+        if(step.id==='flow_servicos'){
+          const selectedFlow=Array.isArray(result?.value?.selected)?result.value.selected:[];
+          if(isMotionFlowSelection(selectedFlow)){
+            if(state.tipo!=='unica'){
+              clearTipoSpecificAnswers('unica');
+            }
+            state.tipo='unica';
+            state.answers.flow_tipo_contratacao=mapTipoContratacaoLabel('unica');
+          }
+        }
         if(step.id==='flow_tipo_contratacao'){
           const mappedTipo=mapTipoContratacaoToInternal(result.value);
           if(mappedTipo&&mappedTipo!==state.tipo){
@@ -463,7 +486,7 @@ const DDD_VALIDOS = new Set(['11','12','13','14','15','16','17','18','19','21','
     }
     function buildSubmissionPayload(honeypotValue){
       const answers=buildSanitizedAnswers();
-      const tipoInterno=state.tipo||mapTipoContratacaoToInternal(state.answers.flow_tipo_contratacao||'')||'unica';
+      const tipoInterno=getTipoInternoFromAnswers(state.answers);
       const safeLocation=(typeof window!=='undefined'&&window.location)?(window.location.origin+window.location.pathname):'';
       if(!state.submissionId){
         state.submissionId='lead_'+Date.now()+'_'+Math.random().toString(36).slice(2,10);
@@ -533,7 +556,7 @@ const DDD_VALIDOS = new Set(['11','12','13','14','15','16','17','18','19','21','
     }
     function buildSanitizedAnswers(){
       const raw=state.answers||{};
-      const tipoInterno=state.tipo||mapTipoContratacaoToInternal(raw.flow_tipo_contratacao||'')||'unica';
+      const tipoInterno=getTipoInternoFromAnswers(raw);
       const flowSelection=raw.flow_servicos&&Array.isArray(raw.flow_servicos.selected)
         ? raw.flow_servicos
         : (tipoInterno==='unica'&&raw.unica_servicos&&Array.isArray(raw.unica_servicos.selected)

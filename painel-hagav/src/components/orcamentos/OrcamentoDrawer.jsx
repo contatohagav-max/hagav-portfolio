@@ -89,6 +89,63 @@ function parseDetalhes(value) {
   }
 }
 
+function readPropostaPdfMeta(record) {
+  const detalhes = parseDetalhes(record?.detalhes);
+  const comercial = parseDetalhes(detalhes?.comercial);
+  const renderMode = String(
+    comercial?.proposta_pdf_render_mode
+    || record?.render_mode
+    || ''
+  ).trim();
+  const pdfEngine = String(
+    comercial?.proposta_pdf_engine
+    || record?.pdf_engine
+    || ''
+  ).trim();
+  const fallbackRaw = comercial?.proposta_pdf_fallback_used;
+  const fallbackByRawValue = (
+    fallbackRaw === true
+    || String(fallbackRaw || '').toLowerCase() === 'true'
+    || String(fallbackRaw || '') === '1'
+  );
+  const fallbackByModeOrEngine = (
+    renderMode === 'native_text_fallback'
+    || !pdfEngine
+    || pdfEngine === 'native_text'
+  );
+  return {
+    renderMode,
+    pdfEngine,
+    pdfFallbackUsed: fallbackByRawValue || fallbackByModeOrEngine,
+    fallbackReason: String(comercial?.proposta_pdf_fallback_reason || '').trim(),
+    fallbackFrom: String(comercial?.proposta_pdf_fallback_from || '').trim(),
+  };
+}
+
+function isHtmlPdfReady(meta) {
+  const renderMode = String(meta?.renderMode || '').trim();
+  const pdfEngine = String(meta?.pdfEngine || '').trim();
+  const fallbackUsed = Boolean(meta?.pdfFallbackUsed);
+  if (!pdfEngine) return false;
+  if (pdfEngine === 'native_text') return false;
+  if (!renderMode || renderMode === 'native_text_fallback') return false;
+  if (fallbackUsed) return false;
+  return true;
+}
+
+function getPdfEngineBlockedMessage(meta) {
+  const renderMode = String(meta?.renderMode || '').trim();
+  const pdfEngine = String(meta?.pdfEngine || '').trim();
+  const fallbackUsed = Boolean(meta?.pdfFallbackUsed);
+  if (!pdfEngine) {
+    return 'PDF bloqueado para uso comercial: engine HTML/CSS nao detectada. Configure PDF_ENGINE + BROWSERLESS_TOKEN (ou PDFSHIFT_API_KEY) no deploy.';
+  }
+  if (renderMode === 'native_text_fallback' || pdfEngine === 'native_text' || fallbackUsed) {
+    return 'PDF bloqueado para uso comercial: documento gerado em modo fallback/texto. Ative engine HTML real no deploy e gere novamente.';
+  }
+  return '';
+}
+
 async function openOrDownloadPropostaPdf(link, fileName = 'proposta-hagav.pdf') {
   if (typeof window === 'undefined' || !link) return 'none';
 
@@ -149,6 +206,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
   const [obsExpanded, setObsExpanded] = useState(false);
   const [propostaLink, setPropostaLink] = useState(String(orc?.link_pdf || '').trim());
   const [propostaGeradaEm, setPropostaGeradaEm] = useState(orc?.proposta_gerada_em || null);
+  const [propostaPdfMeta, setPropostaPdfMeta] = useState(() => readPropostaPdfMeta(orc));
   const [saving, setSaving] = useState(false);
   const [pdfLoading, setPdfLoading] = useState(false);
   const [error, setError] = useState('');
@@ -202,7 +260,11 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
   const statusOptions = Array.from(new Set([...ORC_STATUSES, statusOrc || 'orcamento']));
   const canApproveOrcamento = ['orcamento', 'proposta_enviada', 'ajustando'].includes(String(statusOrc || '').toLowerCase());
   const hasWhatsapp = Boolean(normalizeText(orc.whatsapp));
-  const canSendProposta = Boolean(propostaLink) && hasWhatsapp;
+  const propostaPdfLiberada = isHtmlPdfReady(propostaPdfMeta);
+  const hasPropostaGerada = Boolean(propostaLink) || Boolean(propostaGeradaEm);
+  const propostaPdfBlockedMessage = getPdfEngineBlockedMessage(propostaPdfMeta);
+  const showPropostaPdfBlockedWarning = hasPropostaGerada && !propostaPdfLiberada;
+  const canSendProposta = Boolean(propostaLink) && propostaPdfLiberada && hasWhatsapp;
   const financialMetrics = useMemo(
     () => deriveFinancialMetricsFromFinalPrice(orc, precoFinal),
     [orc, precoFinal]
@@ -211,17 +273,20 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
   function buildFinancialPersistencePatch() {
     const detalhesAtual = parseDetalhes(orc?.detalhes);
     const comercialAtual = parseDetalhes(detalhesAtual?.comercial);
+    const margemAutomaticaAtual = Number(orc?.margem_automatica ?? orc?.margem_estimada ?? 0);
+    const margemComercialAtual = Number(financialMetrics.margem_percentual || 0);
     const nowIso = new Date().toISOString();
 
     return {
       preco_final: Number(financialMetrics.preco_final || 0),
-      margem_estimada: Number(financialMetrics.margem_estimada || 0),
       valor_estimado: Number(financialMetrics.valor_estimado || 0),
       detalhes: {
         ...detalhesAtual,
         comercial: {
           ...comercialAtual,
-          margem_percentual: Number(financialMetrics.margem_percentual || 0),
+          margem_automatica: Number.isFinite(margemAutomaticaAtual) ? margemAutomaticaAtual : 0,
+          margem_percentual: Number.isFinite(margemComercialAtual) ? margemComercialAtual : 0,
+          margem_comercial: Number.isFinite(margemComercialAtual) ? margemComercialAtual : 0,
           lucro_estimado: Number(financialMetrics.lucro_estimado || 0),
           potencial_total: Number(financialMetrics.potencial_total || financialMetrics.valor_estimado || 0),
           preco_final: Number(financialMetrics.preco_final || 0),
@@ -242,6 +307,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
     setFollowup(toDateTimeLocal(orc?.proximo_followup_em));
     setPropostaLink(String(orc?.link_pdf || '').trim());
     setPropostaGeradaEm(orc?.proposta_gerada_em || null);
+    setPropostaPdfMeta(readPropostaPdfMeta(orc));
   }, [
     orc?.id,
     orc?.status_orcamento,
@@ -254,6 +320,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
     orc?.proximo_followup_em,
     orc?.link_pdf,
     orc?.proposta_gerada_em,
+    orc?.detalhes,
   ]);
 
   async function handleSave() {
@@ -333,6 +400,49 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
         return;
       }
 
+      const nextPdfMeta = {
+        renderMode: String(result?.render_mode || '').trim(),
+        pdfEngine: String(result?.pdf_engine || '').trim(),
+        pdfFallbackUsed: (
+          result?.pdf_fallback_used === true
+          || String(result?.pdf_fallback_used || '').toLowerCase() === 'true'
+          || String(result?.render_mode || '').trim() === 'native_text_fallback'
+          || String(result?.pdf_engine || '').trim() === 'native_text'
+          || !String(result?.pdf_engine || '').trim()
+        ),
+        fallbackReason: String(result?.pdf_fallback_reason || '').trim(),
+        fallbackFrom: String(result?.pdf_fallback_from || '').trim(),
+      };
+      const nowIso = new Date().toISOString();
+      const detalhesAtual = parseDetalhes(orc?.detalhes);
+      const comercialAtual = parseDetalhes(detalhesAtual?.comercial);
+      setPropostaPdfMeta(nextPdfMeta);
+      if (!isHtmlPdfReady(nextPdfMeta)) {
+        setPropostaLink('');
+        setPropostaGeradaEm(null);
+        onUpdated?.({
+          ...orc,
+          link_pdf: nextLink,
+          proposta_gerada_em: nowIso,
+          detalhes: {
+            ...detalhesAtual,
+            comercial: {
+              ...comercialAtual,
+              proposta_link: nextLink,
+              proposta_gerada_em: nowIso,
+              proposta_pdf_render_mode: nextPdfMeta.renderMode,
+              proposta_pdf_engine: nextPdfMeta.pdfEngine,
+              proposta_pdf_fallback_used: nextPdfMeta.pdfFallbackUsed,
+              proposta_pdf_fallback_from: nextPdfMeta.fallbackFrom,
+              proposta_pdf_fallback_reason: nextPdfMeta.fallbackReason,
+              proposta_pdf_comercial_liberado: false,
+            },
+          },
+        });
+        setError(getPdfEngineBlockedMessage(nextPdfMeta));
+        return;
+      }
+
       const fileName = String(result?.fileName || `proposta-${orc.id}.pdf`);
       const base64Content = String(result?.pdf_base64 || '').trim();
       const downloadedFromPayload = base64Content
@@ -342,13 +452,26 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
         ? 'download'
         : await openOrDownloadPropostaPdf(nextLink, fileName);
 
-      const nowIso = new Date().toISOString();
       setPropostaLink(nextLink);
       setPropostaGeradaEm(nowIso);
       onUpdated?.({
         ...orc,
         link_pdf: nextLink,
         proposta_gerada_em: nowIso,
+        detalhes: {
+          ...detalhesAtual,
+          comercial: {
+            ...comercialAtual,
+            proposta_link: nextLink,
+            proposta_gerada_em: nowIso,
+            proposta_pdf_render_mode: nextPdfMeta.renderMode,
+            proposta_pdf_engine: nextPdfMeta.pdfEngine,
+            proposta_pdf_fallback_used: nextPdfMeta.pdfFallbackUsed,
+            proposta_pdf_fallback_from: nextPdfMeta.fallbackFrom,
+            proposta_pdf_fallback_reason: nextPdfMeta.fallbackReason,
+            proposta_pdf_comercial_liberado: true,
+          },
+        },
       });
 
       let openedLabel = 'disponibilizada para abertura';
@@ -369,8 +492,11 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
   }
 
   async function handleEnviarProposta() {
-    if (!propostaLink) {
+    if (!propostaLink || !propostaPdfLiberada) {
       setError('Gere a proposta PDF antes de enviar no WhatsApp.');
+      if (!propostaPdfLiberada) {
+        setError(propostaPdfBlockedMessage || 'PDF bloqueado para uso comercial: gere novamente com engine HTML real.');
+      }
       return;
     }
     if (!hasWhatsapp) {
@@ -477,7 +603,8 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
             <InfoRow label="Preco final editavel" value={fmtBRL(financialMetrics.preco_final || 0)} />
-            <InfoRow label="Margem estimada" value={`${Number(financialMetrics.margem_percentual || 0).toFixed(1)}%`} />
+            <InfoRow label="Margem automatica (motor)" value={`${Number(orc.margem_automatica ?? orc.margem_estimada ?? 0).toFixed(1)}%`} />
+            <InfoRow label="Margem comercial (preco final)" value={`${Number(financialMetrics.margem_percentual || 0).toFixed(1)}%`} />
             <InfoRow label="Lucro estimado" value={fmtBRL(financialMetrics.lucro_estimado || 0)} />
             <InfoRow label="Valor potencial" value={fmtBRL(financialMetrics.valor_estimado || orc.preco_final || orc.preco_base)} />
             <InfoRow label="Pacote sugerido" value={orc.pacote_sugerido || '—'} />
@@ -485,6 +612,12 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
             <InfoRow label="Proposta PDF" value={propostaLink ? 'Gerada' : 'Pendente'} />
             <InfoRow label="Proposta gerada em" value={propostaGeradaEm ? fmtDateTime(propostaGeradaEm) : '—'} />
           </div>
+
+          {showPropostaPdfBlockedWarning && (
+            <p className="text-xs text-amber-300 bg-amber-500/10 border border-amber-500/25 rounded-lg px-3 py-2">
+              {propostaPdfBlockedMessage}
+            </p>
+          )}
 
           <div className="flex flex-wrap gap-2">
             <OrcStatusBadge status={statusOrc} />

@@ -163,10 +163,40 @@ function escapePdfText(value) {
   return value.replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)");
 }
 
-function formatMoney(value) {
+function normalizeTemplateText(value, maxLen = 400, { allowEmpty = false } = {}) {
+  const base = String(value ?? "")
+    .normalize("NFKC")
+    .replace(/[\u0000-\u001F\u007F]/g, " ")
+    .replace(/<[^>]*>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, maxLen);
+  if (!base) return allowEmpty ? "" : "-";
+  return base;
+}
+
+function escapeHtml(value) {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function formatMoney(value, { withCurrency = true } = {}) {
   const num = Number(value || 0);
-  if (!Number.isFinite(num)) return "R$ 0,00";
-  return `R$ ${num.toFixed(2).replace(".", ",")}`;
+  const safeNum = Number.isFinite(num) ? num : 0;
+  try {
+    const formatted = new Intl.NumberFormat("pt-BR", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }).format(safeNum);
+    return withCurrency ? `R$ ${formatted}` : formatted;
+  } catch {
+    const fallback = safeNum.toFixed(2).replace(".", ",");
+    return withCurrency ? `R$ ${fallback}` : fallback;
+  }
 }
 
 function formatDateBr(value) {
@@ -176,6 +206,45 @@ function formatDateBr(value) {
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const year = String(date.getFullYear());
   return `${day}/${month}/${year}`;
+}
+
+function formatDatePlusDaysBr(value, days = 7) {
+  const date = new Date(value || Date.now());
+  if (Number.isNaN(date.getTime())) return formatDateBr(Date.now() + days * 86400000);
+  date.setDate(date.getDate() + Number(days || 0));
+  return formatDateBr(date.toISOString());
+}
+
+function firstNonEmptyValue(...values) {
+  for (const value of values) {
+    const normalized = normalizeTemplateText(value, 500, { allowEmpty: true });
+    if (normalized) return normalized;
+  }
+  return "";
+}
+
+function formatWhatsapp(value) {
+  const digits = String(value || "").replace(/\D/g, "");
+  if (!digits) return "";
+  if (digits.length === 13 && digits.startsWith("55")) {
+    return `+55 ${digits.slice(2, 4)} ${digits.slice(4, 9)}-${digits.slice(9)}`;
+  }
+  if (digits.length === 11) {
+    return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+  }
+  if (digits.length === 10) {
+    return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
+  }
+  return digits;
+}
+
+function normalizePlaceholderKey(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
 }
 
 function escapeRegExp(value) {
@@ -214,30 +283,68 @@ function htmlToPdfLines(html) {
 }
 
 function applyTemplatePlaceholders(templateHtml, values) {
-  let output = String(templateHtml || "");
+  const template = String(templateHtml || "");
   const replacements = values && typeof values === "object" ? values : {};
-
-  for (const [keyRaw, valueRaw] of Object.entries(replacements)) {
-    const key = String(keyRaw || "").trim();
+  const lookup = new Map();
+  for (const [rawKey, rawValue] of Object.entries(replacements)) {
+    const key = normalizePlaceholderKey(rawKey);
     if (!key) continue;
-    const safeValue = stripDangerousText(String(valueRaw ?? "-"), 1200) || "-";
-    const escaped = escapeRegExp(key);
-    const patterns = [
-      new RegExp(`{{\\s*${escaped}\\s*}}`, "gi"),
-      new RegExp(`\\[\\[\\s*${escaped}\\s*\\]\\]`, "gi"),
-      new RegExp(`%%\\s*${escaped}\\s*%%`, "gi"),
-      new RegExp(`__\\s*${escaped}\\s*__`, "gi"),
-    ];
-    for (const pattern of patterns) {
-      output = output.replace(pattern, safeValue);
-    }
+    const safeValue = normalizeTemplateText(rawValue, 1600, { allowEmpty: true });
+    lookup.set(key, escapeHtml(safeValue));
   }
 
-  return output
-    .replace(/{{\s*[^{}]+\s*}}/g, "-")
-    .replace(/\[\[\s*[^[\]]+\s*\]\]/g, "-")
-    .replace(/%%\s*[^%]+\s*%%/g, "-")
-    .replace(/__\s*[A-Za-z0-9_.-]+\s*__/g, "-");
+  const totalMatches = template.match(/{{\s*[^{}]+\s*}}/g) || [];
+  const unresolvedKeys = [];
+  let replacedCount = 0;
+
+  let output = template.replace(/{{\s*([^{}]+)\s*}}/g, (fullMatch, placeholderRaw) => {
+    const key = normalizePlaceholderKey(placeholderRaw);
+    if (!key) return "";
+    if (!lookup.has(key)) {
+      unresolvedKeys.push(key);
+      return fullMatch;
+    }
+    replacedCount += 1;
+    return lookup.get(key);
+  });
+
+  output = output
+    .replace(/\[\[\s*([^[\]]+)\s*\]\]/g, (_, placeholderRaw) => {
+      const key = normalizePlaceholderKey(placeholderRaw);
+      if (!key || !lookup.has(key)) return "";
+      return lookup.get(key);
+    })
+    .replace(/%%\s*([^%]+)\s*%%/g, (_, placeholderRaw) => {
+      const key = normalizePlaceholderKey(placeholderRaw);
+      if (!key || !lookup.has(key)) return "";
+      return lookup.get(key);
+    })
+    .replace(/__\s*([A-Za-z0-9_.-]+)\s*__/g, (_, placeholderRaw) => {
+      const key = normalizePlaceholderKey(placeholderRaw);
+      if (!key || !lookup.has(key)) return "";
+      return lookup.get(key);
+    });
+
+  const unresolvedCountByOccurrence = (output.match(/{{\s*[^{}]+\s*}}/g) || []).length;
+  const unresolvedUnique = Array.from(new Set(unresolvedKeys));
+
+  output = output
+    .replace(/{{\s*[^{}]+\s*}}/g, "")
+    .replace(/<li>\s*<\/li>/gi, "")
+    .replace(/<p>\s*<\/p>/gi, "");
+
+  const remainingAfterCleanup = Array.from(new Set(
+    (output.match(/{{\s*([^{}]+)\s*}}/g) || [])
+      .map((item) => normalizePlaceholderKey(item.replace(/[{}]/g, "")))
+      .filter(Boolean)
+  ));
+
+  return {
+    html: output,
+    placeholdersTotal: totalMatches.length,
+    placeholdersSubstituidos: replacedCount,
+    placeholdersRestantes: unresolvedCountByOccurrence > 0 ? unresolvedUnique : remainingAfterCleanup,
+  };
 }
 
 function createPdfFromLines(lines) {
@@ -293,120 +400,274 @@ function readDetalhes(row) {
   return {};
 }
 
-function buildTemplateValues(row) {
+function listDeliverables(detalhes, servico, prazo, formatoEntrega, revisoesInclusas) {
+  const rawList = Array.isArray(detalhes?.entregaveis)
+    ? detalhes.entregaveis
+    : Array.isArray(detalhes?.comercial?.entregaveis)
+      ? detalhes.comercial.entregaveis
+      : [];
+  const cleanedList = rawList
+    .map((item) => normalizeTemplateText(item, 180, { allowEmpty: true }))
+    .filter(Boolean)
+    .slice(0, 4);
+
+  if (cleanedList.length > 0) {
+    while (cleanedList.length < 4) cleanedList.push("");
+    return cleanedList;
+  }
+
+  return [
+    `Edicao e finalizacao de ${servico || "conteudo"} conforme escopo aprovado.`,
+    `Entrega final em ${formatoEntrega || "formato digital padrao"}.`,
+    `Prazo estimado de producao: ${prazo || "a combinar"}.`,
+    `${revisoesInclusas || "1 rodada"} incluida(s) no projeto.`,
+  ];
+}
+
+function getOfficialWhatsapp(env, detalhes) {
+  const envValue = firstEnvValue(env, [
+    "WHATSAPP_HAGAV",
+    "HAGAV_WHATSAPP",
+    "HAGAV_WHATSAPP_OFICIAL",
+    "NEXT_PUBLIC_WHATSAPP_HAGAV",
+    "NEXT_PUBLIC_HAGAV_WHATSAPP",
+  ]);
+  const fromDetalhes = firstNonEmptyValue(
+    detalhes?.comercial?.whatsapp_hagav,
+    detalhes?.whatsapp_hagav
+  );
+  return formatWhatsapp(envValue || fromDetalhes || "5573982284382");
+}
+
+function buildTemplateValues(row, env) {
   const detalhes = readDetalhes(row);
+  const comercial = (detalhes?.comercial && typeof detalhes.comercial === "object")
+    ? detalhes.comercial
+    : {};
   const dataHojeIso = new Date().toISOString();
-  const servico = normalizePdfText(row?.servico || detalhes?.servicoOuOperacao || "-", 180);
-  const quantidade = normalizePdfText(detalhes?.quantidade || "-", 120);
-  const material = normalizePdfText(detalhes?.materialGravado || row?.material_gravado || "-", 120);
-  const tempo = normalizePdfText(detalhes?.tempoBruto || row?.tempo_bruto || "-", 120);
-  const prazo = normalizePdfText(detalhes?.prazo || row?.prazo || "-", 120);
-  const referencia = normalizePdfText(detalhes?.referencia || row?.referencia || "-", 220);
-  const observacoesCliente = normalizePdfText(detalhes?.observacoes || row?.observacoes || "-", 300);
-  const observacoesInternas = normalizePdfText(row?.observacoes_internas || "-", 300);
-  const precoBase = Number(row?.preco_base || 0);
-  const precoFinal = Number(row?.preco_final || row?.valor_sugerido || row?.preco_base || 0);
-  const valorSugerido = Number(row?.valor_sugerido || row?.preco_final || row?.preco_base || 0);
-  const origem = normalizePdfText(row?.origem || "-", 180);
-  const fluxo = normalizePdfText(detalhes?.fluxo || row?.fluxo || "-", 80);
-  const escopo = normalizePdfText(row?.resumo_orcamento || "-", 360);
-  const pacote = normalizePdfText(row?.pacote_sugerido || "-", 120);
-  const clienteNome = normalizePdfText(row?.nome || "-", 120);
-  const whatsapp = normalizePdfText(row?.whatsapp || "-", 40);
-  const propostaNumero = normalizePdfText(`PROP-${row?.id || "-"}`, 80);
+  const servico = firstNonEmptyValue(row?.servico, detalhes?.servicoOuOperacao, detalhes?.servico, "-");
+  const quantidade = firstNonEmptyValue(detalhes?.quantidade, row?.quantidade, "1");
+  const material = firstNonEmptyValue(detalhes?.materialGravado, row?.material_gravado, "A combinar");
+  const tempo = firstNonEmptyValue(detalhes?.tempoBruto, row?.tempo_bruto, "A combinar");
+  const prazo = firstNonEmptyValue(
+    detalhes?.prazo,
+    row?.prazo,
+    comercial?.prazo,
+    "A combinar"
+  );
+  const referencia = firstNonEmptyValue(detalhes?.referencia, row?.referencia, "A combinar");
+  const observacoesCliente = firstNonEmptyValue(
+    detalhes?.observacoes,
+    row?.observacoes,
+    comercial?.observacoes_cliente,
+    ""
+  );
+  const observacoesInternas = firstNonEmptyValue(
+    row?.observacoes_internas,
+    comercial?.observacoes_internas,
+    ""
+  );
+  const precoBaseNum = Number(row?.preco_base || 0);
+  const precoFinalNum = Number(
+    comercial?.preco_final
+    ?? row?.preco_final
+    ?? row?.valor_sugerido
+    ?? row?.preco_base
+    ?? 0
+  );
+  const valorSugeridoNum = Number(
+    row?.valor_sugerido
+    ?? row?.preco_final
+    ?? row?.preco_base
+    ?? comercial?.preco_final
+    ?? 0
+  );
+  const valorTotalNum = Number(
+    comercial?.valor_total
+    ?? row?.preco_final
+    ?? row?.valor_sugerido
+    ?? row?.preco_base
+    ?? 0
+  );
+  const origem = firstNonEmptyValue(row?.origem, detalhes?.origem, "-");
+  const fluxo = firstNonEmptyValue(detalhes?.fluxo, row?.fluxo, "-");
+  const escopo = firstNonEmptyValue(
+    comercial?.descricao_escopo,
+    row?.resumo_orcamento,
+    detalhes?.resumo_orcamento,
+    `Servico ${servico} com entrega conforme briefing e referencia ${referencia}.`
+  );
+  const pacote = firstNonEmptyValue(row?.pacote_sugerido, comercial?.pacote, "-");
+  const clienteNome = firstNonEmptyValue(row?.nome, detalhes?.nome, "-");
+  const whatsappCliente = formatWhatsapp(firstNonEmptyValue(row?.whatsapp, detalhes?.whatsapp, ""));
+  const propostaNumero = normalizeTemplateText(
+    firstNonEmptyValue(comercial?.numero_proposta, `PROP-${row?.id || "-"}`),
+    80
+  );
+  const formaPagamento = firstNonEmptyValue(
+    comercial?.forma_pagamento,
+    detalhes?.forma_pagamento,
+    "PIX / Transferencia / A combinar"
+  );
+  const condicaoPagamento = firstNonEmptyValue(
+    comercial?.condicao_pagamento,
+    detalhes?.condicao_pagamento,
+    "A vista / Conforme combinado"
+  );
+  const revisoesInclusas = firstNonEmptyValue(
+    comercial?.revisoes_inclusas,
+    detalhes?.revisoes_inclusas,
+    "1 rodada"
+  );
+  const formatoEntrega = firstNonEmptyValue(
+    comercial?.formato_entrega,
+    detalhes?.formato_entrega,
+    "Arquivo digital final em MP4"
+  );
+  const dataValidadeInput = firstNonEmptyValue(comercial?.data_validade, row?.validade_ate);
+  const dataValidadeFormatted = dataValidadeInput ? formatDateBr(dataValidadeInput) : "";
+  const dataValidade = (dataValidadeFormatted && dataValidadeFormatted !== "-")
+    ? dataValidadeFormatted
+    : formatDatePlusDaysBr(dataHojeIso, 7);
+  const observacaoAdicional = normalizeTemplateText(
+    firstNonEmptyValue(
+      comercial?.observacao_adicional,
+      detalhes?.observacao_adicional,
+      ""
+    ),
+    400,
+    { allowEmpty: true }
+  );
+  const whatsappHagav = getOfficialWhatsapp(env, detalhes);
+  const entregaveis = listDeliverables(
+    detalhes,
+    servico,
+    prazo,
+    formatoEntrega,
+    revisoesInclusas
+  );
 
   const base = {
-    id: normalizePdfText(row?.id || "-", 80),
+    id: normalizeTemplateText(row?.id || "-", 80),
     proposta_numero: propostaNumero,
     numero_proposta: propostaNumero,
     data_emissao: formatDateBr(dataHojeIso),
     data_hoje: formatDateBr(dataHojeIso),
     data_criacao: formatDateBr(row?.created_at || dataHojeIso),
+    data_validade: dataValidade,
+    validade_dias: "7",
+    validade_comercial: dataValidade,
     cliente_nome: clienteNome,
+    nome_cliente: clienteNome,
     nome: clienteNome,
-    whatsapp,
+    whatsapp: whatsappCliente || "-",
+    whatsapp_cliente: whatsappCliente || "-",
+    whatsapp_hagav: whatsappHagav || "-",
     fluxo,
     origem,
     servico,
     servico_plano: servico,
     plano_servico: servico,
+    formato_entrega: formatoEntrega,
     escopo,
+    descricao_escopo: escopo,
     resumo_orcamento: escopo,
     quantidade,
     material_gravado: material,
     tempo_bruto: tempo,
     prazo,
     referencia,
-    preco_base: formatMoney(precoBase),
-    valor_base: formatMoney(precoBase),
-    preco_final: formatMoney(precoFinal),
-    valor_final: formatMoney(precoFinal),
-    valor_sugerido: formatMoney(valorSugerido),
+    preco_base: formatMoney(precoBaseNum),
+    valor_base: formatMoney(precoBaseNum),
+    preco_final: formatMoney(precoFinalNum),
+    valor_final: formatMoney(precoFinalNum),
+    valor_sugerido: formatMoney(valorSugeridoNum),
+    valor_total: formatMoney(valorTotalNum, { withCurrency: false }),
+    valor_total_moeda: formatMoney(valorTotalNum, { withCurrency: true }),
+    condicao_pagamento: condicaoPagamento,
+    forma_pagamento: formaPagamento,
+    revisoes_inclusas: revisoesInclusas,
+    entregavel_1: entregaveis[0] || "",
+    entregavel_2: entregaveis[1] || "",
+    entregavel_3: entregaveis[2] || "",
+    entregavel_4: entregaveis[3] || "",
+    observacao_adicional: observacaoAdicional,
     pacote_sugerido: pacote,
     observacoes_cliente: observacoesCliente,
-    observacoes: observacoesCliente,
+    observacoes: observacoesCliente || observacoesInternas || "",
     observacoes_internas: observacoesInternas,
-    validade_dias: "7",
   };
 
   const expanded = {};
   for (const [key, value] of Object.entries(base)) {
-    expanded[key] = value;
-    expanded[key.toUpperCase()] = value;
+    const normalized = normalizeTemplateText(value, 1600, { allowEmpty: true });
+    expanded[key] = normalized;
+    expanded[key.toUpperCase()] = normalized;
   }
   return expanded;
 }
 
-const PROPOSTA_TEMPLATE_PATH = "/templates/proposta-hagav-template.html";
+const PROPOSTA_TEMPLATE_CANDIDATES = [
+  "/templates/proposta-hagav-template.html.html",
+  "/templates/proposta-hagav-template.html",
+  "/proposta-hagav-template.html",
+];
 
 async function loadOfficialPropostaTemplate(request, env) {
-  const templateUrl = new URL(PROPOSTA_TEMPLATE_PATH, request.url).toString();
   const readErrors = [];
 
-  if (env?.ASSETS && typeof env.ASSETS.fetch === "function") {
+  for (const templatePath of PROPOSTA_TEMPLATE_CANDIDATES) {
+    const templateUrl = new URL(templatePath, request.url).toString();
+
+    if (env?.ASSETS && typeof env.ASSETS.fetch === "function") {
+      try {
+        const response = await env.ASSETS.fetch(new Request(templateUrl, { method: "GET" }));
+        if (response?.ok) {
+          const html = await response.text();
+          if (String(html || "").trim()) {
+            return { html, source: "assets", templatePath };
+          }
+        }
+        readErrors.push(`${templatePath}:assets_http_${response?.status || 0}`);
+      } catch (err) {
+        readErrors.push(`${templatePath}:assets_fetch_${stripDangerousText(String(err?.message || "erro_desconhecido"), 120)}`);
+      }
+    }
+
     try {
-      const response = await env.ASSETS.fetch(new Request(templateUrl, { method: "GET" }));
+      const response = await fetch(templateUrl, { method: "GET" });
       if (response?.ok) {
         const html = await response.text();
         if (String(html || "").trim()) {
-          return { html, source: "assets", templatePath: PROPOSTA_TEMPLATE_PATH };
+          return { html, source: "http", templatePath };
         }
       }
-      readErrors.push(`assets_http_${response?.status || 0}`);
+      readErrors.push(`${templatePath}:http_${response?.status || 0}`);
     } catch (err) {
-      readErrors.push(`assets_fetch_${stripDangerousText(String(err?.message || "erro_desconhecido"), 120)}`);
+      readErrors.push(`${templatePath}:http_fetch_${stripDangerousText(String(err?.message || "erro_desconhecido"), 120)}`);
     }
   }
 
-  try {
-    const response = await fetch(templateUrl, { method: "GET" });
-    if (response?.ok) {
-      const html = await response.text();
-      if (String(html || "").trim()) {
-        return { html, source: "http", templatePath: PROPOSTA_TEMPLATE_PATH };
-      }
-    }
-    readErrors.push(`http_${response?.status || 0}`);
-  } catch (err) {
-    readErrors.push(`http_fetch_${stripDangerousText(String(err?.message || "erro_desconhecido"), 120)}`);
-  }
-
-  const error = new Error(`template_not_found:${PROPOSTA_TEMPLATE_PATH}:${readErrors.join("|")}`);
+  const error = new Error(`template_not_found:${PROPOSTA_TEMPLATE_CANDIDATES.join(",")}:${readErrors.join("|")}`);
   error.code = "template_not_found";
-  error.templatePath = PROPOSTA_TEMPLATE_PATH;
+  error.templatePath = PROPOSTA_TEMPLATE_CANDIDATES[0];
   throw error;
 }
 
 async function renderPropostaTemplateToLines(row, request, env) {
   const templateInfo = await loadOfficialPropostaTemplate(request, env);
-  const values = buildTemplateValues(row);
-  const renderedHtml = applyTemplatePlaceholders(templateInfo.html, values);
+  const values = buildTemplateValues(row, env);
+  const rendered = applyTemplatePlaceholders(templateInfo.html, values);
+  const renderedHtml = rendered.html;
   const lines = htmlToPdfLines(renderedHtml);
   const firstCharsRendered = renderedHtml.slice(0, 120).replace(/\s+/g, " ").trim();
 
   return {
     lines,
     renderedHtml,
+    placeholdersTotal: rendered.placeholdersTotal,
+    placeholdersSubstituidos: rendered.placeholdersSubstituidos,
+    placeholdersRestantes: rendered.placeholdersRestantes,
     templateSource: templateInfo.source,
     templatePath: templateInfo.templatePath,
     firstCharsRendered,
@@ -511,7 +772,7 @@ export async function onRequestPost(context) {
 
   const getResult = await fetchSupabase(
     config,
-    `/rest/v1/deals?id=eq.${encodeURIComponent(id)}&select=id,created_at,nome,whatsapp,servico,resumo_orcamento,preco_base,preco_final,pacote_sugerido,status,observacoes_internas,link_pdf,detalhes,origem&limit=1`
+    `/rest/v1/deals?id=eq.${encodeURIComponent(id)}&select=id,created_at,nome,whatsapp,servico,quantidade,material_gravado,tempo_bruto,prazo,referencia,resumo_orcamento,preco_base,preco_final,valor_sugerido,pacote_sugerido,status,observacoes,observacoes_internas,validade_ate,link_pdf,detalhes,origem,fluxo&limit=1`
   );
   if (!getResult.ok) {
     return fail(requestId, "fetch_deal", getResult.reason || "deal_fetch_failed", 502);
@@ -531,18 +792,42 @@ export async function onRequestPost(context) {
       : "template_render_failed";
     return fail(requestId, "template_render", reason, 500, {
       detail: stripDangerousText(String(err?.message || ""), 200),
-      template_path: PROPOSTA_TEMPLATE_PATH,
+      template_path: PROPOSTA_TEMPLATE_CANDIDATES[0],
     });
   }
-  const { lines, renderedHtml, templateSource, templatePath, firstCharsRendered } = rendered;
+  const {
+    lines,
+    renderedHtml,
+    placeholdersTotal,
+    placeholdersSubstituidos,
+    placeholdersRestantes,
+    templateSource,
+    templatePath,
+    firstCharsRendered
+  } = rendered;
   logPdf(requestId, "template_render", "Template renderizado para proposta", {
     template_source: templateSource,
     template_path: templatePath,
     lines_count: Array.isArray(lines) ? lines.length : 0,
+    placeholders_total: Number(placeholdersTotal || 0),
+    placeholders_substituidos: Number(placeholdersSubstituidos || 0),
+    placeholders_restantes: Array.isArray(placeholdersRestantes) ? placeholdersRestantes : [],
     first_120_chars: firstCharsRendered,
   });
+  if (Array.isArray(placeholdersRestantes) && placeholdersRestantes.length > 0) {
+    logPdf(requestId, "template_placeholder_warning", "Placeholders restantes apos renderizacao", {
+      placeholders_restantes: placeholdersRestantes,
+    });
+  }
 
   const pdfContent = createPdfFromLines(lines);
+  const pdfBytes = (() => {
+    try {
+      return new TextEncoder().encode(pdfContent).length;
+    } catch {
+      return String(pdfContent || "").length;
+    }
+  })();
   const fileName = `orcamento-${id}-${Date.now()}.pdf`;
   const uploadResult = await uploadPdfIfPossible(config, env, pdfContent, fileName);
   if (!uploadResult.ok) {
@@ -583,6 +868,10 @@ export async function onRequestPost(context) {
     template_source: templateSource,
     template_path: templatePath,
     first_120_chars_rendered: firstCharsRendered,
+    placeholders_total: Number(placeholdersTotal || 0),
+    placeholders_substituidos: Number(placeholdersSubstituidos || 0),
+    placeholders_restantes: Array.isArray(placeholdersRestantes) ? placeholdersRestantes : [],
+    pdf_bytes: pdfBytes,
     rendered_html: renderedHtml,
     request_id: requestId,
     pdf_base64: typeof btoa === "function" ? btoa(pdfContent) : ""

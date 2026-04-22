@@ -113,6 +113,29 @@ async function openOrDownloadPropostaPdf(link, fileName = 'proposta-hagav.pdf') 
   }
 }
 
+function downloadPdfFromBase64(base64, fileName = 'proposta-hagav.pdf') {
+  if (typeof window === 'undefined' || !base64) return false;
+  try {
+    const bytes = atob(base64);
+    const arr = new Uint8Array(bytes.length);
+    for (let i = 0; i < bytes.length; i += 1) {
+      arr[i] = bytes.charCodeAt(i);
+    }
+    const blob = new Blob([arr], { type: 'application/pdf' });
+    const blobUrl = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = blobUrl;
+    anchor.download = fileName;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 4000);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
   const [statusOrc, setStatusOrc] = useState(orc?.status_orcamento ?? 'orcamento');
   const [precoFinal, setPrecoFinal] = useState(orc?.preco_final ?? 0);
@@ -286,7 +309,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
   async function handleGeneratePdf() {
     setPdfLoading(true);
     setError('');
-    setInfo('');
+    setInfo('Gerando proposta PDF...');
     try {
       const result = await generateDealPdf(orc.id);
       console.info('[Orcamentos][PDF][Resultado]', {
@@ -310,10 +333,14 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
         return;
       }
 
-      const openMode = await openOrDownloadPropostaPdf(
-        nextLink,
-        String(result?.fileName || `proposta-${orc.id}.pdf`)
-      );
+      const fileName = String(result?.fileName || `proposta-${orc.id}.pdf`);
+      const base64Content = String(result?.pdf_base64 || '').trim();
+      const downloadedFromPayload = base64Content
+        ? downloadPdfFromBase64(base64Content, fileName)
+        : false;
+      const openMode = downloadedFromPayload
+        ? 'download'
+        : await openOrDownloadPropostaPdf(nextLink, fileName);
 
       const nowIso = new Date().toISOString();
       setPropostaLink(nextLink);
@@ -697,7 +724,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
           <button
             type="button"
             onClick={handleGeneratePdf}
-            disabled={saving || pdfLoading}
+            disabled={pdfLoading}
             className="btn-ghost btn-sm"
           >
             {pdfLoading ? <Loader2 size={13} className="animate-spin" /> : <ExternalLink size={13} />}

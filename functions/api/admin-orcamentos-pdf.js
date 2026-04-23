@@ -541,7 +541,6 @@ async function renderPdfViaPdfshift(html, config) {
 
   const payload = {
     source: html,
-    print_background: true,
     use_print: true,
     format: "A4",
     margin: "0",

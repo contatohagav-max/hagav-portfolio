@@ -767,6 +767,124 @@ function addMonthsAndFormat(value, months, fallback = "-") {
   return formatDateBr(baseDate.toISOString());
 }
 
+function toIsoDate(value) {
+  const date = new Date(value || "");
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toISOString().slice(0, 10);
+}
+
+function addMonthsIso(value, months, fallback = "") {
+  const baseDate = new Date(`${toIsoDate(value)}T12:00:00`);
+  if (Number.isNaN(baseDate.getTime())) return fallback;
+  const safeMonths = Number.isFinite(Number(months)) ? Math.max(0, Math.round(Number(months))) : 0;
+  baseDate.setMonth(baseDate.getMonth() + safeMonths);
+  return baseDate.toISOString().slice(0, 10);
+}
+
+function parseContractVersionValue(value) {
+  if (Number.isFinite(Number(value))) {
+    const parsed = Math.round(Number(value));
+    return parsed > 0 ? parsed : 0;
+  }
+  const raw = String(value || "").trim();
+  if (!/^\d{1,4}$/.test(raw)) return 0;
+  const parsed = Number.parseInt(raw, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+}
+
+function formatContractVersion(version) {
+  const safe = Math.max(1, Math.round(Number(version) || 1));
+  return String(safe).padStart(2, "0");
+}
+
+function sanitizeContractInput(rawInput = {}) {
+  const input = rawInput && typeof rawInput === "object" && !Array.isArray(rawInput)
+    ? rawInput
+    : {};
+  const numericDuracao = Math.max(1, Math.round(Number(input?.duracao_meses || 0) || 0));
+  const numericValor = Number(input?.valor_total ?? input?.valor_final ?? input?.preco_final ?? NaN);
+
+  const out = {
+    nome_cliente: normalizeTemplateText(input?.nome_cliente, 180, { allowEmpty: true }),
+    cpf_cnpj_cliente: normalizeTemplateText(input?.cpf_cnpj ?? input?.cpf_cnpj_cliente, 60, { allowEmpty: true }),
+    email_cliente: normalizeTemplateText(input?.email_cliente, 140, { allowEmpty: true }),
+    forma_pagamento: normalizeTemplateText(input?.forma_pagamento, 120, { allowEmpty: true }),
+    pix: normalizeTemplateText(input?.pix ?? input?.chave_pix, 220, { allowEmpty: true }),
+    resumo_servico: normalizeTemplateText(input?.resumo_servico, 1000, { allowEmpty: true }),
+    responsavel: normalizeTemplateText(input?.responsavel, 120, { allowEmpty: true }),
+    observacoes: normalizeTemplateText(input?.observacoes, 1200, { allowEmpty: true }),
+    status: normalizeTemplateText(input?.status, 40, { allowEmpty: true }),
+    recorrente: typeof input?.recorrente === "boolean" ? input.recorrente : undefined,
+    duracao_meses: numericDuracao || undefined,
+    valor_total: Number.isFinite(numericValor) ? numericValor : undefined,
+  };
+
+  return out;
+}
+
+function buildContractRuntimeData(row, contractInput = {}) {
+  const detalhes = readDetalhes(row);
+  const contratoAtual = (detalhes?.contrato && typeof detalhes.contrato === "object")
+    ? detalhes.contrato
+    : {};
+  const nowIso = new Date().toISOString();
+  const startIso = toIsoDate(nowIso) || toIsoDate(row?.created_at) || toIsoDate(Date.now());
+  const duracaoMeses = Math.max(
+    1,
+    Math.round(
+      Number(contractInput?.duracao_meses ?? contratoAtual?.duracao_meses ?? 12) || 12
+    )
+  );
+  const endIso = addMonthsIso(startIso, duracaoMeses, startIso);
+  const previousVersion = Math.max(
+    parseContractVersionValue(contratoAtual?.numero_geracao),
+    parseContractVersionValue(contratoAtual?.contractVersion),
+    parseContractVersionValue(contratoAtual?.numeroGeracao),
+    parseContractVersionValue(contratoAtual?.numero_contrato),
+    parseContractVersionValue(contratoAtual?.contrato_numero)
+  );
+  const nextVersion = previousVersion + 1;
+  const numeroContrato = formatContractVersion(nextVersion);
+  const valorTotal = Number(
+    contractInput?.valor_total
+      ?? contratoAtual?.valor_total
+      ?? contratoAtual?.valor_final
+      ?? row?.valor_fechado
+      ?? row?.preco_final
+      ?? row?.valor_sugerido
+      ?? 0
+  );
+
+  return {
+    nowIso,
+    startIso,
+    endIso,
+    duracaoMeses,
+    previousVersion,
+    nextVersion,
+    numeroContrato,
+    valorTotal: Number.isFinite(valorTotal) ? valorTotal : 0,
+    contractOverride: {
+      ...contractInput,
+      numero_contrato: numeroContrato,
+      contrato_numero: numeroContrato,
+      numero_geracao: nextVersion,
+      contractVersion: nextVersion,
+      numeroGeracao: nextVersion,
+      data_emissao: nowIso,
+      data_inicio: startIso,
+      data_fim: endIso,
+      data_termino: endIso,
+      vencimento: endIso,
+      duracao_meses: duracaoMeses,
+      valor_total: Number.isFinite(valorTotal) ? valorTotal : undefined,
+      valor_final: Number.isFinite(valorTotal) ? valorTotal : undefined,
+      preco_final: Number.isFinite(valorTotal) ? valorTotal : undefined,
+      atualizado_em: nowIso,
+    },
+  };
+}
+
 function getOfficialWhatsapp(env, detalhes) {
   const envValue = firstEnvValue(env, [
     "WHATSAPP_HAGAV",
@@ -783,14 +901,23 @@ function getOfficialWhatsapp(env, detalhes) {
   return formatWhatsapp(envValue || fromDetalhes || "5573982284382");
 }
 
-function buildTemplateValues(row, env) {
+function buildTemplateValues(row, env, runtime = {}) {
   const detalhes = readDetalhes(row);
-  const contrato = (detalhes?.contrato && typeof detalhes.contrato === "object") ? detalhes.contrato : {};
+  const contratoAtual = (detalhes?.contrato && typeof detalhes.contrato === "object") ? detalhes.contrato : {};
+  const runtimeContract = (runtime?.contractOverride && typeof runtime.contractOverride === "object")
+    ? runtime.contractOverride
+    : {};
+  const contrato = { ...contratoAtual, ...runtimeContract };
   const comercial = (detalhes?.comercial && typeof detalhes.comercial === "object") ? detalhes.comercial : {};
-  const dataHojeIso = new Date().toISOString();
+  const dataHojeIso = String(runtime?.nowIso || new Date().toISOString());
 
   const contratoNumero = normalizeTemplateText(
-    firstNonEmptyValue(contrato?.numero_contrato, contrato?.contrato_numero, `CONT-${row?.id || "-"}`),
+    firstNonEmptyValue(
+      runtime?.numeroContrato,
+      contrato?.numero_contrato,
+      contrato?.contrato_numero,
+      formatContractVersion(1)
+    ),
     80
   );
 
@@ -838,10 +965,20 @@ function buildTemplateValues(row, env) {
   );
   const descricaoServico = firstNonEmptyValue(
     contrato?.descricao_servico,
+    contrato?.resumo_servico,
     detalhes?.descricao_servico,
+    detalhes?.resumo_servico,
     row?.resumo_orcamento,
     detalhes?.resumo_orcamento,
     `Prestacao de servicos de ${servico} conforme escopo aprovado.`
+  );
+  const resumoServico = firstNonEmptyValue(
+    contrato?.resumo_servico,
+    contrato?.descricao_servico,
+    row?.resumo_orcamento,
+    detalhes?.resumo_orcamento,
+    descricaoServico,
+    servico
   );
 
   const valorTotalNum = Number(
@@ -859,6 +996,13 @@ function buildTemplateValues(row, env) {
     detalhes?.forma_pagamento,
     "A combinar"
   );
+  const pix = firstNonEmptyValue(
+    contrato?.pix,
+    contrato?.chave_pix,
+    detalhes?.pix,
+    detalhes?.chave_pix,
+    "-"
+  );
   const condicaoPagamento = firstNonEmptyValue(
     contrato?.condicao_pagamento,
     comercial?.condicao_pagamento,
@@ -866,13 +1010,28 @@ function buildTemplateValues(row, env) {
     "Conforme combinado"
   );
 
-  const dataInicioRaw = firstNonEmptyValue(contrato?.data_inicio, detalhes?.data_inicio, row?.created_at);
-  const vencimentoRaw = firstNonEmptyValue(contrato?.vencimento, row?.validade_ate, contrato?.data_termino);
-  const duracaoMeses = Math.max(1, Math.round(Number(contrato?.duracao_meses || 12) || 12));
+  const dataInicioRaw = firstNonEmptyValue(
+    runtime?.startIso,
+    contrato?.data_inicio,
+    detalhes?.data_inicio,
+    row?.created_at
+  );
+  const vencimentoRaw = firstNonEmptyValue(
+    runtime?.endIso,
+    contrato?.data_fim,
+    contrato?.vencimento,
+    row?.validade_ate,
+    contrato?.data_termino
+  );
+  const duracaoMeses = Math.max(
+    1,
+    Math.round(Number(runtime?.duracaoMeses ?? contrato?.duracao_meses ?? 12) || 12)
+  );
+  const dataEmissao = formatDateIfPresent(contrato?.data_emissao, formatDateBr(dataHojeIso));
   const dataInicio = formatDateIfPresent(dataInicioRaw, formatDateBr(dataHojeIso));
   const vencimento = formatDateIfPresent(vencimentoRaw, formatDatePlusDaysBr(dataHojeIso, 30));
   const dataTermino = formatDateIfPresent(
-    firstNonEmptyValue(contrato?.data_termino, vencimentoRaw),
+    firstNonEmptyValue(contrato?.data_fim, contrato?.data_termino, vencimentoRaw),
     addMonthsAndFormat(dataInicioRaw, duracaoMeses, vencimento)
   );
   const dataAssinatura = formatDateIfPresent(contrato?.data_assinatura, formatDateBr(dataHojeIso));
@@ -880,6 +1039,14 @@ function buildTemplateValues(row, env) {
   const tipoProjeto = firstNonEmptyValue(
     contrato?.tipo_projeto,
     contrato?.recorrente === false ? "Pontual" : "Recorrente"
+  );
+  const prazoResumo = firstNonEmptyValue(
+    contrato?.prazo_resumo,
+    comercial?.prazo_resumo,
+    detalhes?.prazo_resumo,
+    detalhes?.prazo,
+    row?.prazo,
+    "Conforme demanda e volume contratado"
   );
   const renovacao = firstNonEmptyValue(
     contrato?.renovacao,
@@ -934,23 +1101,28 @@ function buildTemplateValues(row, env) {
     id: normalizeTemplateText(row?.id || "-", 80),
     numero_contrato: contratoNumero,
     contrato_numero: contratoNumero,
-    data_emissao: formatDateBr(dataHojeIso),
+    numero_geracao: String(runtime?.nextVersion || contrato?.numero_geracao || contrato?.contractVersion || contrato?.numeroGeracao || "1"),
+    contractVersion: String(runtime?.nextVersion || contrato?.numero_geracao || contrato?.contractVersion || contrato?.numeroGeracao || "1"),
+    data_emissao: dataEmissao,
     data_hoje: formatDateBr(dataHojeIso),
     data_assinatura: dataAssinatura,
     data_inicio: dataInicio,
     inicio: dataInicio,
     data_termino: dataTermino,
+    data_fim: dataTermino,
     vencimento,
     duracao_meses: String(duracaoMeses),
     duracao: `${duracaoMeses} meses`,
     renovacao,
     tipo_projeto: tipoProjeto,
+    prazo_resumo: prazoResumo,
     status_contrato: normalizeTemplateText(contrato?.status || row?.status_contrato || "aguardando_contrato", 40),
 
     nome_cliente: clienteNome,
     cliente_nome: clienteNome,
     nome: clienteNome,
     empresa_cliente: empresaCliente,
+    cpf_cnpj: cpfCnpjCliente,
     cpf_cnpj_cliente: cpfCnpjCliente,
     email_cliente: emailCliente,
     endereco_cliente: enderecoCliente,
@@ -961,6 +1133,7 @@ function buildTemplateValues(row, env) {
     servico_plano: servico,
     plano_servico: servico,
     quantidade,
+    resumo_servico: resumoServico,
     descricao_servico: descricaoServico,
 
     valor_total: formatMoney(valorTotalNum, { withCurrency: false }),
@@ -968,6 +1141,8 @@ function buildTemplateValues(row, env) {
     valor_final: formatMoney(valorTotalNum, { withCurrency: true }),
     preco_final: formatMoney(valorTotalNum, { withCurrency: true }),
     forma_pagamento: formaPagamento,
+    pix,
+    chave_pix: pix,
     condicao_pagamento: condicaoPagamento,
 
     observacoes: observacoes || "Sem observacoes adicionais.",
@@ -1033,9 +1208,9 @@ async function loadOfficialContratoTemplate(request, env) {
   throw error;
 }
 
-async function renderContratoTemplateToLines(row, request, env) {
+async function renderContratoTemplateToLines(row, request, env, runtime = {}) {
   const templateInfo = await loadOfficialContratoTemplate(request, env);
-  const values = buildTemplateValues(row, env);
+  const values = buildTemplateValues(row, env, runtime);
   const rendered = applyTemplatePlaceholders(templateInfo.html, values);
   const renderedHtml = ensureHtmlDocument(rendered.html);
   const htmlDiagnostics = inspectRenderedHtml(renderedHtml);
@@ -1082,10 +1257,30 @@ async function uploadPdfIfPossible(config, env, pdfContent, fileName) {
   };
 }
 
-async function updateContractLink(config, row, linkPdf, pdfMeta = {}) {
+async function updateContractLink(config, row, linkPdf, pdfMeta = {}, runtime = {}) {
   const detalhes = readDetalhes(row);
   const contratoAtual = (detalhes?.contrato && typeof detalhes.contrato === "object") ? detalhes.contrato : {};
   const nowIso = new Date().toISOString();
+  const contractOverride = (runtime?.contractOverride && typeof runtime.contractOverride === "object")
+    ? runtime.contractOverride
+    : {};
+  const numeroGeracao = Math.max(
+    parseContractVersionValue(contractOverride?.numero_geracao),
+    parseContractVersionValue(runtime?.nextVersion),
+    parseContractVersionValue(contratoAtual?.numero_geracao)
+  ) || 1;
+  const numeroContrato = formatContractVersion(numeroGeracao);
+  const valorTotalPersist = Number(
+    runtime?.valorTotal
+      ?? contractOverride?.valor_total
+      ?? contractOverride?.valor_final
+      ?? contractOverride?.preco_final
+      ?? row?.valor_fechado
+      ?? row?.preco_final
+      ?? row?.valor_sugerido
+      ?? 0
+  );
+  const valorTotalSafe = Number.isFinite(valorTotalPersist) ? valorTotalPersist : 0;
   const renderMode = stripDangerousText(String(pdfMeta?.render_mode || ""), 80);
   const pdfEngine = stripDangerousText(String(pdfMeta?.pdf_engine || ""), 80);
   const pdfFallbackUsed = Boolean(pdfMeta?.pdf_fallback_used);
@@ -1107,10 +1302,30 @@ async function updateContractLink(config, row, linkPdf, pdfMeta = {}) {
       method: "PATCH",
       headers: { prefer: "return=representation" },
       body: {
+        preco_final: valorTotalSafe,
+        valor_fechado: valorTotalSafe,
+        validade_ate: runtime?.endIso || contractOverride?.data_fim || contractOverride?.vencimento || row?.validade_ate || null,
         detalhes: {
           ...detalhes,
           contrato: {
             ...contratoAtual,
+            ...contractOverride,
+            numero_contrato: numeroContrato,
+            contrato_numero: numeroContrato,
+            numero_geracao: numeroGeracao,
+            contractVersion: numeroGeracao,
+            numeroGeracao: numeroGeracao,
+            data_emissao: runtime?.nowIso || contractOverride?.data_emissao || nowIso,
+            data_inicio: runtime?.startIso || contractOverride?.data_inicio || contratoAtual?.data_inicio || null,
+            data_fim: runtime?.endIso || contractOverride?.data_fim || contractOverride?.vencimento || contratoAtual?.data_fim || contratoAtual?.vencimento || null,
+            data_termino: runtime?.endIso || contractOverride?.data_termino || contractOverride?.data_fim || contractOverride?.vencimento || contratoAtual?.data_termino || null,
+            vencimento: runtime?.endIso || contractOverride?.vencimento || contractOverride?.data_fim || contratoAtual?.vencimento || null,
+            duracao_meses: runtime?.duracaoMeses || contractOverride?.duracao_meses || contratoAtual?.duracao_meses || 12,
+            valor_total: valorTotalSafe,
+            valor_final: valorTotalSafe,
+            preco_final: valorTotalSafe,
+            pix: firstNonEmptyValue(contractOverride?.pix, contractOverride?.chave_pix, contratoAtual?.pix, contratoAtual?.chave_pix, ""),
+            chave_pix: firstNonEmptyValue(contractOverride?.pix, contractOverride?.chave_pix, contratoAtual?.pix, contratoAtual?.chave_pix, ""),
             link_pdf: linkPdf || "",
             contrato_gerado_em: nowIso,
             pdf_render_mode: renderMode,
@@ -1157,6 +1372,8 @@ export async function onRequestPost(context) {
     return fail(requestId, "request", "json_invalido", 400);
   }
 
+  const contractInput = sanitizeContractInput(body?.contrato || body?.contract);
+
   const id = stripDangerousText(String(body?.id || ""), 120);
   if (!id || !/^[a-zA-Z0-9-]+$/.test(id)) {
     return fail(requestId, "request", "id_invalido", 400);
@@ -1173,10 +1390,11 @@ export async function onRequestPost(context) {
   if (!row) {
     return fail(requestId, "fetch_deal", "deal_nao_encontrado", 404);
   }
+  const runtimeData = buildContractRuntimeData(row, contractInput);
 
   let rendered;
   try {
-    rendered = await renderContratoTemplateToLines(row, request, env);
+    rendered = await renderContratoTemplateToLines(row, request, env, runtimeData);
   } catch (err) {
     const reason = String(err?.code || "").toLowerCase() === "template_not_found"
       || String(err?.message || "").includes("template_not_found")
@@ -1304,7 +1522,7 @@ export async function onRequestPost(context) {
     pdf_fallback_used: pdfFallbackUsed,
     pdf_fallback_from: pdfFallbackFrom,
     pdf_fallback_reason: pdfFallbackReason,
-  });
+  }, runtimeData);
   if (!updateResult.ok) {
     return fail(requestId, "persist_link", "deal_link_update_failed", 502, {
       detail: stripDangerousText(String(updateResult.reason || "deal_update_failed"), 180),
@@ -1331,6 +1549,12 @@ export async function onRequestPost(context) {
     id,
     fileName,
     link_pdf: linkPdf,
+    numero_contrato: String(runtimeData?.numeroContrato || ""),
+    numero_geracao: Number(runtimeData?.nextVersion || 0) || 1,
+    data_inicio_iso: String(runtimeData?.startIso || ""),
+    data_fim_iso: String(runtimeData?.endIso || ""),
+    data_emissao: formatDateBr(runtimeData?.nowIso || new Date().toISOString()),
+    duracao_meses: Number(runtimeData?.duracaoMeses || 0) || undefined,
     uploaded: uploadResult.ok,
     upload_reason: uploadResult.ok ? "" : uploadResult.reason,
     template_source: templateSource,

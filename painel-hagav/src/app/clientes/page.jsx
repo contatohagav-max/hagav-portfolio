@@ -106,42 +106,109 @@ function toIsoRenewAlert(vencimento) {
 }
 
 function downloadPdfFromBase64(base64, fileName) {
-  if (!base64) return;
-  const bytes = atob(base64);
-  const arr = new Uint8Array(bytes.length);
-  for (let i = 0; i < bytes.length; i += 1) arr[i] = bytes.charCodeAt(i);
-  const blob = new Blob([arr], { type: 'application/pdf' });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = fileName || 'contrato-hagav.pdf';
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 2000);
+  if (!base64) return false;
+  try {
+    const bytes = atob(base64);
+    const arr = new Uint8Array(bytes.length);
+    for (let i = 0; i < bytes.length; i += 1) arr[i] = bytes.charCodeAt(i);
+    const blob = new Blob([arr], { type: 'application/pdf' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = fileName || 'contrato-hagav.pdf';
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
-function openPrintWindow(html) {
-  if (typeof window === 'undefined' || !html) return;
-  const win = window.open('', '_blank', 'width=960,height=800,menubar=no,toolbar=no');
-  if (!win) {
-    const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.target = '_blank';
-    a.rel = 'noreferrer';
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 4000);
-    return;
+async function openOrDownloadPdfLink(link, fileName) {
+  if (typeof window === 'undefined' || !link) return 'none';
+  try {
+    const response = await fetch(link, { method: 'GET' });
+    if (!response.ok) throw new Error(`download_http_${response.status}`);
+    const blob = await response.blob();
+    const blobUrl = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = blobUrl;
+    anchor.download = fileName || 'contrato-hagav.pdf';
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 4000);
+    return 'download';
+  } catch {
+    const popup = window.open(link, '_blank', 'noopener,noreferrer');
+    if (popup) return 'new_tab';
+    window.location.href = link;
+    return 'same_tab';
   }
-  win.document.open();
-  win.document.write(html);
-  win.document.close();
-  win.focus();
-  setTimeout(() => { win.print(); }, 900);
+}
+
+function readContratoPdfMeta(row) {
+  const detalhes = parseDetalhes(row?.detalhes);
+  const contratoFromDetalhes = parseDetalhes(detalhes?.contrato);
+  const contrato = {
+    ...contratoFromDetalhes,
+    ...parseDetalhes(row?.contrato),
+  };
+
+  const renderMode = String(contrato?.pdf_render_mode || row?.render_mode || '').trim();
+  const pdfEngine = String(contrato?.pdf_engine || row?.pdf_engine || '').trim();
+  const fallbackRaw = contrato?.pdf_fallback_used;
+  const fallbackByRawValue = (
+    fallbackRaw === true
+    || String(fallbackRaw || '').toLowerCase() === 'true'
+    || String(fallbackRaw || '') === '1'
+  );
+  const fallbackByModeOrEngine = (
+    renderMode === 'native_text_fallback'
+    || !pdfEngine
+    || pdfEngine === 'native_text'
+  );
+
+  return {
+    renderMode,
+    pdfEngine,
+    pdfFallbackUsed: fallbackByRawValue || fallbackByModeOrEngine,
+    fallbackReason: String(contrato?.pdf_fallback_reason || '').trim(),
+    fallbackFrom: String(contrato?.pdf_fallback_from || '').trim(),
+  };
+}
+
+function isHtmlPdfReady(meta) {
+  const renderMode = String(meta?.renderMode || '').trim();
+  const pdfEngine = String(meta?.pdfEngine || '').trim();
+  const fallbackUsed = Boolean(meta?.pdfFallbackUsed);
+  if (!pdfEngine) return false;
+  if (pdfEngine === 'native_text') return false;
+  if (!renderMode || renderMode === 'native_text_fallback') return false;
+  if (fallbackUsed) return false;
+  return true;
+}
+
+function getContratoPdfBlockedMessage(meta) {
+  const renderMode = String(meta?.renderMode || '').trim();
+  const pdfEngine = String(meta?.pdfEngine || '').trim();
+  const fallbackUsed = Boolean(meta?.pdfFallbackUsed);
+  if (!pdfEngine) {
+    return 'Contrato bloqueado para uso comercial: engine HTML/CSS nao detectada. Configure PDF_ENGINE + BROWSERLESS_TOKEN (ou PDFSHIFT_API_KEY) no deploy.';
+  }
+  if (renderMode === 'native_text_fallback' || pdfEngine === 'native_text' || fallbackUsed) {
+    return 'Contrato bloqueado para uso comercial: documento gerado em modo fallback/texto. Ative engine HTML real no deploy e gere novamente.';
+  }
+  return '';
+}
+
+function canUseContractPdf(row) {
+  const link = String(row?.contrato_link_pdf || '').trim();
+  if (!link) return false;
+  const meta = readContratoPdfMeta(row);
+  return isHtmlPdfReady(meta);
 }
 
 function BadgeContrato({ status }) {
@@ -190,6 +257,11 @@ export default function ClientesPage() {
   const [vencimento, setVencimento] = useState('');
   const [responsavel, setResponsavel] = useState('');
   const [formaPagamento, setFormaPagamento] = useState('');
+  const [pix, setPix] = useState('');
+  const [nomeContratante, setNomeContratante] = useState('');
+  const [cpfCnpj, setCpfCnpj] = useState('');
+  const [emailCliente, setEmailCliente] = useState('');
+  const [resumoServico, setResumoServico] = useState('');
   const [obsContrato, setObsContrato] = useState('');
   const [recorrente, setRecorrente] = useState(true);
   const [statusEdicao, setStatusEdicao] = useState('ativo');
@@ -225,9 +297,18 @@ export default function ClientesPage() {
     const hoje = isoDate(new Date().toISOString());
     const inicioDefault = isoDate(contrato?.data_inicio || selected?.inicio_contrato) || hoje;
     const duracaoDefault = String(contrato?.duracao_meses || 12);
-    const vencimentoDefault = isoDate(contrato?.vencimento || selected?.vencimento_contrato)
+    const vencimentoDefault = isoDate(contrato?.data_fim || contrato?.vencimento || selected?.vencimento_contrato)
       || addMonthsIso(inicioDefault, duracaoDefault)
       || inicioDefault;
+    const resumoServicoDefault = String(
+      contrato?.resumo_servico
+      || contrato?.descricao_servico
+      || selected?.resumo_orcamento
+      || selected?.plano_servico
+      || selected?.servico
+      || selected?.pacote_sugerido
+      || ''
+    );
 
     setValorFinal(String(contrato?.valor_final || selected?.valor_contrato || selected?.preco_final || selected?.valor_sugerido || 0));
     setDataInicio(inicioDefault);
@@ -235,6 +316,11 @@ export default function ClientesPage() {
     setVencimento(vencimentoDefault);
     setResponsavel(String(contrato?.responsavel || selected?.responsavel_contrato || selected?.responsavel || 'Time HAGAV'));
     setFormaPagamento(String(contrato?.forma_pagamento || selected?.forma_pagamento_contrato || 'A combinar'));
+    setPix(String(contrato?.pix || contrato?.chave_pix || ''));
+    setNomeContratante(String(contrato?.nome_cliente || selected?.nome || ''));
+    setCpfCnpj(String(contrato?.cpf_cnpj_cliente || contrato?.cpf_cnpj || ''));
+    setEmailCliente(String(contrato?.email_cliente || selected?.email || ''));
+    setResumoServico(resumoServicoDefault);
     setObsContrato(String(contrato?.observacoes || ''));
     setRecorrente(typeof contrato?.recorrente === 'boolean' ? contrato.recorrente : Boolean(selected?.recorrente_contrato));
     setStatusEdicao(String(contrato?.status || resolveDisplayStatusContrato(selected) || 'ativo'));
@@ -249,6 +335,14 @@ export default function ClientesPage() {
       return cloneSelectedRow({ ...prev, ...current });
     });
   }, [rows, selected?.id]);
+
+  useEffect(() => {
+    if (!selected) return;
+    const nextVencimento = addMonthsIso(dataInicio, duracaoMeses);
+    if (!nextVencimento) return;
+    if (nextVencimento === vencimento) return;
+    setVencimento(nextVencimento);
+  }, [dataInicio, duracaoMeses, selected, vencimento]);
 
   const metrics = useMemo(() => {
     const ativos = rows.filter((item) => resolveDisplayStatusContrato(item) === 'ativo').length;
@@ -271,9 +365,55 @@ export default function ClientesPage() {
   }, [rows]);
 
   async function handleGenerateContractPdf(row) {
+    if (!row?.id) return;
+    const isSelectedRow = Boolean(selected?.id && selected.id === row.id);
+    const currentRow = isSelectedRow ? selected : cloneSelectedRow(row);
+    const detalhesBase = parseDetalhes(currentRow?.detalhes);
+    const contratoBase = parseDetalhes(currentRow?.contrato || detalhesBase?.contrato);
+    const hojeIso = isoDate(new Date().toISOString());
+    const duracaoSafe = isSelectedRow
+      ? Math.max(1, Number.parseInt(String(duracaoMeses || contratoBase?.duracao_meses || 12), 10) || 12)
+      : Math.max(1, Number.parseInt(String(contratoBase?.duracao_meses || 12), 10) || 12);
+    const inicioGeracao = hojeIso;
+    const fimGeracao = addMonthsIso(inicioGeracao, duracaoSafe) || inicioGeracao;
+    const valorInput = isSelectedRow ? Number(valorFinal) : Number(contratoBase?.valor_final ?? currentRow?.valor_contrato ?? currentRow?.preco_final ?? currentRow?.valor_sugerido ?? 0);
+    const valorSafe = Number.isFinite(valorInput) && valorInput > 0
+      ? valorInput
+      : Number(currentRow?.valor_contrato || currentRow?.preco_final || currentRow?.valor_sugerido || 0);
+    const payloadContrato = {
+      nome_cliente: isSelectedRow
+        ? (String(nomeContratante || '').trim() || String(currentRow?.nome || '').trim())
+        : (String(contratoBase?.nome_cliente || currentRow?.nome || '').trim()),
+      cpf_cnpj: isSelectedRow ? String(cpfCnpj || '').trim() : String(contratoBase?.cpf_cnpj_cliente || contratoBase?.cpf_cnpj || '').trim(),
+      email_cliente: isSelectedRow ? String(emailCliente || '').trim() : String(contratoBase?.email_cliente || currentRow?.email || '').trim(),
+      forma_pagamento: isSelectedRow
+        ? (String(formaPagamento || '').trim() || 'A combinar')
+        : (String(contratoBase?.forma_pagamento || currentRow?.forma_pagamento_contrato || 'A combinar').trim()),
+      pix: isSelectedRow ? String(pix || '').trim() : String(contratoBase?.pix || contratoBase?.chave_pix || '').trim(),
+      resumo_servico: isSelectedRow
+        ? (String(resumoServico || '').trim() || String(currentRow?.resumo_orcamento || currentRow?.plano_servico || currentRow?.servico || '').trim())
+        : String(contratoBase?.resumo_servico || contratoBase?.descricao_servico || currentRow?.resumo_orcamento || currentRow?.plano_servico || currentRow?.servico || '').trim(),
+      valor_total: Number.isFinite(valorSafe) ? valorSafe : 0,
+      duracao_meses: duracaoSafe,
+      data_inicio: inicioGeracao,
+      data_fim: fimGeracao,
+      responsavel: isSelectedRow
+        ? (String(responsavel || '').trim() || String(currentRow?.responsavel || '').trim() || 'Time HAGAV')
+        : (String(contratoBase?.responsavel || currentRow?.responsavel || 'Time HAGAV').trim()),
+      observacoes: isSelectedRow ? String(obsContrato || '').trim() : String(contratoBase?.observacoes || '').trim(),
+      recorrente: isSelectedRow ? Boolean(recorrente) : Boolean(contratoBase?.recorrente ?? currentRow?.recorrente_contrato),
+      status: isSelectedRow
+        ? String(statusEdicao || '').trim().toLowerCase()
+        : String(contratoBase?.status || currentRow?.status_contrato || 'aguardando_contrato').trim().toLowerCase(),
+    };
+
     try {
       setFeedback('Gerando PDF do contrato...');
-      const result = await generateContractPdf(row.id);
+      const result = await generateContractPdf(row.id, {
+        payload: {
+          contrato: payloadContrato,
+        },
+      });
       console.info('[Clientes][PDF][Resultado]', {
         deal_id: row.id,
         request_id: String(result?.request_id || ''),
@@ -281,36 +421,118 @@ export default function ClientesPage() {
         uploaded: Boolean(result?.uploaded),
         upload_reason: String(result?.upload_reason || ''),
         has_link_pdf: Boolean(String(result?.link_pdf || '').trim()),
+        render_mode: String(result?.render_mode || ''),
+        pdf_engine: String(result?.pdf_engine || ''),
+        pdf_fallback_used: Boolean(result?.pdf_fallback_used),
       });
-      // rendered_html = HTML completo preenchido → janela de impressao do browser (layout premium)
-      if (result?.rendered_html) {
-        openPrintWindow(result.rendered_html);
-      } else if (result?.pdf_base64) {
-        downloadPdfFromBase64(result.pdf_base64, result.fileName || `contrato-${row.id}.pdf`);
-      }
       const linkPdf = String(result?.link_pdf || '').trim();
-      const uploadReason = String(result?.upload_reason || '').trim();
+      const nextMeta = {
+        renderMode: String(result?.render_mode || '').trim(),
+        pdfEngine: String(result?.pdf_engine || '').trim(),
+        pdfFallbackUsed: (
+          result?.pdf_fallback_used === true
+          || String(result?.pdf_fallback_used || '').toLowerCase() === 'true'
+          || String(result?.render_mode || '').trim() === 'native_text_fallback'
+          || String(result?.pdf_engine || '').trim() === 'native_text'
+          || !String(result?.pdf_engine || '').trim()
+        ),
+        fallbackReason: String(result?.pdf_fallback_reason || '').trim(),
+        fallbackFrom: String(result?.pdf_fallback_from || '').trim(),
+      };
+
       if (linkPdf) {
+        const detalhesAtual = parseDetalhes(row?.detalhes);
+        const contratoAtual = parseDetalhes(detalhesAtual?.contrato);
+        const numeroGeracao = Number(result?.numero_geracao || contratoAtual?.numero_geracao || contratoAtual?.contractVersion || 0) || 0;
+        const dataInicioPdf = String(result?.data_inicio_iso || payloadContrato.data_inicio || contratoAtual?.data_inicio || '');
+        const dataFimPdf = String(result?.data_fim_iso || payloadContrato.data_fim || contratoAtual?.data_fim || contratoAtual?.vencimento || '');
+        const contratoAtualizado = {
+          ...contratoAtual,
+          ...payloadContrato,
+          numero_contrato: String(result?.numero_contrato || contratoAtual?.numero_contrato || ''),
+          contrato_numero: String(result?.numero_contrato || contratoAtual?.contrato_numero || ''),
+          numero_geracao: numeroGeracao || contratoAtual?.numero_geracao || 1,
+          contractVersion: numeroGeracao || contratoAtual?.contractVersion || 1,
+          numeroGeracao: numeroGeracao || contratoAtual?.numeroGeracao || 1,
+          data_emissao: String(result?.data_emissao || contratoAtual?.data_emissao || ''),
+          data_inicio: dataInicioPdf,
+          data_fim: dataFimPdf,
+          data_termino: dataFimPdf,
+          vencimento: dataFimPdf,
+          duracao_meses: Number(result?.duracao_meses || payloadContrato.duracao_meses || contratoAtual?.duracao_meses || 12) || 12,
+          valor_total: Number(payloadContrato.valor_total || contratoAtual?.valor_total || 0) || 0,
+          valor_final: Number(payloadContrato.valor_total || contratoAtual?.valor_final || 0) || 0,
+          preco_final: Number(payloadContrato.valor_total || contratoAtual?.preco_final || 0) || 0,
+          link_pdf: linkPdf,
+          pdf_render_mode: nextMeta.renderMode,
+          pdf_engine: nextMeta.pdfEngine,
+          pdf_fallback_used: nextMeta.pdfFallbackUsed,
+          pdf_fallback_from: nextMeta.fallbackFrom,
+          pdf_fallback_reason: nextMeta.fallbackReason,
+          pdf_comercial_liberado: isHtmlPdfReady(nextMeta),
+        };
+        const detalhesAtualizados = {
+          ...detalhesAtual,
+          contrato: contratoAtualizado,
+        };
+        const valorAtualizado = Number(payloadContrato.valor_total || row?.valor_contrato || 0) || 0;
         setRows((prev) => prev.map((item) => (
           item.id === row.id
-            ? { ...item, contrato_link_pdf: linkPdf }
+            ? {
+              ...item,
+              contrato_link_pdf: linkPdf,
+              detalhes: detalhesAtualizados,
+              contrato: detalhesAtualizados.contrato,
+              valor_contrato: valorAtualizado,
+              preco_final: valorAtualizado,
+              valor_fechado: valorAtualizado,
+              vencimento_contrato: dataFimPdf || item?.vencimento_contrato,
+              validade_ate: dataFimPdf || item?.validade_ate,
+              inicio_contrato: dataInicioPdf || item?.inicio_contrato,
+            }
             : item
         )));
         if (selected?.id === row.id) {
-          setSelected((prev) => cloneSelectedRow({ ...prev, contrato_link_pdf: linkPdf }));
+          setSelected((prev) => cloneSelectedRow({
+            ...prev,
+            contrato_link_pdf: linkPdf,
+            detalhes: detalhesAtualizados,
+            contrato: detalhesAtualizados.contrato,
+            valor_contrato: valorAtualizado,
+            preco_final: valorAtualizado,
+            valor_fechado: valorAtualizado,
+            vencimento_contrato: dataFimPdf || prev?.vencimento_contrato,
+            validade_ate: dataFimPdf || prev?.validade_ate,
+            inicio_contrato: dataInicioPdf || prev?.inicio_contrato,
+          }));
+          setDataInicio(dataInicioPdf || inicioGeracao);
+          setVencimento(dataFimPdf || fimGeracao);
+          setDuracaoMeses(String(result?.duracao_meses || payloadContrato.duracao_meses || duracaoSafe));
         }
       }
-      if (linkPdf) {
-        setFeedback('Contrato aberto para impressao e link atualizado.');
-      } else if (result?.rendered_html) {
-        setFeedback('Contrato aberto para impressao. Use "Salvar como PDF" no browser. Para link publico, configure SUPABASE_PDF_BUCKET no deploy.');
-      } else if (uploadReason === 'pdf_bucket_not_configured') {
-        setFeedback('Contrato PDF gerado sem link publico. Configure SUPABASE_PDF_BUCKET (ou SUPABASE_STORAGE_BUCKET) no deploy.');
-      } else if (uploadReason) {
-        setFeedback(`Contrato PDF gerado sem upload no storage (${uploadReason}).`);
-      } else {
-        setFeedback('Contrato PDF gerado para download local.');
+
+      if (!linkPdf) {
+        setFeedback('Falha ao gerar link do contrato PDF.');
+        setTimeout(() => setFeedback(''), 3200);
+        return;
       }
+
+      if (!isHtmlPdfReady(nextMeta)) {
+        setFeedback(getContratoPdfBlockedMessage(nextMeta));
+        setTimeout(() => setFeedback(''), 5200);
+        return;
+      }
+
+      const fileName = String(result?.fileName || `contrato-${row.id}.pdf`);
+      const downloadedFromPayload = downloadPdfFromBase64(String(result?.pdf_base64 || '').trim(), fileName);
+      const openMode = downloadedFromPayload
+        ? 'download'
+        : await openOrDownloadPdfLink(linkPdf, fileName);
+      const openedLabel = openMode === 'download'
+        ? 'baixado'
+        : (openMode === 'new_tab' ? 'aberto em nova aba' : 'aberto');
+      const numeroContratoInfo = String(result?.numero_contrato || '').trim();
+      setFeedback(`Contrato PDF gerado com sucesso${numeroContratoInfo ? ` (#${numeroContratoInfo})` : ''} e ${openedLabel}.`);
       setTimeout(() => setFeedback(''), 3000);
     } catch (err) {
       console.error('[Clientes][ContratoPDF][Erro]', {
@@ -324,10 +546,16 @@ export default function ClientesPage() {
 
   async function handleEnviarContratoWhatsApp(row) {
     if (!row) return;
+    const pdfMeta = readContratoPdfMeta(row);
     const contratoLink = String(row?.contrato_link_pdf || '').trim();
     if (!contratoLink) {
       setFeedback('Gere o contrato PDF antes de enviar no WhatsApp.');
       setTimeout(() => setFeedback(''), 3200);
+      return;
+    }
+    if (!isHtmlPdfReady(pdfMeta)) {
+      setFeedback(getContratoPdfBlockedMessage(pdfMeta));
+      setTimeout(() => setFeedback(''), 5200);
       return;
     }
 
@@ -390,9 +618,15 @@ export default function ClientesPage() {
 
     const inicioSafe = isoDate(dataInicio) || isoDate(selected?.inicio_contrato) || isoDate(new Date().toISOString());
     const duracaoSafe = Math.max(1, Number.parseInt(String(duracaoMeses || '12'), 10) || 12);
-    const vencimentoSafe = isoDate(vencimento) || addMonthsIso(inicioSafe, duracaoSafe) || inicioSafe;
+    const vencimentoSafe = addMonthsIso(inicioSafe, duracaoSafe) || isoDate(vencimento) || inicioSafe;
     const responsavelSafe = String(responsavel || '').trim() || String(selected?.responsavel || '').trim() || 'Time HAGAV';
     const formaPagamentoSafe = String(formaPagamento || '').trim() || 'A combinar';
+    const pixSafe = String(pix || '').trim();
+    const nomeContratanteSafe = String(nomeContratante || '').trim() || String(selected?.nome || '').trim();
+    const cpfCnpjSafe = String(cpfCnpj || '').trim();
+    const emailClienteSafe = String(emailCliente || '').trim();
+    const resumoServicoSafe = String(resumoServico || '').trim()
+      || String(selected?.resumo_orcamento || selected?.plano_servico || selected?.servico || selected?.pacote_sugerido || '').trim();
     const observacoesSafe = String(obsContrato || '').trim();
 
     if (!inicioSafe || !vencimentoSafe) {
@@ -432,6 +666,14 @@ export default function ClientesPage() {
       observacoes: observacoesSafe,
       responsavel: responsavelSafe,
       forma_pagamento: formaPagamentoSafe,
+      pix: pixSafe,
+      chave_pix: pixSafe,
+      nome_cliente: nomeContratanteSafe,
+      cpf_cnpj_cliente: cpfCnpjSafe,
+      email_cliente: emailClienteSafe,
+      resumo_servico: resumoServicoSafe,
+      data_fim: vencimentoSafe,
+      data_termino: vencimentoSafe,
       recorrente: Boolean(recorrente),
       status: nextStatus,
       atualizado_em: nowIso,
@@ -692,46 +934,68 @@ export default function ClientesPage() {
         {selected && (
           <div className="space-y-3">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              <div className="md:col-span-2">
+                <p className="text-[10px] text-hagav-gray uppercase tracking-wider">Dados do contratante</p>
+              </div>
               <div>
-                <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Cliente</label>
-                <input type="text" value={selected.nome || ''} disabled className="hinput w-full opacity-80" />
+                <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Nome do contratante</label>
+                <input type="text" value={nomeContratante} onChange={(e) => setNomeContratante(e.target.value)} className="hinput w-full" />
               </div>
               <div>
                 <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">WhatsApp</label>
                 <input type="text" value={selected.whatsapp || ''} disabled className="hinput w-full opacity-80" />
               </div>
+              <div>
+                <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">CPF/CNPJ</label>
+                <input type="text" value={cpfCnpj} onChange={(e) => setCpfCnpj(e.target.value)} className="hinput w-full" />
+              </div>
+              <div>
+                <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">E-mail</label>
+                <input type="email" value={emailCliente} onChange={(e) => setEmailCliente(e.target.value)} className="hinput w-full" />
+              </div>
+
+              <div className="md:col-span-2 mt-1">
+                <p className="text-[10px] text-hagav-gray uppercase tracking-wider">Servico</p>
+              </div>
               <div className="md:col-span-2">
-                <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Servico/Plano</label>
-                <input
-                  type="text"
-                  value={selected.plano_servico || selected.servico || selected.pacote_sugerido || ''}
-                  disabled
-                  className="hinput w-full opacity-80"
-                />
+                <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Resumo do servico</label>
+                <textarea rows={2} value={resumoServico} onChange={(e) => setResumoServico(e.target.value)} className="hinput w-full resize-none" />
               </div>
               <div>
                 <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Valor final (R$)</label>
                 <input type="number" min="0" step="0.01" value={valorFinal} onChange={(e) => setValorFinal(e.target.value)} className="hinput w-full" />
               </div>
               <div>
-                <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Data inicio</label>
-                <input type="date" value={dataInicio} onChange={(e) => setDataInicio(e.target.value)} className="hinput w-full" />
-              </div>
-              <div>
                 <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Duracao (meses)</label>
                 <input type="number" min="1" step="1" value={duracaoMeses} onChange={(e) => setDuracaoMeses(e.target.value)} className="hinput w-full" />
               </div>
-              <div>
-                <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Vencimento</label>
-                <input type="date" value={vencimento} onChange={(e) => setVencimento(e.target.value)} className="hinput w-full" />
-              </div>
-              <div>
-                <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Responsavel</label>
-                <input type="text" value={responsavel} onChange={(e) => setResponsavel(e.target.value)} className="hinput w-full" />
+
+              <div className="md:col-span-2 mt-1">
+                <p className="text-[10px] text-hagav-gray uppercase tracking-wider">Pagamento</p>
               </div>
               <div>
                 <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Forma de pagamento</label>
                 <input type="text" value={formaPagamento} onChange={(e) => setFormaPagamento(e.target.value)} className="hinput w-full" />
+              </div>
+              <div>
+                <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Chave PIX</label>
+                <input type="text" value={pix} onChange={(e) => setPix(e.target.value)} className="hinput w-full" />
+              </div>
+
+              <div className="md:col-span-2 mt-1">
+                <p className="text-[10px] text-hagav-gray uppercase tracking-wider">Contrato</p>
+              </div>
+              <div>
+                <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Data inicio</label>
+                <input type="date" value={dataInicio} onChange={(e) => setDataInicio(e.target.value)} className="hinput w-full" />
+              </div>
+              <div>
+                <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Vencimento (auto)</label>
+                <input type="date" value={vencimento} readOnly className="hinput w-full opacity-80" />
+              </div>
+              <div>
+                <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Responsavel</label>
+                <input type="text" value={responsavel} onChange={(e) => setResponsavel(e.target.value)} className="hinput w-full" />
               </div>
               <div>
                 <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Status contrato</label>
@@ -758,6 +1022,9 @@ export default function ClientesPage() {
               </div>
             </div>
 
+            <div>
+              <p className="text-[10px] text-hagav-gray uppercase tracking-wider mb-2">Acoes</p>
+            </div>
             <div className="modal-actions">
               <button type="button" className="btn-gold btn-sm" onClick={() => handleSaveContrato('ativo', 'ativar')} disabled={saving}>
                 {saving ? <RefreshCw size={12} className="animate-spin" /> : <Power size={12} />}
@@ -783,16 +1050,20 @@ export default function ClientesPage() {
                 type="button"
                 className="btn-ghost btn-sm"
                 onClick={() => handleEnviarContratoWhatsApp(selected)}
-                disabled={saving || !selected.contrato_link_pdf}
+                disabled={saving || !canUseContractPdf(selected)}
               >
                 <MessageCircle size={12} /> Enviar contrato no WhatsApp
               </button>
-              {selected.contrato_link_pdf ? (
+              {canUseContractPdf(selected) ? (
                 <a href={selected.contrato_link_pdf} target="_blank" rel="noreferrer" className="btn-ghost btn-sm">
                   <ExternalLink size={12} /> Ver contrato
                 </a>
               ) : (
-                <span className="text-xs text-hagav-gray">Gere o contrato PDF para habilitar envio e visualizacao.</span>
+                <span className="text-xs text-hagav-gray">
+                  {String(selected?.contrato_link_pdf || '').trim()
+                    ? getContratoPdfBlockedMessage(readContratoPdfMeta(selected))
+                    : 'Gere o contrato PDF para habilitar envio e visualizacao.'}
+                </span>
               )}
             </div>
           </div>

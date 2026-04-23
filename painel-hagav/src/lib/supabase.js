@@ -791,7 +791,7 @@ async function getSupabaseSessionToken() {
   }
 }
 
-async function generatePdfDocument(endpoint, id, { adminKey } = {}) {
+async function generatePdfDocument(endpoint, id, { adminKey, payload } = {}) {
   const key = getAdminApiKey(adminKey);
   const token = await getSupabaseSessionToken();
 
@@ -801,11 +801,16 @@ async function generatePdfDocument(endpoint, id, { adminKey } = {}) {
   if (key) headers['x-admin-key'] = key;
   if (token) headers.authorization = `Bearer ${token}`;
 
+  const requestBody = {
+    id,
+    ...(payload && typeof payload === 'object' ? payload : {}),
+  };
+
   const request = async (targetEndpoint) => fetch(targetEndpoint, {
     method: 'POST',
     headers,
     credentials: 'include',
-    body: JSON.stringify({ id }),
+    body: JSON.stringify(requestBody),
   });
   let response = await request(endpoint);
   let rawText = '';
@@ -912,12 +917,12 @@ async function generatePdfDocument(endpoint, id, { adminKey } = {}) {
   return parsed;
 }
 
-export async function generateDealPdf(id, { adminKey } = {}) {
-  return generatePdfDocument('/api/admin-orcamentos-pdf', id, { adminKey });
+export async function generateDealPdf(id, { adminKey, payload } = {}) {
+  return generatePdfDocument('/api/admin-orcamentos-pdf', id, { adminKey, payload });
 }
 
-export async function generateContractPdf(id, { adminKey } = {}) {
-  return generatePdfDocument('/api/admin-contratos-pdf', id, { adminKey });
+export async function generateContractPdf(id, { adminKey, payload } = {}) {
+  return generatePdfDocument('/api/admin-contratos-pdf', id, { adminKey, payload });
 }
 
 export async function fetchClientesContratos({

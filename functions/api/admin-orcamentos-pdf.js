@@ -430,6 +430,57 @@ function bytesToBase64(bytesLike) {
   return btoa(binary);
 }
 
+function previewRawResponse(value, maxLen = 320) {
+  return String(value || "")
+    .replace(/[\u0000-\u001F\u007F]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, maxLen);
+}
+
+function decodeBytesPreview(bytes, maxBytes = 900) {
+  try {
+    const slice = bytes instanceof Uint8Array
+      ? bytes.subarray(0, Math.min(bytes.length, maxBytes))
+      : new Uint8Array(0);
+    return previewRawResponse(new TextDecoder("utf-8").decode(slice), 320);
+  } catch {
+    return "";
+  }
+}
+
+function normalizePdfshiftEndpoint(rawEndpoint) {
+  const fallback = "https://api.pdfshift.io/v3/convert/pdf";
+  const raw = String(rawEndpoint || "").trim();
+  if (!raw) return fallback;
+
+  let candidate = raw;
+  if (!/^https?:\/\//i.test(candidate)) {
+    candidate = `https://${candidate}`;
+  }
+
+  try {
+    const url = new URL(candidate);
+    const host = String(url.hostname || "").toLowerCase();
+    const path = String(url.pathname || "").replace(/\/+$/, "");
+    const query = String(url.search || "");
+
+    if (host === "api.pdfshift.io") {
+      const normalizedPath = path || "/v3/convert/pdf";
+      return `https://api.pdfshift.io${normalizedPath}${query}`;
+    }
+
+    if (host.endsWith("pdfshift.io") || host.endsWith("pdfshift.com")) {
+      const normalizedPath = path.includes("/convert/pdf") ? path : "/v3/convert/pdf";
+      return `https://api.pdfshift.io${normalizedPath}${query}`;
+    }
+
+    return url.toString();
+  } catch {
+    return fallback;
+  }
+}
+
 function getPdfRenderConfig(env) {
   const forcedEngine = firstEnvValue(env, ["PDF_ENGINE", "PDF_RENDER_ENGINE", "PDF_PROVIDER"]).toLowerCase();
   const pdfshiftKey = firstEnvValue(env, ["PDFSHIFT_API_KEY", "PDFSHIFT_KEY"]);
@@ -442,6 +493,8 @@ function getPdfRenderConfig(env) {
   const autoEngine = browserlessToken ? "browserless" : (pdfshiftKey ? "pdfshift" : "native_text");
   const normalizedForced = forcedEngine && forcedEngine !== "auto" ? forcedEngine : "";
   const engine = normalizedForced || autoEngine;
+  const pdfshiftEndpointRaw = firstEnvValue(env, ["PDFSHIFT_ENDPOINT", "PDFSHIFT_URL"]) || "https://api.pdfshift.io/v3/convert/pdf";
+  const pdfshiftEndpoint = normalizePdfshiftEndpoint(pdfshiftEndpointRaw);
 
   return {
     engine,
@@ -449,7 +502,9 @@ function getPdfRenderConfig(env) {
     allowNativeFallback,
     pdfshift: {
       apiKey: pdfshiftKey,
-      endpoint: firstEnvValue(env, ["PDFSHIFT_ENDPOINT", "PDFSHIFT_URL"]) || "https://api.pdfshift.io/v3/convert/pdf",
+      endpoint: pdfshiftEndpoint,
+      endpointRaw: pdfshiftEndpointRaw,
+      authMode: "x_api_key",
     },
     browserless: {
       token: browserlessToken,
@@ -479,42 +534,99 @@ async function renderPdfViaPdfshift(html, config) {
       detail: "PDFSHIFT_API_KEY ausente",
       renderMode: "remote_html_to_pdf",
       pdfEngine: "pdfshift",
+      providerEndpoint: String(config?.endpoint || ""),
+      providerAuthMode: "x_api_key",
     };
   }
-  const auth = btoa(`api:${config.apiKey}`);
-  const response = await fetch(config.endpoint, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json; charset=utf-8",
-      authorization: `Basic ${auth}`,
-    },
-    body: JSON.stringify({
-      source: html,
-      print_background: true,
-      use_print: true,
-      format: "A4",
-      margin: "0",
-    }),
-  });
 
-  if (!response.ok) {
-    const text = stripDangerousText(await response.text().catch(() => ""), 240);
+  const payload = {
+    source: html,
+    print_background: true,
+    use_print: true,
+    format: "A4",
+    margin: "0",
+  };
+
+  let response;
+  try {
+    response = await fetch(config.endpoint, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json; charset=utf-8",
+        "x-api-key": String(config.apiKey || ""),
+        accept: "application/pdf, application/json;q=0.9, text/plain;q=0.8, */*;q=0.5",
+      },
+      body: JSON.stringify(payload),
+    });
+  } catch (err) {
     return {
       ok: false,
       reason: "pdf_render_failed",
       status: 502,
-      detail: text || `pdfshift_http_${response.status}`,
+      detail: `pdfshift_fetch_error:${stripDangerousText(String(err?.message || "erro_desconhecido"), 220)}`,
       renderMode: "remote_html_to_pdf",
       pdfEngine: "pdfshift",
+      providerEndpoint: String(config.endpoint || ""),
+      providerAuthMode: "x_api_key",
+    };
+  }
+
+  const providerStatus = Number(response.status || 0);
+  const providerContentType = String(response.headers.get("content-type") || "").toLowerCase();
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => "");
+    const bodyPreview = previewRawResponse(text, 320);
+    return {
+      ok: false,
+      reason: "pdf_render_failed",
+      status: 502,
+      detail: `pdfshift_http_${providerStatus}:${bodyPreview || "sem_corpo"}`,
+      renderMode: "remote_html_to_pdf",
+      pdfEngine: "pdfshift",
+      providerStatus,
+      providerContentType,
+      providerBodyPreview: bodyPreview,
+      providerEndpoint: String(config.endpoint || ""),
+      providerAuthMode: "x_api_key",
     };
   }
 
   const buffer = await response.arrayBuffer();
+  const pdfBytes = new Uint8Array(buffer);
+  const firstBytesText = decodeBytesPreview(pdfBytes, 40);
+  const headerLooksPdf = String(firstBytesText || "").includes("%PDF-");
+  const contentTypeLooksPdf = (
+    providerContentType.includes("application/pdf")
+    || providerContentType.includes("application/octet-stream")
+  );
+
+  if (!headerLooksPdf && !contentTypeLooksPdf) {
+    const bodyPreview = decodeBytesPreview(pdfBytes, 900);
+    return {
+      ok: false,
+      reason: "pdf_render_failed",
+      status: 502,
+      detail: `pdfshift_unexpected_response:${bodyPreview || "resposta_nao_pdf"}`,
+      renderMode: "remote_html_to_pdf",
+      pdfEngine: "pdfshift",
+      providerStatus,
+      providerContentType,
+      providerBodyPreview: bodyPreview,
+      providerEndpoint: String(config.endpoint || ""),
+      providerAuthMode: "x_api_key",
+    };
+  }
+
   return {
     ok: true,
-    pdfBytes: new Uint8Array(buffer),
+    pdfBytes,
     renderMode: "remote_html_to_pdf",
     pdfEngine: "pdfshift",
+    providerStatus,
+    providerContentType,
+    providerEndpoint: String(config.endpoint || ""),
+    providerAuthMode: "x_api_key",
   };
 }
 
@@ -937,12 +1049,25 @@ async function uploadPdfIfPossible(config, env, pdfContent, fileName) {
   };
 }
 
-async function updatePdfLink(config, row, linkPdf) {
+async function updatePdfLink(config, row, linkPdf, pdfMeta = {}) {
   const detalhes = readDetalhes(row);
   const comercial = (detalhes?.comercial && typeof detalhes.comercial === "object")
     ? detalhes.comercial
     : {};
   const nowIso = new Date().toISOString();
+  const renderMode = stripDangerousText(String(pdfMeta?.render_mode || ""), 80);
+  const pdfEngine = stripDangerousText(String(pdfMeta?.pdf_engine || ""), 80);
+  const pdfFallbackUsed = Boolean(pdfMeta?.pdf_fallback_used);
+  const pdfFallbackFrom = stripDangerousText(String(pdfMeta?.pdf_fallback_from || ""), 80);
+  const pdfFallbackReason = stripDangerousText(String(pdfMeta?.pdf_fallback_reason || ""), 120);
+  const pdfComercialLiberado = Boolean(
+    linkPdf
+    && pdfEngine
+    && renderMode
+    && renderMode !== "native_text_fallback"
+    && pdfEngine !== "native_text"
+    && !pdfFallbackUsed
+  );
 
   return fetchSupabase(
     config,
@@ -959,6 +1084,12 @@ async function updatePdfLink(config, row, linkPdf) {
             ...comercial,
             proposta_link: linkPdf || "",
             proposta_gerada_em: nowIso,
+            proposta_pdf_render_mode: renderMode,
+            proposta_pdf_engine: pdfEngine,
+            proposta_pdf_fallback_used: pdfFallbackUsed,
+            proposta_pdf_fallback_from: pdfFallbackFrom,
+            proposta_pdf_fallback_reason: pdfFallbackReason,
+            proposta_pdf_comercial_liberado: pdfComercialLiberado,
             atualizado_em: nowIso,
           },
         },
@@ -1060,19 +1191,31 @@ export async function onRequestPost(context) {
     html_preview_first_300_chars: String(htmlPreviewFirst300Chars || ""),
   });
   if (Array.isArray(placeholdersRestantes) && placeholdersRestantes.length > 0) {
-    logPdf(requestId, "template_placeholder_warning", "Placeholders restantes apos renderizacao", {
+    return fail(requestId, "template_placeholder", "template_placeholders_missing", 422, {
+      template_source: templateSource,
+      template_path: templatePath,
+      placeholders_total: Number(placeholdersTotal || 0),
+      placeholders_substituidos: Number(placeholdersSubstituidos || 0),
       placeholders_restantes: placeholdersRestantes,
+      html_has_style_tag: Boolean(htmlHasStyleTag),
+      html_has_header_class: Boolean(htmlHasHeaderClass),
+      html_preview_first_300_chars: String(htmlPreviewFirst300Chars || ""),
     });
   }
 
   const pdfRender = await renderHtmlToPdf(renderedHtml, env);
   if (!pdfRender.ok) {
     return fail(requestId, "pdf_render", pdfRender.reason || "pdf_render_failed", pdfRender.status || 502, {
-      detail: stripDangerousText(String(pdfRender.detail || "html_to_pdf_render_failed"), 220),
+      detail: previewRawResponse(String(pdfRender.detail || "html_to_pdf_render_failed"), 320),
       template_source: templateSource,
       template_path: templatePath,
       render_mode: String(pdfRender.renderMode || "remote_html_to_pdf"),
       pdf_engine: String(pdfRender.pdfEngine || "unknown"),
+      provider_status: Number(pdfRender.providerStatus || 0) || undefined,
+      provider_content_type: String(pdfRender.providerContentType || ""),
+      provider_body_preview: String(pdfRender.providerBodyPreview || ""),
+      provider_endpoint: String(pdfRender.providerEndpoint || ""),
+      provider_auth_mode: String(pdfRender.providerAuthMode || ""),
       html_has_style_tag: Boolean(htmlHasStyleTag),
       html_has_header_class: Boolean(htmlHasHeaderClass),
       html_preview_first_300_chars: String(htmlPreviewFirst300Chars || ""),
@@ -1090,6 +1233,10 @@ export async function onRequestPost(context) {
     fallback_used: fallbackUsed,
     fallback_from: String(pdfRender?.fallbackFrom || ""),
     fallback_reason: String(pdfRender?.fallbackReason || ""),
+    provider_status: Number(pdfRender.providerStatus || 0) || undefined,
+    provider_content_type: String(pdfRender.providerContentType || ""),
+    provider_endpoint: String(pdfRender.providerEndpoint || ""),
+    provider_auth_mode: String(pdfRender.providerAuthMode || ""),
     html_has_style_tag: Boolean(htmlHasStyleTag),
     html_has_header_class: Boolean(htmlHasHeaderClass),
   });
@@ -1107,6 +1254,11 @@ export async function onRequestPost(context) {
       pdf_fallback_used: fallbackUsed,
       pdf_fallback_from: String(pdfRender?.fallbackFrom || ""),
       pdf_fallback_reason: String(pdfRender?.fallbackReason || ""),
+      provider_status: Number(pdfRender.providerStatus || 0) || undefined,
+      provider_content_type: String(pdfRender.providerContentType || ""),
+      provider_body_preview: String(pdfRender.providerBodyPreview || ""),
+      provider_endpoint: String(pdfRender.providerEndpoint || ""),
+      provider_auth_mode: String(pdfRender.providerAuthMode || ""),
       html_has_style_tag: Boolean(htmlHasStyleTag),
       html_has_header_class: Boolean(htmlHasHeaderClass),
       html_preview_first_300_chars: String(htmlPreviewFirst300Chars || ""),
@@ -1115,7 +1267,13 @@ export async function onRequestPost(context) {
 
   let linkPdf = "";
   linkPdf = stripDangerousText(uploadResult.link || "", 1000);
-  const updateResult = await updatePdfLink(config, row, linkPdf);
+  const updateResult = await updatePdfLink(config, row, linkPdf, {
+    render_mode: renderMode,
+    pdf_engine: pdfEngine,
+    pdf_fallback_used: fallbackUsed,
+    pdf_fallback_from: String(pdfRender?.fallbackFrom || ""),
+    pdf_fallback_reason: String(pdfRender?.fallbackReason || ""),
+  });
   if (!updateResult.ok) {
     return fail(requestId, "persist_link", "deal_link_update_failed", 502, {
       detail: stripDangerousText(String(updateResult.reason || "deal_update_failed"), 180),
@@ -1146,6 +1304,11 @@ export async function onRequestPost(context) {
     pdf_fallback_used: fallbackUsed,
     pdf_fallback_from: String(pdfRender?.fallbackFrom || ""),
     pdf_fallback_reason: String(pdfRender?.fallbackReason || ""),
+    provider_status: Number(pdfRender.providerStatus || 0) || undefined,
+    provider_content_type: String(pdfRender.providerContentType || ""),
+    provider_body_preview: String(pdfRender.providerBodyPreview || ""),
+    provider_endpoint: String(pdfRender.providerEndpoint || ""),
+    provider_auth_mode: String(pdfRender.providerAuthMode || ""),
     html_has_style_tag: Boolean(htmlHasStyleTag),
     html_has_header_class: Boolean(htmlHasHeaderClass),
     html_preview_first_300_chars: String(htmlPreviewFirst300Chars || ""),

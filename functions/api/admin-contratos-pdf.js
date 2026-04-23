@@ -163,10 +163,40 @@ function escapePdfText(value) {
   return value.replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)");
 }
 
-function formatMoney(value) {
+function normalizeTemplateText(value, maxLen = 400, { allowEmpty = false } = {}) {
+  const base = String(value ?? "")
+    .normalize("NFKC")
+    .replace(/[\u0000-\u001F\u007F]/g, " ")
+    .replace(/<[^>]*>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, maxLen);
+  if (!base) return allowEmpty ? "" : "-";
+  return base;
+}
+
+function escapeHtml(value) {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function formatMoney(value, { withCurrency = true } = {}) {
   const num = Number(value || 0);
-  if (!Number.isFinite(num)) return "R$ 0,00";
-  return `R$ ${num.toFixed(2).replace(".", ",")}`;
+  const safeNum = Number.isFinite(num) ? num : 0;
+  try {
+    const formatted = new Intl.NumberFormat("pt-BR", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }).format(safeNum);
+    return withCurrency ? `R$ ${formatted}` : formatted;
+  } catch {
+    const fallback = safeNum.toFixed(2).replace(".", ",");
+    return withCurrency ? `R$ ${fallback}` : fallback;
+  }
 }
 
 function formatDateBr(value) {
@@ -176,6 +206,45 @@ function formatDateBr(value) {
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const year = String(date.getFullYear());
   return `${day}/${month}/${year}`;
+}
+
+function formatDatePlusDaysBr(value, days = 7) {
+  const date = new Date(value || Date.now());
+  if (Number.isNaN(date.getTime())) return formatDateBr(Date.now() + days * 86400000);
+  date.setDate(date.getDate() + Number(days || 0));
+  return formatDateBr(date.toISOString());
+}
+
+function firstNonEmptyValue(...values) {
+  for (const value of values) {
+    const normalized = normalizeTemplateText(value, 500, { allowEmpty: true });
+    if (normalized) return normalized;
+  }
+  return "";
+}
+
+function formatWhatsapp(value) {
+  const digits = String(value || "").replace(/\D/g, "");
+  if (!digits) return "";
+  if (digits.length === 13 && digits.startsWith("55")) {
+    return `+55 ${digits.slice(2, 4)} ${digits.slice(4, 9)}-${digits.slice(9)}`;
+  }
+  if (digits.length === 11) {
+    return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+  }
+  if (digits.length === 10) {
+    return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
+  }
+  return digits;
+}
+
+function normalizePlaceholderKey(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
 }
 
 function escapeRegExp(value) {
@@ -214,30 +283,68 @@ function htmlToPdfLines(html) {
 }
 
 function applyTemplatePlaceholders(templateHtml, values) {
-  let output = String(templateHtml || "");
+  const template = String(templateHtml || "");
   const replacements = values && typeof values === "object" ? values : {};
-
-  for (const [keyRaw, valueRaw] of Object.entries(replacements)) {
-    const key = String(keyRaw || "").trim();
+  const lookup = new Map();
+  for (const [rawKey, rawValue] of Object.entries(replacements)) {
+    const key = normalizePlaceholderKey(rawKey);
     if (!key) continue;
-    const safeValue = stripDangerousText(String(valueRaw ?? "-"), 1200) || "-";
-    const escaped = escapeRegExp(key);
-    const patterns = [
-      new RegExp(`{{\\s*${escaped}\\s*}}`, "gi"),
-      new RegExp(`\\[\\[\\s*${escaped}\\s*\\]\\]`, "gi"),
-      new RegExp(`%%\\s*${escaped}\\s*%%`, "gi"),
-      new RegExp(`__\\s*${escaped}\\s*__`, "gi"),
-    ];
-    for (const pattern of patterns) {
-      output = output.replace(pattern, safeValue);
-    }
+    const safeValue = normalizeTemplateText(rawValue, 1600, { allowEmpty: true });
+    lookup.set(key, escapeHtml(safeValue));
   }
 
-  return output
+  const totalMatches = template.match(/{{\s*[^{}]+\s*}}/g) || [];
+  const unresolvedKeys = [];
+  let replacedCount = 0;
+
+  let output = template.replace(/{{\s*([^{}]+)\s*}}/g, (fullMatch, placeholderRaw) => {
+    const key = normalizePlaceholderKey(placeholderRaw);
+    if (!key) return "";
+    if (!lookup.has(key)) {
+      unresolvedKeys.push(key);
+      return fullMatch;
+    }
+    replacedCount += 1;
+    return lookup.get(key);
+  });
+
+  output = output
+    .replace(/\[\[\s*([^[\]]+)\s*\]\]/g, (_, placeholderRaw) => {
+      const key = normalizePlaceholderKey(placeholderRaw);
+      if (!key || !lookup.has(key)) return "";
+      return lookup.get(key);
+    })
+    .replace(/%%\s*([^%]+)\s*%%/g, (_, placeholderRaw) => {
+      const key = normalizePlaceholderKey(placeholderRaw);
+      if (!key || !lookup.has(key)) return "";
+      return lookup.get(key);
+    })
+    .replace(/__\s*([A-Za-z0-9_.-]+)\s*__/g, (_, placeholderRaw) => {
+      const key = normalizePlaceholderKey(placeholderRaw);
+      if (!key || !lookup.has(key)) return "";
+      return lookup.get(key);
+    });
+
+  const unresolvedCountByOccurrence = (output.match(/{{\s*[^{}]+\s*}}/g) || []).length;
+  const unresolvedUnique = Array.from(new Set(unresolvedKeys));
+
+  output = output
     .replace(/{{\s*[^{}]+\s*}}/g, "-")
-    .replace(/\[\[\s*[^[\]]+\s*\]\]/g, "-")
-    .replace(/%%\s*[^%]+\s*%%/g, "-")
-    .replace(/__\s*[A-Za-z0-9_.-]+\s*__/g, "-");
+    .replace(/<li>\s*<\/li>/gi, "")
+    .replace(/<p>\s*<\/p>/gi, "");
+
+  const remainingAfterCleanup = Array.from(new Set(
+    (output.match(/{{\s*([^{}]+)\s*}}/g) || [])
+      .map((item) => normalizePlaceholderKey(item.replace(/[{}]/g, "")))
+      .filter(Boolean)
+  ));
+
+  return {
+    html: output,
+    placeholdersTotal: totalMatches.length,
+    placeholdersSubstituidos: replacedCount,
+    placeholdersRestantes: unresolvedCountByOccurrence > 0 ? unresolvedUnique : remainingAfterCleanup,
+  };
 }
 
 function createPdfFromLines(lines) {
@@ -280,6 +387,359 @@ function createPdfFromLines(lines) {
   return pdf;
 }
 
+function ensureHtmlDocument(html) {
+  const base = String(html || "").trim();
+  if (!base) return "<!DOCTYPE html><html><head><meta charset=\"utf-8\" /></head><body></body></html>";
+  const withDoctype = /<!doctype html>/i.test(base) ? base : `<!DOCTYPE html>\n${base}`;
+  if (/<html[\s>]/i.test(withDoctype)) return withDoctype;
+  return `<!DOCTYPE html><html><head><meta charset="utf-8" /></head><body>${withDoctype}</body></html>`;
+}
+
+function inspectRenderedHtml(html) {
+  const source = String(html || "");
+  return {
+    htmlHasStyleTag: /<style[\s>]/i.test(source),
+    htmlHasHeaderClass: /class=["'][^"']*\bheader\b[^"']*["']/i.test(source),
+    htmlHasDoctype: /<!doctype html>/i.test(source),
+    htmlHasHtmlTag: /<html[\s>]/i.test(source),
+    htmlHasHeadTag: /<head[\s>]/i.test(source),
+    htmlHasBodyTag: /<body[\s>]/i.test(source),
+    htmlPreviewFirst300Chars: source.slice(0, 300).replace(/\s+/g, " ").trim(),
+  };
+}
+
+function utf8ToBase64(value) {
+  const bytes = new TextEncoder().encode(String(value || ""));
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += 1) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
+}
+
+function previewRawResponse(value, maxLen = 320) {
+  return String(value || "")
+    .replace(/[\u0000-\u001F\u007F]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, maxLen);
+}
+
+function decodeBytesPreview(bytes, maxBytes = 900) {
+  try {
+    const slice = bytes instanceof Uint8Array
+      ? bytes.subarray(0, Math.min(bytes.length, maxBytes))
+      : new Uint8Array(0);
+    return previewRawResponse(new TextDecoder("utf-8").decode(slice), 320);
+  } catch {
+    return "";
+  }
+}
+
+function normalizePdfshiftEndpoint(rawEndpoint) {
+  const fallback = "https://api.pdfshift.io/v3/convert/pdf";
+  const raw = String(rawEndpoint || "").trim();
+  if (!raw) return fallback;
+
+  let candidate = raw;
+  if (!/^https?:\/\//i.test(candidate)) {
+    candidate = `https://${candidate}`;
+  }
+
+  try {
+    const url = new URL(candidate);
+    const host = String(url.hostname || "").toLowerCase();
+    const path = String(url.pathname || "").replace(/\/+$/, "");
+    const query = String(url.search || "");
+
+    if (host === "api.pdfshift.io") {
+      const normalizedPath = path || "/v3/convert/pdf";
+      return `https://api.pdfshift.io${normalizedPath}${query}`;
+    }
+
+    if (host.endsWith("pdfshift.io") || host.endsWith("pdfshift.com")) {
+      const normalizedPath = path.includes("/convert/pdf") ? path : "/v3/convert/pdf";
+      return `https://api.pdfshift.io${normalizedPath}${query}`;
+    }
+
+    return url.toString();
+  } catch {
+    return fallback;
+  }
+}
+
+function bytesToBase64(bytesLike) {
+  const bytes = bytesLike instanceof Uint8Array ? bytesLike : new Uint8Array(bytesLike || []);
+  let binary = "";
+  const CHUNK = 0x8000;
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    const chunk = bytes.subarray(i, i + CHUNK);
+    for (let j = 0; j < chunk.length; j += 1) {
+      binary += String.fromCharCode(chunk[j]);
+    }
+  }
+  return btoa(binary);
+}
+
+function getPdfRenderConfig(env) {
+  const forcedEngine = firstEnvValue(env, ["PDF_ENGINE", "PDF_RENDER_ENGINE", "PDF_PROVIDER"]).toLowerCase();
+  const pdfshiftKey = firstEnvValue(env, ["PDFSHIFT_API_KEY", "PDFSHIFT_KEY"]);
+  const browserlessToken = firstEnvValue(env, ["BROWSERLESS_TOKEN", "BROWSERLESS_API_KEY", "PDF_BROWSERLESS_TOKEN"]);
+  const allowNativeFallbackRaw = firstEnvValue(env, ["PDF_NATIVE_FALLBACK", "PDF_ALLOW_NATIVE_FALLBACK"]);
+  const allowNativeFallback = allowNativeFallbackRaw
+    ? !/^(0|false|no)$/i.test(allowNativeFallbackRaw)
+    : true;
+
+  const autoEngine = browserlessToken ? "browserless" : (pdfshiftKey ? "pdfshift" : "native_text");
+  const normalizedForced = forcedEngine && forcedEngine !== "auto" ? forcedEngine : "";
+  const engine = normalizedForced || autoEngine;
+  const pdfshiftEndpointRaw = firstEnvValue(env, ["PDFSHIFT_ENDPOINT", "PDFSHIFT_URL"]) || "https://api.pdfshift.io/v3/convert/pdf";
+  const pdfshiftEndpoint = normalizePdfshiftEndpoint(pdfshiftEndpointRaw);
+
+  return {
+    engine,
+    renderMode: engine === "native_text" ? "native_text_fallback" : "remote_html_to_pdf",
+    allowNativeFallback,
+    pdfshift: {
+      apiKey: pdfshiftKey,
+      endpoint: pdfshiftEndpoint,
+      endpointRaw: pdfshiftEndpointRaw,
+      authMode: "x_api_key",
+    },
+    browserless: {
+      token: browserlessToken,
+      endpoint: (firstEnvValue(env, ["BROWSERLESS_ENDPOINT", "BROWSERLESS_URL", "PDF_BROWSERLESS_ENDPOINT"]) || "https://chrome.browserless.io").replace(/\/+$/, ""),
+    },
+  };
+}
+
+function renderPdfViaNativeText(html) {
+  const lines = htmlToPdfLines(html);
+  const pdfText = createPdfFromLines(lines);
+  const pdfBytes = new TextEncoder().encode(pdfText);
+  return {
+    ok: true,
+    pdfBytes,
+    renderMode: "native_text_fallback",
+    pdfEngine: "native_text",
+  };
+}
+
+async function renderPdfViaPdfshift(html, config) {
+  if (!config?.apiKey) {
+    return {
+      ok: false,
+      reason: "pdf_engine_not_configured",
+      status: 503,
+      detail: "PDFSHIFT_API_KEY ausente",
+      renderMode: "remote_html_to_pdf",
+      pdfEngine: "pdfshift",
+      providerEndpoint: String(config?.endpoint || ""),
+      providerAuthMode: "x_api_key",
+    };
+  }
+
+  const payload = {
+    source: html,
+    print_background: true,
+    use_print: true,
+    format: "A4",
+    margin: "0",
+  };
+
+  let response;
+  try {
+    response = await fetch(config.endpoint, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json; charset=utf-8",
+        "x-api-key": String(config.apiKey || ""),
+        accept: "application/pdf, application/json;q=0.9, text/plain;q=0.8, */*;q=0.5",
+      },
+      body: JSON.stringify(payload),
+    });
+  } catch (err) {
+    return {
+      ok: false,
+      reason: "pdf_render_failed",
+      status: 502,
+      detail: `pdfshift_fetch_error:${stripDangerousText(String(err?.message || "erro_desconhecido"), 220)}`,
+      renderMode: "remote_html_to_pdf",
+      pdfEngine: "pdfshift",
+      providerEndpoint: String(config.endpoint || ""),
+      providerAuthMode: "x_api_key",
+    };
+  }
+
+  const providerStatus = Number(response.status || 0);
+  const providerContentType = String(response.headers.get("content-type") || "").toLowerCase();
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => "");
+    const bodyPreview = previewRawResponse(text, 320);
+    return {
+      ok: false,
+      reason: "pdf_render_failed",
+      status: 502,
+      detail: `pdfshift_http_${providerStatus}:${bodyPreview || "sem_corpo"}`,
+      renderMode: "remote_html_to_pdf",
+      pdfEngine: "pdfshift",
+      providerStatus,
+      providerContentType,
+      providerBodyPreview: bodyPreview,
+      providerEndpoint: String(config.endpoint || ""),
+      providerAuthMode: "x_api_key",
+    };
+  }
+
+  const buffer = await response.arrayBuffer();
+  const pdfBytes = new Uint8Array(buffer);
+  const firstBytesText = decodeBytesPreview(pdfBytes, 40);
+  const headerLooksPdf = String(firstBytesText || "").includes("%PDF-");
+  const contentTypeLooksPdf = (
+    providerContentType.includes("application/pdf")
+    || providerContentType.includes("application/octet-stream")
+  );
+
+  if (!headerLooksPdf && !contentTypeLooksPdf) {
+    const bodyPreview = decodeBytesPreview(pdfBytes, 900);
+    return {
+      ok: false,
+      reason: "pdf_render_failed",
+      status: 502,
+      detail: `pdfshift_unexpected_response:${bodyPreview || "resposta_nao_pdf"}`,
+      renderMode: "remote_html_to_pdf",
+      pdfEngine: "pdfshift",
+      providerStatus,
+      providerContentType,
+      providerBodyPreview: bodyPreview,
+      providerEndpoint: String(config.endpoint || ""),
+      providerAuthMode: "x_api_key",
+    };
+  }
+
+  return {
+    ok: true,
+    pdfBytes,
+    renderMode: "remote_html_to_pdf",
+    pdfEngine: "pdfshift",
+    providerStatus,
+    providerContentType,
+    providerEndpoint: String(config.endpoint || ""),
+    providerAuthMode: "x_api_key",
+  };
+}
+
+async function renderPdfViaBrowserless(html, config) {
+  if (!config?.token) {
+    return {
+      ok: false,
+      reason: "pdf_engine_not_configured",
+      status: 503,
+      detail: "BROWSERLESS_TOKEN ausente",
+      renderMode: "remote_html_to_pdf",
+      pdfEngine: "browserless",
+    };
+  }
+
+  const endpoint = `${config.endpoint}/pdf?token=${encodeURIComponent(config.token)}`;
+  const commonOptions = {
+    format: "A4",
+    printBackground: true,
+    preferCSSPageSize: true,
+    margin: { top: "0.2in", right: "0.2in", bottom: "0.2in", left: "0.2in" },
+  };
+  const attempts = [
+    {
+      label: "html_payload",
+      payload: {
+        html,
+        waitUntil: "networkidle0",
+        options: commonOptions,
+      },
+    },
+    {
+      label: "data_url",
+      payload: {
+        url: `data:text/html;base64,${utf8ToBase64(html)}`,
+        waitUntil: "networkidle0",
+        options: commonOptions,
+      },
+    },
+  ];
+
+  const errors = [];
+  for (const attempt of attempts) {
+    try {
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: { "content-type": "application/json; charset=utf-8" },
+        body: JSON.stringify(attempt.payload),
+      });
+      if (!response.ok) {
+        const text = stripDangerousText(await response.text().catch(() => ""), 240);
+        errors.push(`${attempt.label}:${text || `http_${response.status}`}`);
+        continue;
+      }
+      const buffer = await response.arrayBuffer();
+      return {
+        ok: true,
+        pdfBytes: new Uint8Array(buffer),
+        renderMode: "remote_html_to_pdf",
+        pdfEngine: "browserless",
+      };
+    } catch (err) {
+      errors.push(`${attempt.label}:${stripDangerousText(String(err?.message || "erro_desconhecido"), 180)}`);
+    }
+  }
+
+  return {
+    ok: false,
+    reason: "pdf_render_failed",
+    status: 502,
+    detail: errors.join("|").slice(0, 500),
+    renderMode: "remote_html_to_pdf",
+    pdfEngine: "browserless",
+  };
+}
+
+async function renderHtmlToPdf(html, env) {
+  const config = getPdfRenderConfig(env);
+  if (config.engine === "native_text") {
+    return renderPdfViaNativeText(html);
+  }
+
+  let primaryResult = null;
+  if (config.engine === "pdfshift") {
+    primaryResult = await renderPdfViaPdfshift(html, config.pdfshift);
+  } else if (config.engine === "browserless") {
+    primaryResult = await renderPdfViaBrowserless(html, config.browserless);
+  } else {
+    primaryResult = {
+      ok: false,
+      reason: "pdf_engine_not_supported",
+      status: 400,
+      detail: `Engine nao suportada: ${config.engine}`,
+      renderMode: config.renderMode,
+      pdfEngine: config.engine,
+    };
+  }
+
+  if (primaryResult?.ok) return primaryResult;
+
+  if (config.allowNativeFallback) {
+    const fallback = renderPdfViaNativeText(html);
+    return {
+      ...fallback,
+      fallbackFrom: String(primaryResult?.pdfEngine || config.engine || "unknown"),
+      fallbackReason: String(primaryResult?.reason || "pdf_render_failed"),
+      fallbackDetail: stripDangerousText(String(primaryResult?.detail || ""), 240),
+    };
+  }
+
+  return primaryResult;
+}
+
 function readDetalhes(row) {
   if (row?.detalhes && typeof row.detalhes === "object" && !Array.isArray(row.detalhes)) {
     return row.detalhes;
@@ -293,60 +753,243 @@ function readDetalhes(row) {
   return {};
 }
 
-function buildTemplateValues(row) {
+function formatDateIfPresent(value, fallback = "-") {
+  const normalized = normalizeTemplateText(value, 40, { allowEmpty: true });
+  if (!normalized) return fallback;
+  const asDate = formatDateBr(normalized);
+  return asDate === "-" ? fallback : asDate;
+}
+
+function addMonthsAndFormat(value, months, fallback = "-") {
+  const baseDate = new Date(value || "");
+  if (Number.isNaN(baseDate.getTime())) return fallback;
+  const safeMonths = Number.isFinite(Number(months)) ? Math.max(0, Math.round(Number(months))) : 0;
+  baseDate.setMonth(baseDate.getMonth() + safeMonths);
+  return formatDateBr(baseDate.toISOString());
+}
+
+function getOfficialWhatsapp(env, detalhes) {
+  const envValue = firstEnvValue(env, [
+    "WHATSAPP_HAGAV",
+    "HAGAV_WHATSAPP",
+    "HAGAV_WHATSAPP_OFICIAL",
+    "NEXT_PUBLIC_WHATSAPP_HAGAV",
+    "NEXT_PUBLIC_HAGAV_WHATSAPP",
+  ]);
+  const fromDetalhes = firstNonEmptyValue(
+    detalhes?.contrato?.whatsapp_hagav,
+    detalhes?.comercial?.whatsapp_hagav,
+    detalhes?.whatsapp_hagav,
+  );
+  return formatWhatsapp(envValue || fromDetalhes || "5573982284382");
+}
+
+function buildTemplateValues(row, env) {
   const detalhes = readDetalhes(row);
   const contrato = (detalhes?.contrato && typeof detalhes.contrato === "object") ? detalhes.contrato : {};
+  const comercial = (detalhes?.comercial && typeof detalhes.comercial === "object") ? detalhes.comercial : {};
   const dataHojeIso = new Date().toISOString();
-  const valorFinal = Number(
-    contrato?.valor_final
+
+  const contratoNumero = normalizeTemplateText(
+    firstNonEmptyValue(contrato?.numero_contrato, contrato?.contrato_numero, `CONT-${row?.id || "-"}`),
+    80
+  );
+
+  const clienteNome = firstNonEmptyValue(row?.nome, contrato?.nome_cliente, detalhes?.nome, "-");
+  const empresaCliente = firstNonEmptyValue(
+    contrato?.empresa_cliente,
+    detalhes?.empresa_cliente,
+    detalhes?.empresa,
+    "Nao informado"
+  );
+  const cpfCnpjCliente = firstNonEmptyValue(
+    contrato?.cpf_cnpj_cliente,
+    detalhes?.cpf_cnpj_cliente,
+    detalhes?.cpf_cnpj,
+    "Nao informado"
+  );
+  const emailCliente = firstNonEmptyValue(
+    contrato?.email_cliente,
+    detalhes?.email_cliente,
+    detalhes?.email,
+    "Nao informado"
+  );
+  const enderecoCliente = firstNonEmptyValue(
+    contrato?.endereco_cliente,
+    detalhes?.endereco_cliente,
+    detalhes?.endereco,
+    "Nao informado"
+  );
+  const whatsappCliente = formatWhatsapp(
+    firstNonEmptyValue(row?.whatsapp, contrato?.whatsapp_cliente, detalhes?.whatsapp, "")
+  );
+
+  const servico = firstNonEmptyValue(
+    contrato?.servico,
+    row?.servico,
+    row?.pacote_sugerido,
+    detalhes?.servico,
+    "Servico audiovisual"
+  );
+  const quantidade = firstNonEmptyValue(
+    contrato?.quantidade,
+    detalhes?.quantidade,
+    detalhes?.comercial?.quantidade,
+    "1"
+  );
+  const descricaoServico = firstNonEmptyValue(
+    contrato?.descricao_servico,
+    detalhes?.descricao_servico,
+    row?.resumo_orcamento,
+    detalhes?.resumo_orcamento,
+    `Prestacao de servicos de ${servico} conforme escopo aprovado.`
+  );
+
+  const valorTotalNum = Number(
+    contrato?.valor_total
+    ?? contrato?.valor_final
     ?? row?.valor_fechado
     ?? row?.preco_final
     ?? row?.valor_sugerido
     ?? 0
   );
-  const dataInicio = String(contrato?.data_inicio || "");
-  const vencimento = String(contrato?.vencimento || row?.validade_ate || "");
-  const duracaoMeses = String(contrato?.duracao_meses || "12");
-  const formaPagamento = normalizePdfText(contrato?.forma_pagamento || "A combinar", 180);
-  const responsavel = normalizePdfText(contrato?.responsavel || row?.responsavel || "Time HAGAV", 120);
-  const recorrente = contrato?.recorrente ? "Sim" : "Nao";
-  const servico = normalizePdfText(row?.servico || row?.pacote_sugerido || "-", 180);
-  const observacoes = normalizePdfText(contrato?.observacoes || row?.observacoes_internas || "-", 300);
-  const clienteNome = normalizePdfText(row?.nome || "-", 120);
-  const whatsapp = normalizePdfText(row?.whatsapp || "-", 40);
-  const contratoNumero = normalizePdfText(`CONT-${row?.id || "-"}`, 80);
+
+  const formaPagamento = firstNonEmptyValue(
+    contrato?.forma_pagamento,
+    comercial?.forma_pagamento,
+    detalhes?.forma_pagamento,
+    "A combinar"
+  );
+  const condicaoPagamento = firstNonEmptyValue(
+    contrato?.condicao_pagamento,
+    comercial?.condicao_pagamento,
+    detalhes?.condicao_pagamento,
+    "Conforme combinado"
+  );
+
+  const dataInicioRaw = firstNonEmptyValue(contrato?.data_inicio, detalhes?.data_inicio, row?.created_at);
+  const vencimentoRaw = firstNonEmptyValue(contrato?.vencimento, row?.validade_ate, contrato?.data_termino);
+  const duracaoMeses = Math.max(1, Math.round(Number(contrato?.duracao_meses || 12) || 12));
+  const dataInicio = formatDateIfPresent(dataInicioRaw, formatDateBr(dataHojeIso));
+  const vencimento = formatDateIfPresent(vencimentoRaw, formatDatePlusDaysBr(dataHojeIso, 30));
+  const dataTermino = formatDateIfPresent(
+    firstNonEmptyValue(contrato?.data_termino, vencimentoRaw),
+    addMonthsAndFormat(dataInicioRaw, duracaoMeses, vencimento)
+  );
+  const dataAssinatura = formatDateIfPresent(contrato?.data_assinatura, formatDateBr(dataHojeIso));
+
+  const tipoProjeto = firstNonEmptyValue(
+    contrato?.tipo_projeto,
+    contrato?.recorrente === false ? "Pontual" : "Recorrente"
+  );
+  const renovacao = firstNonEmptyValue(
+    contrato?.renovacao,
+    contrato?.recorrente === false
+      ? "Sem renovacao automatica."
+      : "Renovacao mediante alinhamento comercial entre as partes."
+  );
+
+  const observacoes = normalizeTemplateText(
+    firstNonEmptyValue(
+      contrato?.observacoes,
+      row?.observacoes_internas,
+      detalhes?.observacoes
+    ),
+    1200,
+    { allowEmpty: true }
+  );
+
+  const cidadeForo = firstNonEmptyValue(
+    contrato?.cidade_foro,
+    detalhes?.cidade_foro,
+    firstEnvValue(env, ["HAGAV_CIDADE_FORO", "CIDADE_FORO_CONTRATO"]),
+    "Salvador/BA"
+  );
+  const representanteHagav = firstNonEmptyValue(
+    contrato?.representante_hagav,
+    detalhes?.representante_hagav,
+    firstEnvValue(env, ["HAGAV_REPRESENTANTE", "HAGAV_SIGNATORY"]),
+    "HAGAV Studio"
+  );
+  const cnpjHagav = firstNonEmptyValue(
+    contrato?.cnpj_hagav,
+    detalhes?.cnpj_hagav,
+    firstEnvValue(env, ["HAGAV_CNPJ", "CNPJ_HAGAV"]),
+    "00.000.000/0000-00"
+  );
+  const emailHagav = firstNonEmptyValue(
+    contrato?.email_hagav,
+    detalhes?.email_hagav,
+    firstEnvValue(env, ["HAGAV_EMAIL", "EMAIL_HAGAV", "NEXT_PUBLIC_HAGAV_EMAIL"]),
+    "contato@hagav.com.br"
+  );
+  const enderecoHagav = firstNonEmptyValue(
+    contrato?.endereco_hagav,
+    detalhes?.endereco_hagav,
+    firstEnvValue(env, ["HAGAV_ENDERECO", "ENDERECO_HAGAV"]),
+    "A combinar"
+  );
+  const whatsappHagav = getOfficialWhatsapp(env, detalhes);
 
   const base = {
-    id: normalizePdfText(row?.id || "-", 80),
-    contrato_numero: contratoNumero,
+    id: normalizeTemplateText(row?.id || "-", 80),
     numero_contrato: contratoNumero,
+    contrato_numero: contratoNumero,
     data_emissao: formatDateBr(dataHojeIso),
     data_hoje: formatDateBr(dataHojeIso),
+    data_assinatura: dataAssinatura,
+    data_inicio: dataInicio,
+    inicio: dataInicio,
+    data_termino: dataTermino,
+    vencimento,
+    duracao_meses: String(duracaoMeses),
+    duracao: `${duracaoMeses} meses`,
+    renovacao,
+    tipo_projeto: tipoProjeto,
+    status_contrato: normalizeTemplateText(contrato?.status || row?.status_contrato || "aguardando_contrato", 40),
+
+    nome_cliente: clienteNome,
     cliente_nome: clienteNome,
     nome: clienteNome,
-    whatsapp,
+    empresa_cliente: empresaCliente,
+    cpf_cnpj_cliente: cpfCnpjCliente,
+    email_cliente: emailCliente,
+    endereco_cliente: enderecoCliente,
+    whatsapp_cliente: whatsappCliente || "-",
+    whatsapp: whatsappCliente || "-",
+
+    servico,
     servico_plano: servico,
     plano_servico: servico,
-    servico,
-    valor_contrato: formatMoney(valorFinal),
-    valor_final: formatMoney(valorFinal),
-    preco_final: formatMoney(valorFinal),
-    data_inicio: normalizePdfText(dataInicio || "-", 30),
-    inicio: normalizePdfText(dataInicio || "-", 30),
-    vencimento: normalizePdfText(vencimento || "-", 30),
-    duracao_meses: normalizePdfText(duracaoMeses, 20),
-    recorrente,
+    quantidade,
+    descricao_servico: descricaoServico,
+
+    valor_total: formatMoney(valorTotalNum, { withCurrency: false }),
+    valor_contrato: formatMoney(valorTotalNum, { withCurrency: true }),
+    valor_final: formatMoney(valorTotalNum, { withCurrency: true }),
+    preco_final: formatMoney(valorTotalNum, { withCurrency: true }),
     forma_pagamento: formaPagamento,
-    responsavel,
-    observacoes: observacoes,
-    observacoes_contrato: observacoes,
-    status_contrato: normalizePdfText(contrato?.status || row?.status_contrato || "ativo", 40),
+    condicao_pagamento: condicaoPagamento,
+
+    observacoes: observacoes || "Sem observacoes adicionais.",
+    observacoes_contrato: observacoes || "Sem observacoes adicionais.",
+
+    cidade_foro: cidadeForo,
+    representante_hagav: representanteHagav,
+    cnpj_hagav: cnpjHagav,
+    email_hagav: emailHagav,
+    endereco_hagav: enderecoHagav,
+    whatsapp_hagav: whatsappHagav || "-",
+
+    responsavel: firstNonEmptyValue(contrato?.responsavel, row?.responsavel, "Time HAGAV"),
+    recorrente: contrato?.recorrente === false ? "Nao" : "Sim",
   };
 
   const expanded = {};
   for (const [key, value] of Object.entries(base)) {
-    expanded[key] = value;
-    expanded[key.toUpperCase()] = value;
+    const normalized = normalizeTemplateText(value, 1600, { allowEmpty: true });
+    expanded[key] = normalized;
+    expanded[key.toUpperCase()] = normalized;
   }
   return expanded;
 }
@@ -393,17 +1036,19 @@ async function loadOfficialContratoTemplate(request, env) {
 
 async function renderContratoTemplateToLines(row, request, env) {
   const templateInfo = await loadOfficialContratoTemplate(request, env);
-  const values = buildTemplateValues(row);
-  const renderedHtml = applyTemplatePlaceholders(templateInfo.html, values);
-  const lines = htmlToPdfLines(renderedHtml);
-  const firstCharsRendered = renderedHtml.slice(0, 120).replace(/\s+/g, " ").trim();
+  const values = buildTemplateValues(row, env);
+  const rendered = applyTemplatePlaceholders(templateInfo.html, values);
+  const renderedHtml = ensureHtmlDocument(rendered.html);
+  const htmlDiagnostics = inspectRenderedHtml(renderedHtml);
 
   return {
-    lines,
     renderedHtml,
+    htmlDiagnostics,
+    placeholdersTotal: rendered.placeholdersTotal,
+    placeholdersSubstituidos: rendered.placeholdersSubstituidos,
+    placeholdersRestantes: rendered.placeholdersRestantes,
     templateSource: templateInfo.source,
     templatePath: templateInfo.templatePath,
-    firstCharsRendered,
   };
 }
 
@@ -438,10 +1083,23 @@ async function uploadPdfIfPossible(config, env, pdfContent, fileName) {
   };
 }
 
-async function updateContractLink(config, row, linkPdf) {
+async function updateContractLink(config, row, linkPdf, pdfMeta = {}) {
   const detalhes = readDetalhes(row);
   const contratoAtual = (detalhes?.contrato && typeof detalhes.contrato === "object") ? detalhes.contrato : {};
   const nowIso = new Date().toISOString();
+  const renderMode = stripDangerousText(String(pdfMeta?.render_mode || ""), 80);
+  const pdfEngine = stripDangerousText(String(pdfMeta?.pdf_engine || ""), 80);
+  const pdfFallbackUsed = Boolean(pdfMeta?.pdf_fallback_used);
+  const pdfFallbackFrom = stripDangerousText(String(pdfMeta?.pdf_fallback_from || ""), 80);
+  const pdfFallbackReason = stripDangerousText(String(pdfMeta?.pdf_fallback_reason || ""), 120);
+  const pdfComercialLiberado = Boolean(
+    linkPdf
+    && pdfEngine
+    && renderMode
+    && renderMode !== "native_text_fallback"
+    && pdfEngine !== "native_text"
+    && !pdfFallbackUsed
+  );
 
   return fetchSupabase(
     config,
@@ -456,6 +1114,12 @@ async function updateContractLink(config, row, linkPdf) {
             ...contratoAtual,
             link_pdf: linkPdf || "",
             contrato_gerado_em: nowIso,
+            pdf_render_mode: renderMode,
+            pdf_engine: pdfEngine,
+            pdf_fallback_used: pdfFallbackUsed,
+            pdf_fallback_from: pdfFallbackFrom,
+            pdf_fallback_reason: pdfFallbackReason,
+            pdf_comercial_liberado: pdfComercialLiberado,
             atualizado_em: nowIso
           }
         }
@@ -524,15 +1188,91 @@ export async function onRequestPost(context) {
       template_path: CONTRATO_TEMPLATE_PATH,
     });
   }
-  const { lines, renderedHtml, templateSource, templatePath, firstCharsRendered } = rendered;
+  const {
+    renderedHtml,
+    htmlDiagnostics,
+    placeholdersTotal,
+    placeholdersSubstituidos,
+    placeholdersRestantes,
+    templateSource,
+    templatePath
+  } = rendered;
+  const {
+    htmlHasStyleTag,
+    htmlHasHeaderClass,
+    htmlPreviewFirst300Chars,
+    htmlHasDoctype,
+    htmlHasHtmlTag,
+    htmlHasHeadTag,
+    htmlHasBodyTag,
+  } = htmlDiagnostics || {};
   logPdf(requestId, "template_render", "Template renderizado para contrato", {
     template_source: templateSource,
     template_path: templatePath,
-    lines_count: Array.isArray(lines) ? lines.length : 0,
-    first_120_chars: firstCharsRendered,
+    placeholders_total: Number(placeholdersTotal || 0),
+    placeholders_substituidos: Number(placeholdersSubstituidos || 0),
+    placeholders_restantes: Array.isArray(placeholdersRestantes) ? placeholdersRestantes : [],
+    html_has_style_tag: Boolean(htmlHasStyleTag),
+    html_has_header_class: Boolean(htmlHasHeaderClass),
+    html_has_doctype: Boolean(htmlHasDoctype),
+    html_has_html_tag: Boolean(htmlHasHtmlTag),
+    html_has_head_tag: Boolean(htmlHasHeadTag),
+    html_has_body_tag: Boolean(htmlHasBodyTag),
+    html_preview_first_300_chars: String(htmlPreviewFirst300Chars || ""),
+  });
+  if (Array.isArray(placeholdersRestantes) && placeholdersRestantes.length > 0) {
+    return fail(requestId, "template_placeholder", "template_placeholders_missing", 422, {
+      template_source: templateSource,
+      template_path: templatePath,
+      placeholders_total: Number(placeholdersTotal || 0),
+      placeholders_substituidos: Number(placeholdersSubstituidos || 0),
+      placeholders_restantes: placeholdersRestantes,
+      html_has_style_tag: Boolean(htmlHasStyleTag),
+      html_has_header_class: Boolean(htmlHasHeaderClass),
+      html_preview_first_300_chars: String(htmlPreviewFirst300Chars || ""),
+    });
+  }
+
+  const pdfRender = await renderHtmlToPdf(renderedHtml, env);
+  if (!pdfRender.ok) {
+    return fail(requestId, "pdf_render", pdfRender.reason || "pdf_render_failed", pdfRender.status || 502, {
+      detail: previewRawResponse(String(pdfRender.detail || "html_to_pdf_render_failed"), 320),
+      template_source: templateSource,
+      template_path: templatePath,
+      render_mode: String(pdfRender.renderMode || "remote_html_to_pdf"),
+      pdf_engine: String(pdfRender.pdfEngine || "unknown"),
+      provider_status: Number(pdfRender.providerStatus || 0) || undefined,
+      provider_content_type: String(pdfRender.providerContentType || ""),
+      provider_body_preview: String(pdfRender.providerBodyPreview || ""),
+      provider_endpoint: String(pdfRender.providerEndpoint || ""),
+      provider_auth_mode: String(pdfRender.providerAuthMode || ""),
+      html_has_style_tag: Boolean(htmlHasStyleTag),
+      html_has_header_class: Boolean(htmlHasHeaderClass),
+      html_preview_first_300_chars: String(htmlPreviewFirst300Chars || ""),
+    });
+  }
+  const pdfContent = pdfRender.pdfBytes;
+  const pdfBytes = Number(pdfContent?.byteLength || 0);
+  const renderMode = String(pdfRender.renderMode || "remote_html_to_pdf");
+  const pdfEngine = String(pdfRender.pdfEngine || "unknown");
+  const pdfFallbackUsed = Boolean(pdfRender?.fallbackFrom);
+  const pdfFallbackFrom = String(pdfRender?.fallbackFrom || "");
+  const pdfFallbackReason = String(pdfRender?.fallbackReason || "");
+  logPdf(requestId, "pdf_render", "PDF do contrato gerado a partir do HTML renderizado", {
+    render_mode: renderMode,
+    pdf_engine: pdfEngine,
+    pdf_bytes: pdfBytes,
+    fallback_used: pdfFallbackUsed,
+    fallback_from: pdfFallbackFrom,
+    fallback_reason: pdfFallbackReason,
+    provider_status: Number(pdfRender.providerStatus || 0) || undefined,
+    provider_content_type: String(pdfRender.providerContentType || ""),
+    provider_endpoint: String(pdfRender.providerEndpoint || ""),
+    provider_auth_mode: String(pdfRender.providerAuthMode || ""),
+    html_has_style_tag: Boolean(htmlHasStyleTag),
+    html_has_header_class: Boolean(htmlHasHeaderClass),
   });
 
-  const pdfContent = createPdfFromLines(lines);
   const fileName = `contrato-${id}-${Date.now()}.pdf`;
   const uploadResult = await uploadPdfIfPossible(config, env, pdfContent, fileName);
   if (!uploadResult.ok) {
@@ -541,12 +1281,31 @@ export async function onRequestPost(context) {
       file_name: fileName,
       template_source: templateSource,
       template_path: templatePath,
+      render_mode: renderMode,
+      pdf_engine: pdfEngine,
+      pdf_fallback_used: pdfFallbackUsed,
+      pdf_fallback_from: pdfFallbackFrom,
+      pdf_fallback_reason: pdfFallbackReason,
+      provider_status: Number(pdfRender.providerStatus || 0) || undefined,
+      provider_content_type: String(pdfRender.providerContentType || ""),
+      provider_body_preview: String(pdfRender.providerBodyPreview || ""),
+      provider_endpoint: String(pdfRender.providerEndpoint || ""),
+      provider_auth_mode: String(pdfRender.providerAuthMode || ""),
+      html_has_style_tag: Boolean(htmlHasStyleTag),
+      html_has_header_class: Boolean(htmlHasHeaderClass),
+      html_preview_first_300_chars: String(htmlPreviewFirst300Chars || ""),
     });
   }
 
   let linkPdf = "";
   linkPdf = stripDangerousText(uploadResult.link || "", 1000);
-  const updateResult = await updateContractLink(config, row, linkPdf);
+  const updateResult = await updateContractLink(config, row, linkPdf, {
+    render_mode: renderMode,
+    pdf_engine: pdfEngine,
+    pdf_fallback_used: pdfFallbackUsed,
+    pdf_fallback_from: pdfFallbackFrom,
+    pdf_fallback_reason: pdfFallbackReason,
+  });
   if (!updateResult.ok) {
     return fail(requestId, "persist_link", "deal_link_update_failed", 502, {
       detail: stripDangerousText(String(updateResult.reason || "deal_update_failed"), 180),
@@ -554,6 +1313,11 @@ export async function onRequestPost(context) {
       link_pdf: linkPdf,
       template_source: templateSource,
       template_path: templatePath,
+      render_mode: renderMode,
+      pdf_engine: pdfEngine,
+      pdf_fallback_used: pdfFallbackUsed,
+      pdf_fallback_from: pdfFallbackFrom,
+      pdf_fallback_reason: pdfFallbackReason,
     });
   }
   logPdf(requestId, "persist_link", "Link do contrato salvo no deal", {
@@ -572,10 +1336,26 @@ export async function onRequestPost(context) {
     upload_reason: uploadResult.ok ? "" : uploadResult.reason,
     template_source: templateSource,
     template_path: templatePath,
-    first_120_chars_rendered: firstCharsRendered,
-    rendered_html: renderedHtml,
+    render_mode: renderMode,
+    pdf_engine: pdfEngine,
+    pdf_fallback_used: pdfFallbackUsed,
+    pdf_fallback_from: pdfFallbackFrom,
+    pdf_fallback_reason: pdfFallbackReason,
+    provider_status: Number(pdfRender.providerStatus || 0) || undefined,
+    provider_content_type: String(pdfRender.providerContentType || ""),
+    provider_body_preview: String(pdfRender.providerBodyPreview || ""),
+    provider_endpoint: String(pdfRender.providerEndpoint || ""),
+    provider_auth_mode: String(pdfRender.providerAuthMode || ""),
+    html_has_style_tag: Boolean(htmlHasStyleTag),
+    html_has_header_class: Boolean(htmlHasHeaderClass),
+    html_preview_first_300_chars: String(htmlPreviewFirst300Chars || ""),
+    html_rendered_preview: String(htmlPreviewFirst300Chars || ""),
+    placeholders_total: Number(placeholdersTotal || 0),
+    placeholders_substituidos: Number(placeholdersSubstituidos || 0),
+    placeholders_restantes: Array.isArray(placeholdersRestantes) ? placeholdersRestantes : [],
+    pdf_bytes: pdfBytes,
     request_id: requestId,
-    pdf_base64: typeof btoa === "function" ? btoa(pdfContent) : ""
+    pdf_base64: bytesToBase64(pdfContent)
   });
 }
 

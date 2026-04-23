@@ -822,6 +822,11 @@ async function generatePdfDocument(endpoint, id, { adminKey } = {}) {
     const stage = String(parsed?.stage || '').trim();
     const requestId = String(parsed?.request_id || '').trim();
     const uploadReason = String(parsed?.upload_reason || '').trim();
+    const providerStatus = Number(parsed?.provider_status || 0) || 0;
+    const providerContentType = String(parsed?.provider_content_type || '').trim();
+    const providerBodyPreview = String(parsed?.provider_body_preview || '').trim();
+    const providerEndpoint = String(parsed?.provider_endpoint || '').trim();
+    const providerAuthMode = String(parsed?.provider_auth_mode || '').trim();
     const rawSnippet = String(rawText || '').trim().slice(0, 300);
     const detail = String(
       parsed?.detail
@@ -840,6 +845,11 @@ async function generatePdfDocument(endpoint, id, { adminKey } = {}) {
       upload_reason: uploadReason,
       detail,
       raw_snippet: rawSnippet,
+      provider_status: providerStatus,
+      provider_content_type: providerContentType,
+      provider_body_preview: providerBodyPreview,
+      provider_endpoint: providerEndpoint,
+      provider_auth_mode: providerAuthMode,
       has_admin_key_header: Boolean(key),
       has_session_token: Boolean(token),
     });
@@ -850,6 +860,11 @@ async function generatePdfDocument(endpoint, id, { adminKey } = {}) {
       if (requestId) parts.push(`RID: ${requestId}.`);
       if (uploadReason) parts.push(`Upload: ${uploadReason}.`);
       if (detail) parts.push(`Detalhe: ${detail}.`);
+      if (providerEndpoint) parts.push(`Provider: ${providerEndpoint}.`);
+      if (providerAuthMode) parts.push(`Auth: ${providerAuthMode}.`);
+      if (providerStatus) parts.push(`HTTP provider: ${providerStatus}.`);
+      if (providerContentType) parts.push(`Content-Type provider: ${providerContentType}.`);
+      if (providerBodyPreview) parts.push(`Preview provider: ${providerBodyPreview}.`);
       return parts.join(' ');
     };
 
@@ -879,6 +894,9 @@ async function generatePdfDocument(endpoint, id, { adminKey } = {}) {
     }
     if (reason === 'template_not_found') {
       throw new Error(withMeta('Template oficial de PDF nao encontrado no deploy. Verifique publicacao em /templates.'));
+    }
+    if (reason === 'template_placeholders_missing') {
+      throw new Error(withMeta('Template de PDF com placeholders sem valor. Revise mapeamento de campos antes de gerar para uso comercial.'));
     }
     throw new Error(withMeta(reason || `Falha ao gerar PDF (${response.status})`));
   }

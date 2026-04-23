@@ -69,9 +69,9 @@
     .page {
       position: relative;
       z-index: 1;
-      width: min(100%, 560px);
+      width: min(100%, 596px);
       margin: 0 auto;
-      padding: 14px 16px 72px;
+      padding: 16px 16px 72px;
       display: flex;
       flex-direction: column;
       gap: 10px;
@@ -85,28 +85,34 @@
     .logo {
       display: flex;
       justify-content: center;
-      margin-bottom: -2px;
+      margin-bottom: -8px;
+      padding-top: 2px;
     }
     .logo-link {
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      padding: 2px;
+      width: min(62vw, 240px);
+      padding: 0;
       margin: 0;
       border: none;
       background: none;
-      border-radius: 14px;
+      border-radius: 20px;
       text-decoration: none;
       cursor: pointer;
       transition: transform .18s ease, filter .2s ease, opacity .2s ease;
       -webkit-tap-highlight-color: transparent;
+      overflow: hidden;
+      animation: logoFloat 12s ease-in-out infinite alternate;
     }
     .logo img {
-      width: min(85vw, 272px);
+      width: 100%;
+      max-width: none;
       height: auto;
       display: block;
       filter: drop-shadow(0 10px 22px rgba(0, 0, 0, 0.34));
-      animation: logoFloat 12s ease-in-out infinite alternate;
+      transform: scale(1.3) translateY(10px);
+      transform-origin: center top;
     }
     .logo-link:focus-visible {
       outline: 1px solid rgba(255, 196, 108, 0.58);
@@ -133,39 +139,37 @@
     }
     .content.budget-focus { padding-top: 12px; }
     .content.budget-focus .hero-copy { display: none; }
-    h1 {
-      font-size: clamp(11.5px, 2.7vw, 12.5px);
-      font-weight: 800;
-      line-height: 1.42;
-      letter-spacing: 0.02em;
-      text-transform: uppercase;
-      text-align: center;
-      margin-bottom: 8px;
-      white-space: normal;
-    }
-    h1 em {
-      display: block;
-      font-style: normal;
-      color: var(--yellow);
-    }
-    .stats {
-      list-style: none;
+    .hero-copy {
+      position: relative;
+      z-index: 1;
       display: flex;
-      justify-content: center;
-      flex-wrap: wrap;
-      gap: 7px 12px;
-      margin-bottom: 12px;
-    }
-    .stats li {
-      font-size: 11.5px;
-      color: var(--text-soft);
-      font-weight: 600;
-      display: flex;
+      flex-direction: column;
       align-items: center;
-      gap: 5px;
-      white-space: nowrap;
+      gap: 0;
+      padding: 4px 8px 14px;
+      text-align: center;
     }
-    .stats .check { color: var(--yellow); font-size: 10px; }
+    .hero-microcopy {
+      display: block;
+      max-width: 336px;
+      margin: 0 auto;
+      color: rgba(255,255,255,.85);
+      font-size: 12.5px;
+      line-height: 1.58;
+      font-weight: 500;
+      letter-spacing: 0.01em;
+      text-wrap: balance;
+    }
+    .hero-microcopy strong {
+      color: rgba(255, 205, 126, 0.96);
+      font-weight: 700;
+    }
+    #pane-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-top: 8px;
+    }
     .hidden { display: none !important; }
     .btn,
     .mode-card {
@@ -274,17 +278,26 @@
     .mode-go:active { transform: scale(.985); }
 
     @media (max-width: 560px) {
-      .page { padding: 12px 14px 64px; }
-      .logo img { width: min(84vw, 248px); }
-      .btn { padding: 11px 12px; font-size: 14px; }
-      .stats { margin-bottom: 10px; }
+      .page { padding: 14px 14px 64px; gap: 14px; }
+      .logo { margin-bottom: 8px; }
+      .logo-link { width: min(66vw, 220px); }
+      .logo img { transform: scale(1.18) translateY(4px); }
+      .content { padding: 20px 16px 16px; border-radius: 24px; }
+      .btn { padding: 13px 13px; font-size: 14px; }
+      .hero-copy { padding: 2px 4px 14px; }
+      .hero-microcopy { max-width: 296px; font-size: 12px; line-height: 1.52; }
+      #pane-actions { gap: 14px; margin-top: 8px; }
     }
     @media (max-width: 390px) {
-      .logo img { width: min(82vw, 220px); }
-      .content { padding: 16px 12px 12px; }
+      .page { padding: 12px 12px 58px; gap: 12px; }
+      .logo-link { width: min(70vw, 190px); }
+      .logo img { transform: scale(1.14) translateY(1px); }
+      .content { padding: 18px 14px 14px; }
+      .hero-copy { padding: 0 4px 12px; }
+      .hero-microcopy { max-width: 264px; font-size: 11.5px; line-height: 1.5; }
+      #pane-actions { gap: 12px; }
     }
     @media (prefers-reduced-motion: reduce) {
-      .logo img,
       .logo-link { animation: none !important; }
     }
 
@@ -308,16 +321,9 @@
 
     <section class="content" id="hero-card">
       <div class="hero-copy" id="hero-copy">
-        <h1>
-          Seu conteúdo em escala profissional.
-          <em>Processo, qualidade e consistência.</em>
-        </h1>
-
-        <ul class="stats">
-          <li><span class="check">✔</span> +7 anos de experiência</li>
-          <li><span class="check">✔</span> +60 clientes atendidos</li>
-          <li><span class="check">✔</span> Atendimento rápido</li>
-        </ul>
+        <p class="hero-microcopy">
+          Vídeos <strong>sob medida</strong> para vender melhor, com processo claro e atendimento direto.
+        </p>
       </div>
 
       <div class="pane" id="pane-actions">

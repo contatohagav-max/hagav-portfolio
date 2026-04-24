@@ -98,7 +98,7 @@
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      width: min(72vw, 280px);
+      width: min(36vw, 140px);
       padding: 0;
       margin: 0;
       border: none;
@@ -116,7 +116,7 @@
       height: auto;
       display: block;
       filter: drop-shadow(0 10px 22px rgba(0, 0, 0, 0.34));
-      margin-bottom: -68px;
+      margin-bottom: -34px;
     }
     .logo-link:focus-visible {
       outline: 1px solid rgba(255, 196, 108, 0.58);
@@ -217,6 +217,7 @@
       flex-shrink: 0;
     }
     .btn-icon svg { width: 17px; height: 17px; fill: rgba(255,255,255,.9); }
+    .btn-icon .btn-icon-play { width: 19px; height: 19px; }
     .btn-arrow { margin-left: auto; color: rgba(255,205,126,.95); }
 
     .mode-card {
@@ -291,7 +292,7 @@
     @media (max-width: 560px) {
       .page { padding: 14px 14px 64px; gap: 14px; }
       .logo { margin-bottom: 8px; }
-      .logo-link { width: min(72vw, 240px); }
+      .logo-link { width: min(36vw, 140px); }
       .content { padding: 20px 16px 16px; border-radius: 24px; }
       .btn { padding: 13px 13px; font-size: 14px; }
       .hero-copy { padding: 2px 4px 14px; }
@@ -300,7 +301,7 @@
     }
     @media (max-width: 390px) {
       .page { padding: 12px 12px 58px; gap: 12px; }
-      .logo-link { width: min(72vw, 210px); }
+      .logo-link { width: min(36vw, 140px); }
       .content { padding: 18px 14px 14px; }
       .hero-copy { padding: 0 4px 12px; }
       .hero-microcopy { max-width: 264px; font-size: 11.5px; line-height: 1.5; }
@@ -337,7 +338,7 @@
 
       <div class="pane" id="pane-actions">
         <a href="./portfolio.html" class="btn">
-          <span class="btn-icon"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></span>
+          <span class="btn-icon"><svg class="btn-icon-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></span>
           <span>Ver nossos projetos</span>
           <span class="btn-arrow">→</span>
         </a>
@@ -407,5 +408,4 @@
   </script>
 </body>
 </html>
-
 

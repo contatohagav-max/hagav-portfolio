@@ -131,7 +131,7 @@ const DDD_VALIDOS = new Set(['11','12','13','14','15','16','17','18','19','21','
     function getUnifiedBaseSteps(selected){
       const stepServices=Array.isArray(selected)?selected:[];
       const base=[
-        {id:'flow_servicos',label:'Serviços',title:'Qual tipo de conteúdo você precisa?',hint:'Selecione todos os formatos que fazem sentido para o seu pedido.',type:'multi',required:true,options:UNIFIED_SERVICE_OPTIONS,outro:true}
+        {id:'flow_servicos',label:'Serviços',title:'Qual tipo de conteúdo você precisa?',hintHtml:'Selecione todos os formatos que <strong>fazem sentido</strong> para o seu pedido.',type:'multi',required:true,options:UNIFIED_SERVICE_OPTIONS,outro:true}
       ];
       if(isMotionFlowSelection(stepServices)) return base;
       return base.concat([
@@ -197,6 +197,7 @@ const DDD_VALIDOS = new Set(['11','12','13','14','15','16','17','18','19','21','
         stepsEl.innerHTML='';
         const submitCard=document.createElement('article');
         submitCard.className='step-active';
+        submitCard.classList.add('has-back');
         submitCard.innerHTML='<button class=\"step-back\" type=\"button\" id=\"go-back-final\">Voltar</button>'+
           '<h2 class=\"step-title\">Tudo certo para enviar sua solicitação</h2>'+
           '<p class=\"step-hint\">Está tudo certo! Agora é só enviar sua solicitação.</p>'+
@@ -220,6 +221,7 @@ const DDD_VALIDOS = new Set(['11','12','13','14','15','16','17','18','19','21','
       const active=steps[state.currentIndex];
       const activeCard=document.createElement('article');
       activeCard.className='step-active';
+      if(state.currentIndex>0) activeCard.classList.add('has-back');
       activeCard.innerHTML=buildActiveStepMarkup(active,state.currentIndex>0);
       stepsEl.appendChild(activeCard);
       attachStepEvents(active,activeCard);
@@ -239,8 +241,33 @@ const DDD_VALIDOS = new Set(['11','12','13','14','15','16','17','18','19','21','
       launchConfettiBurst();
       updateProgress(totalSteps,totalSteps);
     }
+    function getServiceOptionIcon(label){
+      switch(label){
+        case 'Reels / Shorts / TikTok':
+          return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5A2.5 2.5 0 016.5 3h11A2.5 2.5 0 0120 5.5v13a2.5 2.5 0 01-2.5 2.5h-11A2.5 2.5 0 014 18.5v-13zm3 0v13h10v-13H7zm2 1.2h2.1l2 2.1H11zM9 10h2v2H9v-2zm4 0h2v2h-2v-2zm-4 4h2v2H9v-2zm4 0h2v2h-2v-2z"/></svg>';
+        case 'Criativo para Ads':
+          return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11.5v1a2.5 2.5 0 002.5 2.5H7l3.8 2.6a1 1 0 001.57-.82V7.2a1 1 0 00-1.57-.82L7 9H5.5A2.5 2.5 0 003 11.5zm11.5-1.8a1 1 0 011.4.14 4.6 4.6 0 010 5.32 1 1 0 01-1.54-1.28 2.6 2.6 0 000-2.76 1 1 0 01.14-1.42zm3.25-2.35a1 1 0 011.4.12 8.2 8.2 0 010 9.96 1 1 0 11-1.54-1.28 6.2 6.2 0 000-7.4 1 1 0 01.14-1.4z"/></svg>';
+        case 'Corte Podcast / Clipe':
+          return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.6 10.9l3.5-3.5a3.1 3.1 0 014.4 4.4l-3.5 3.5 1.1 1.1a3.1 3.1 0 11-4.4 4.4l-1.1-1.1-1.1 1.1a3.1 3.1 0 11-4.4-4.4l1.1-1.1-1.1-1.1a3.1 3.1 0 114.4-4.4l1.1 1.1zM7.1 12.3a1.1 1.1 0 10-1.6-1.6 1.1 1.1 0 001.6 1.6zm9.8 9.8a1.1 1.1 0 10-1.6-1.6 1.1 1.1 0 001.6 1.6z"/></svg>';
+        case 'Depoimento':
+          return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.8 6.5h2.4a1 1 0 011 1v3.1A3.9 3.9 0 017.3 15H7a1 1 0 01-1-1v-2.3a1 1 0 011-1h1.5A1.9 1.9 0 009.6 9V8.5H7.8a1 1 0 01-1-1v0a1 1 0 011-1zm7 0h2.4a1 1 0 011 1v3.1A3.9 3.9 0 0114.3 15H14a1 1 0 01-1-1v-2.3a1 1 0 011-1h1.5a1.9 1.9 0 001.1-1.7V8.5h-1.8a1 1 0 01-1-1v0a1 1 0 011-1z"/></svg>';
+        case 'Videoaula / Módulo':
+          return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4l9 4.5-9 4.5L3 8.5 12 4zm-6.8 7.6L12 15l6.8-3.4V16a1 1 0 01-.6.92l-5.8 2.6a1 1 0 01-.82 0L5.8 16.9A1 1 0 015.2 16v-4.4z"/></svg>';
+        case 'YouTube':
+          return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21.6 7.2a2.8 2.8 0 00-2-2C17.9 4.7 12 4.7 12 4.7s-5.9 0-7.6.5a2.8 2.8 0 00-2 2A29 29 0 002 12a29 29 0 00.4 4.8 2.8 2.8 0 002 2c1.7.5 7.6.5 7.6.5s5.9 0 7.6-.5a2.8 2.8 0 002-2A29 29 0 0022 12a29 29 0 00-.4-4.8zM10 15.5v-7l6 3.5-6 3.5z"/></svg>';
+        case 'VSL até 15 min':
+        case 'VSL longa (15-30 min)':
+          return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5A8.5 8.5 0 1120.5 12 8.5 8.5 0 0112 3.5zm0 2A6.5 6.5 0 1018.5 12 6.5 6.5 0 0012 5.5zm-.9 2.7h1.8v4.1l3 1.8-.9 1.5-3.9-2.3V8.2z"/></svg>';
+        case 'Motion / Vinheta':
+          return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.8l1.8 4.4 4.7 1.2-3.2 3.2.8 4.8-4.1-2.2-4.1 2.2.8-4.8-3.2-3.2 4.7-1.2L12 2.8zm6.4 12.5l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8.8-2zm-12.8.8l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8.8-2z"/></svg>';
+        case 'Outro':
+          return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12a2 2 0 114 0 2 2 0 01-4 0zm5 0a2 2 0 114 0 2 2 0 01-4 0zm5 0a2 2 0 114 0 2 2 0 01-4 0z"/></svg>';
+        default:
+          return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4a8 8 0 110 16 8 8 0 010-16z"/></svg>';
+      }
+    }
     function buildActiveStepMarkup(step,canGoBack){
-      const hint=step.hint?'<p class="step-hint">'+escapeHtml(step.hint)+'</p>':'';
+      const hint=step.hintHtml?'<p class="step-hint">'+step.hintHtml+'</p>':(step.hint?'<p class="step-hint">'+escapeHtml(step.hint)+'</p>':'');
       const back=canGoBack?'<button class="step-back" type="button" id="go-back">Voltar</button>':'';
       const error='<div class="error" id="step-error"></div>';
       let body='';
@@ -262,7 +289,11 @@ const DDD_VALIDOS = new Set(['11','12','13','14','15','16','17','18','19','21','
       if(step.type==='multi'){
         const current=state.answers[step.id]||{selected:[],outro:''};
         const selected=Array.isArray(current.selected)?current.selected:[];
-        body='<div class="options">'+step.options.map((opt)=>{const active=selected.includes(opt)?' active':'';return '<button class="opt'+active+'" type="button" data-multi="'+escapeAttr(opt)+'"><span class="opt-row"><span>'+escapeHtml(opt)+'</span><span class="opt-check">✓</span></span></button>';}).join('')+'</div>';
+        if(step.id==='flow_servicos'){
+          body='<div class="service-options">'+step.options.map((opt)=>{const active=selected.includes(opt)?' active':'';return '<button class="opt service-opt'+active+'" type="button" data-multi="'+escapeAttr(opt)+'"><span class="service-icon">'+getServiceOptionIcon(opt)+'</span><span class="service-label">'+escapeHtml(opt)+'</span></button>';}).join('')+'</div>';
+        }else{
+          body='<div class="options">'+step.options.map((opt)=>{const active=selected.includes(opt)?' active':'';return '<button class="opt'+active+'" type="button" data-multi="'+escapeAttr(opt)+'"><span class="opt-row"><span>'+escapeHtml(opt)+'</span><span class="opt-check">✓</span></span></button>';}).join('')+'</div>';
+        }
         if(step.outro){const show=selected.includes('Outro')?'':' style="display:none"';body+='<div id="multi-outro-wrap"'+show+'><input class="field" id="multi-outro" type="text" placeholder="Descreva aqui..." value="'+escapeAttr(current.outro||'')+'" maxlength="'+FIELD_LIMITS.outro+'" /></div>'}
       }
       if(step.type==='quantityByService'){

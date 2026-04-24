@@ -42,10 +42,10 @@
       flex-direction: column;
       align-items: center;
       justify-content: flex-start;
-      padding-top: 8vh;
+      padding-top: clamp(20px, 5.2vh, 52px);
       background:
-        radial-gradient(120% 72% at 50% -18%, rgba(255, 190, 95, 0.09) 0%, transparent 52%),
-        linear-gradient(160deg, var(--bg) 0%, var(--bg-soft) 46%, var(--bg-deep) 100%);
+        radial-gradient(110% 68% at 50% -10%, rgba(255, 204, 116, 0.12) 0%, transparent 46%),
+        linear-gradient(180deg, #090909 0%, var(--bg-soft) 48%, var(--bg-deep) 100%);
       color: #fff;
       overflow-x: hidden;
     }
@@ -54,9 +54,9 @@
       position: fixed;
       inset: 0;
       background:
-        radial-gradient(ellipse 74% 90% at -12% 48%, rgba(255, 146, 58, 0.18) 0%, rgba(120, 48, 19, 0.12) 36%, transparent 72%),
-        radial-gradient(ellipse 65% 50% at 110% 0%, rgba(255, 194, 103, 0.16) 0%, rgba(131, 68, 30, 0.1) 36%, transparent 68%),
-        radial-gradient(ellipse 45% 34% at 88% 90%, rgba(255, 164, 70, 0.08) 0%, transparent 66%);
+        radial-gradient(ellipse 62% 76% at -10% 44%, rgba(255, 146, 58, 0.18) 0%, rgba(120, 48, 19, 0.1) 38%, transparent 74%),
+        radial-gradient(ellipse 60% 70% at 110% 16%, rgba(255, 194, 103, 0.16) 0%, rgba(131, 68, 30, 0.08) 34%, transparent 74%),
+        radial-gradient(ellipse 58% 32% at 50% 104%, rgba(255, 181, 75, 0.08) 0%, transparent 68%);
       z-index: 0;
       pointer-events: none;
     }
@@ -65,10 +65,8 @@
       position: fixed;
       inset: 0;
       background:
-        radial-gradient(ellipse 82% 54% at 50% 118%, rgba(255, 190, 94, 0.12) 0%, transparent 66%),
-        radial-gradient(ellipse 180% 72% at -22% 26%, transparent 66%, rgba(255, 168, 70, 0.06) 67%, transparent 70%),
-        radial-gradient(ellipse 160% 74% at 122% 16%, transparent 66%, rgba(255, 167, 70, 0.07) 67%, transparent 70%);
-      mix-blend-mode: soft-light;
+        radial-gradient(ellipse 120% 86% at 50% 50%, transparent 52%, rgba(0, 0, 0, 0.42) 100%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.015) 0%, rgba(255, 255, 255, 0) 28%);
       z-index: 0;
       pointer-events: none;
     }
@@ -76,34 +74,49 @@
       position: relative;
       z-index: 1;
       width: 100%;
-      max-width: 596px;
+      max-width: 454px;
+      min-height: 100svh;
       margin: 0 auto;
-      padding: 16px 16px 72px;
+      padding: 26px 16px 20px;
       display: flex;
       flex-direction: column;
-      gap: 0;
+      align-items: center;
+      justify-content: center;
     }
-    .logo,
+    .hero-shell,
     .content,
     footer {
       position: relative;
       z-index: 1;
+      width: 100%;
+    }
+    .hero-shell {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 18px;
+      transition: gap .24s ease, margin .24s ease;
+    }
+    .hero-shell.budget-active {
+      gap: 18px;
+      margin-bottom: 0;
     }
     .logo {
       display: flex;
       justify-content: center;
-      padding-top: 2px;
+      width: 100%;
+      transition: opacity .25s ease, transform .25s ease, width .25s ease;
     }
     .logo-link {
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      width: min(36vw, 140px);
+      width: min(50vw, 188px);
       padding: 0;
       margin: 0;
       border: none;
       background: none;
-      border-radius: 20px;
+      border-radius: 24px;
       text-decoration: none;
       cursor: pointer;
       transition: transform .18s ease, filter .2s ease, opacity .2s ease;
@@ -115,140 +128,159 @@
       max-width: none;
       height: auto;
       display: block;
-      filter: drop-shadow(0 10px 22px rgba(0, 0, 0, 0.34));
-      margin-bottom: -34px;
+      object-fit: contain;
+      filter: drop-shadow(0 14px 28px rgba(0, 0, 0, 0.34));
+      margin-bottom: -18px;
     }
     .logo-link:focus-visible {
       outline: 1px solid rgba(255, 196, 108, 0.58);
       outline-offset: 3px;
     }
+    .logo.budget-logo .logo-link { width: min(50vw, 188px); }
+    .logo.budget-logo img { margin-bottom: -18px; }
     .content {
-      margin-top: 32px;
-      background: linear-gradient(158deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.045));
-      border: 1px solid rgba(255, 255, 255, 0.13);
-      border-radius: 22px;
-      box-shadow: 0 22px 52px rgba(0, 0, 0, 0.48), 0 0 36px rgba(255, 184, 0, 0.07), inset 0 1px 0 rgba(255, 255, 255, 0.11);
-      backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
+      margin-top: 0;
+      background: linear-gradient(180deg, rgba(19, 19, 19, 0.92), rgba(11, 11, 11, 0.92));
+      border: 1.1px solid rgba(255, 198, 92, 0.34);
+      border-radius: 30px;
+      box-shadow:
+        0 0 0 1px rgba(255, 198, 92, 0.05),
+        0 28px 60px rgba(0, 0, 0, 0.54),
+        0 0 34px rgba(255, 184, 0, 0.12),
+        inset 0 1px 0 rgba(255, 255, 255, 0.08);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
       overflow: hidden;
+      transition: padding .24s ease, box-shadow .24s ease, border-color .24s ease;
     }
-    .content { padding: 18px 14px 14px; }
+    .content { padding: 20px 14px 16px; }
     .content::before {
       content: '';
       position: absolute;
-      inset: -24% -10% auto -10%;
-      height: 40%;
-      background: radial-gradient(ellipse at center, rgba(255, 195, 104, 0.1) 0%, rgba(255, 195, 104, 0) 72%);
+      inset: 0;
+      background:
+        radial-gradient(circle at top center, rgba(255, 199, 96, 0.08) 0%, rgba(255, 199, 96, 0) 40%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.03) 0%, rgba(255, 255, 255, 0) 26%);
       pointer-events: none;
       z-index: 0;
     }
-    .content.budget-focus { padding-top: 12px; margin-top: 0; }
-    .content.budget-focus .hero-copy { display: none; }
-    .logo { transition: opacity .25s ease, transform .25s ease, width .25s ease; }
-    .logo.hidden-logo { opacity: 0; pointer-events: none; height: 0; overflow: hidden; margin: 0; padding: 0; }
-    /* Logo pequena no modo orçamento */
-    .logo.budget-logo { margin-bottom: 0; }
-    .logo.budget-logo .logo-link { width: min(36vw, 140px); }
-    .logo.budget-logo img { margin-bottom: -34px; }
+    .content.budget-focus {
+      padding: 26px 20px 22px;
+      border-color: rgba(255, 192, 72, 0.56);
+      box-shadow:
+        0 0 0 1px rgba(255, 198, 92, 0.08),
+        0 30px 62px rgba(0, 0, 0, 0.56),
+        0 0 42px rgba(255, 184, 0, 0.14),
+        inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    }
     .hero-copy {
+      position: relative;
+      z-index: 1;
+      padding: 4px 10px 18px;
+      text-align: center;
+      max-height: 220px;
+      overflow: hidden;
+      transition: opacity .25s ease, max-height .25s ease, transform .25s ease, padding .25s ease;
+    }
+    .hero-copy.is-hidden {
+      opacity: 0;
+      max-height: 0;
+      padding-top: 0;
+      padding-bottom: 0;
+      transform: translateY(-8px);
+      pointer-events: none;
+    }
+    .hero-microcopy {
+      max-width: 328px;
+      margin: 0 auto;
+      color: rgba(255,255,255,.92);
+      font-size: 15px;
+      line-height: 1.46;
+      font-weight: 600;
+      text-wrap: balance;
+    }
+    .hero-microcopy strong {
+      color: rgba(255, 193, 71, 0.98);
+      font-weight: 800;
+    }
+    #pane-actions {
       position: relative;
       z-index: 1;
       display: flex;
       flex-direction: column;
-      align-items: center;
-      gap: 0;
-      padding: 4px 8px 14px;
-      text-align: center;
-    }
-    .hero-microcopy {
-      display: block;
-      max-width: 336px;
-      margin: 0 auto;
-      color: rgba(255,255,255,.85);
-      font-size: 12.5px;
-      line-height: 1.58;
-      font-weight: 500;
-      letter-spacing: 0.01em;
-      text-wrap: balance;
-    }
-    .hero-microcopy strong {
-      color: rgba(255, 205, 126, 0.96);
-      font-weight: 700;
-    }
-    #pane-actions {
-      display: flex;
-      flex-direction: column;
       gap: 12px;
-      margin-top: 8px;
     }
     .hidden { display: none !important; }
-    .btn,
-    .mode-card {
-      border-radius: 16px;
-      border: 1.2px solid var(--glass);
-      background: linear-gradient(135deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.04));
-      box-shadow: 0 14px 32px rgba(0, 0, 0, 0.34), 0 0 22px rgba(255, 184, 0, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.1);
-      backdrop-filter: blur(18px);
-      -webkit-backdrop-filter: blur(18px);
-      transition: transform .18s ease, border-color .22s ease, box-shadow .22s ease, background .22s ease;
-    }
     .btn {
+      position: relative;
       display: flex;
       align-items: center;
-      gap: 12px;
+      gap: 16px;
       width: 100%;
-      padding: 12px 14px;
+      min-height: 92px;
+      padding: 16px 18px;
       text-decoration: none;
       color: #fff;
-      font-size: 15px;
+      font-size: 16px;
       font-weight: 700;
-      background: transparent;
-      border-width: 1.2px;
-      cursor: pointer;
       font-family: inherit;
+      background: linear-gradient(180deg, rgba(23, 23, 23, 0.94), rgba(10, 10, 10, 0.98));
+      border: 1.1px solid rgba(255, 203, 109, 0.18);
+      border-radius: 24px;
+      box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.05),
+        0 16px 30px rgba(0, 0, 0, 0.34),
+        0 0 0 1px rgba(255, 198, 92, 0.05);
+      cursor: pointer;
+      overflow: hidden;
+      transition: transform .2s ease, border-color .22s ease, box-shadow .22s ease, background .22s ease;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .btn::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(120deg, rgba(255, 205, 120, 0.08) 0%, rgba(255, 205, 120, 0) 44%, rgba(255, 255, 255, 0) 68%, rgba(255, 255, 255, 0.02) 100%);
+      pointer-events: none;
     }
     .btn-icon {
-      width: 36px;
-      height: 36px;
-      border-radius: 9px;
-      background: rgba(255, 255, 255, 0.1);
+      width: 76px;
+      height: 76px;
+      border-radius: 999px;
+      background:
+        radial-gradient(circle at 38% 34%, rgba(255, 208, 112, 0.22), rgba(255, 208, 112, 0.06) 42%, rgba(9, 9, 9, 0.94) 72%),
+        linear-gradient(180deg, rgba(22, 22, 22, 0.95), rgba(8, 8, 8, 0.98));
+      border: 1.4px solid rgba(255, 192, 74, 0.74);
+      box-shadow:
+        0 0 0 1px rgba(255, 192, 74, 0.12),
+        0 0 20px rgba(255, 184, 0, 0.14),
+        inset 0 1px 0 rgba(255, 245, 214, 0.14);
       display: grid;
       place-items: center;
       flex-shrink: 0;
     }
-    .btn-icon svg { width: 17px; height: 17px; fill: rgba(255,255,255,.9); }
-    .btn-icon .btn-icon-play { width: 19px; height: 19px; }
-    .btn-arrow { margin-left: auto; color: rgba(255,205,126,.95); }
-
-    .mode-card {
-      padding: 15px;
+    .btn-icon svg { width: 26px; height: 26px; fill: rgba(255, 202, 96, 0.98); }
+    .btn-icon .btn-icon-play { width: 28px; height: 28px; }
+    .btn-label {
+      flex: 1;
+      min-width: 0;
       display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-    .mode-title {
-      font-size: 18px;
-      font-weight: 800;
-      letter-spacing: .01em;
-    }
-    .mode-text {
-      font-size: 13px;
-      line-height: 1.5;
-      color: rgba(255,255,255,.74);
-    }
-    .mode-go {
-      margin-top: 4px;
-      align-self: flex-start;
-      border: 1px solid rgba(255, 206, 122, 0.58);
-      background: linear-gradient(135deg, rgba(255, 205, 120, 0.22), rgba(255, 255, 255, 0.08));
+      align-items: center;
+      line-height: 1.2;
       color: #fff;
-      border-radius: 12px;
-      font-size: 13px;
-      font-weight: 800;
-      padding: 10px 16px;
-      cursor: pointer;
-      font-family: inherit;
-      transition: transform .18s ease, box-shadow .2s ease;
+      text-align: left;
+      text-wrap: balance;
+    }
+    .btn-arrow {
+      margin-left: auto;
+      color: rgba(255, 189, 44, 0.98);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      align-self: center;
+      font-size: 18px;
+      line-height: 1;
+      transition: transform .22s ease;
     }
     .mode-back {
       margin-top: 4px;
@@ -260,52 +292,94 @@
       text-align: center;
       cursor: pointer;
     }
-
     footer {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
       text-align: center;
       font-size: 11px;
-      color: rgba(255, 255, 255, 0.22);
+      color: rgba(255, 255, 255, 0.28);
       letter-spacing: 0.04em;
-      padding-top: 2px;
+      padding-top: 18px;
     }
-
+    .footer-line {
+      width: 64px;
+      height: 1px;
+      flex-shrink: 0;
+      background: linear-gradient(90deg, transparent, rgba(255, 188, 62, 0.72), transparent);
+      opacity: 0.78;
+    }
+    .footer-copy {
+      opacity: 0.88;
+      text-wrap: nowrap;
+    }
     @media (hover: hover) {
       .logo-link:hover {
         transform: translateY(-1px);
         filter: brightness(1.03);
       }
-      .btn:hover,
-      .mode-card:hover {
+      .btn:hover {
         transform: translateY(-2px);
-        border-color: var(--glass-strong);
-        box-shadow: 0 18px 34px rgba(0,0,0,.38), 0 0 28px rgba(255,184,0,.13);
+        border-color: rgba(255, 204, 104, 0.36);
+        background: linear-gradient(180deg, rgba(26, 26, 26, 0.95), rgba(10, 10, 10, 0.98));
+        box-shadow:
+          inset 0 1px 0 rgba(255, 255, 255, 0.08),
+          0 20px 38px rgba(0,0,0,.38),
+          0 0 24px rgba(255,184,0,.16);
       }
-      .mode-go:hover {
-        transform: translateY(-1px);
-        box-shadow: 0 10px 20px rgba(0,0,0,.22), 0 0 22px rgba(255,184,0,.14);
-      }
+      .btn:hover .btn-arrow { transform: translateX(3px); }
     }
-    .btn:active,
-    .mode-card:active,
-    .mode-go:active { transform: scale(.985); }
-
+    .btn:active { transform: scale(.985); }
+    @media (min-width: 561px) {
+      .page {
+        max-width: 486px;
+        padding: 28px 20px 22px;
+      }
+      .hero-shell { gap: 18px; }
+      .logo-link { width: min(36vw, 196px); }
+      .hero-microcopy { max-width: 348px; font-size: 15.5px; }
+      .content { padding: 22px 16px 18px; }
+      .btn { min-height: 96px; }
+    }
     @media (max-width: 560px) {
-      .page { padding: 14px 14px 64px; gap: 14px; }
-      .logo { margin-bottom: 8px; }
-      .logo-link { width: min(36vw, 140px); }
-      .content { padding: 20px 16px 16px; border-radius: 24px; }
-      .btn { padding: 13px 13px; font-size: 14px; }
-      .hero-copy { padding: 2px 4px 14px; }
-      .hero-microcopy { max-width: 296px; font-size: 12px; line-height: 1.52; }
-      #pane-actions { gap: 14px; margin-top: 8px; }
+      body { padding-top: 20px; }
+      .page {
+        padding: 22px 16px 18px;
+        justify-content: center;
+      }
+      .hero-shell { gap: 16px; }
+      .logo-link { width: min(54vw, 196px); }
+      .content {
+        padding: 20px 14px 16px;
+        border-radius: 28px;
+      }
+      .content.budget-focus {
+        padding: 24px 18px 20px;
+      }
+      .hero-microcopy { max-width: 310px; }
+      .btn { padding: 15px 16px; }
+      .btn-label { font-size: 15px; }
     }
     @media (max-width: 390px) {
-      .page { padding: 12px 12px 58px; gap: 12px; }
-      .logo-link { width: min(36vw, 140px); }
-      .content { padding: 18px 14px 14px; }
-      .hero-copy { padding: 0 4px 12px; }
-      .hero-microcopy { max-width: 264px; font-size: 11.5px; line-height: 1.5; }
-      #pane-actions { gap: 12px; }
+      .page { padding: 18px 14px 16px; }
+      .logo-link { width: min(56vw, 182px); }
+      .logo img { margin-bottom: -16px; }
+      .hero-microcopy {
+        max-width: 278px;
+        font-size: 14px;
+        line-height: 1.44;
+      }
+      .btn {
+        min-height: 86px;
+        padding: 14px 14px;
+      }
+      .btn-icon {
+        width: 70px;
+        height: 70px;
+      }
+      .footer-line { width: 54px; }
     }
     @media (prefers-reduced-motion: reduce) {
       .logo-link { animation: none !important; }
@@ -323,35 +397,37 @@
 </head>
 <body>
   <div class="page">
-    <div class="logo">
-      <button class="logo-link" id="logo-home-link" type="button" aria-label="Voltar ao início">
-        <img src="./assets/logo-oficial-master-bg.png" alt="HAGAV Studio" decoding="async" />
-      </button>
-    </div>
+    <header class="hero-shell">
+      <div class="logo">
+        <button class="logo-link" id="logo-home-link" type="button" aria-label="Voltar ao início">
+          <img src="./assets/logo-oficial-master-bg.png" alt="HAGAV Studio" decoding="async" />
+        </button>
+      </div>
+    </header>
 
     <section class="content" id="hero-card">
       <div class="hero-copy" id="hero-copy">
         <p class="hero-microcopy">
-          Vídeos <strong>sob medida</strong> para vender melhor, com processo claro e atendimento direto.
+          Vídeos <strong>sob medida</strong> para vender melhor,
+          com processo claro e atendimento direto.
         </p>
       </div>
-
       <div class="pane" id="pane-actions">
         <a href="./portfolio.html" class="btn">
           <span class="btn-icon"><svg class="btn-icon-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></span>
-          <span>Ver nossos projetos</span>
+          <span class="btn-label">Ver nossos projetos</span>
           <span class="btn-arrow">→</span>
         </a>
 
         <button class="btn btn-budget" id="open-budget-modes" type="button">
           <span class="btn-icon"><svg viewBox="0 0 24 24"><path d="M4 4h6v6H4V4zm10 0h6v6h-6V4zM4 14h6v6H4v-6zm10 0h6v6h-6v-6z"/></svg></span>
-          <span>Solicitar orçamento</span>
+          <span class="btn-label">Solicitar orçamento</span>
           <span class="btn-arrow">→</span>
         </button>
 
         <a href="https://wa.me/5573982284382" class="btn" target="_blank" rel="noopener" data-whatsapp-track data-track-page="home" data-track-origin="H - HOME">
-          <span class="btn-icon"><svg viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347"/></svg></span>
-          <span>Falar no WhatsApp</span>
+          <span class="btn-icon"><svg viewBox="0 0 24 24"><path d="M6.62 10.79a15.05 15.05 0 006.59 6.59l2.2-2.2a1 1 0 011.01-.24c1.11.37 2.3.56 3.58.56a1 1 0 011 1V20a1 1 0 01-1 1C10.85 21 3 13.15 3 3a1 1 0 011-1h3.5a1 1 0 011 1c0 1.28.19 2.47.56 3.58a1 1 0 01-.24 1.01l-2.2 2.2z"/></svg></span>
+          <span class="btn-label">Falar no WhatsApp</span>
           <span class="btn-arrow">→</span>
         </a>
       </div>
@@ -365,7 +441,11 @@
         </div>
       </section>
     </section>
-    <footer>© <span data-footer-year>2026</span> HAGAV Studio de Edição</footer>
+    <footer>
+      <span class="footer-line" aria-hidden="true"></span>
+      <span class="footer-copy">© <span data-footer-year>2026</span> HAGAV Studio de Edição</span>
+      <span class="footer-line" aria-hidden="true"></span>
+    </footer>
   </div>
   <script src="./assets/budget-inline.js"></script>
   <script src="./assets/whatsapp-tracking.js"></script>
@@ -374,9 +454,13 @@
     const paneBudget = document.getElementById('pane-budget');
     const heroCard = document.getElementById('hero-card');
     const logoWrap = document.querySelector('.logo');
+    const heroShell = document.querySelector('.hero-shell');
+    const heroCopy = document.getElementById('hero-copy');
     function setBudgetFocus(isBudget){
       heroCard.classList.toggle('budget-focus', !!isBudget);
       logoWrap.classList.toggle('budget-logo', !!isBudget);
+      heroShell.classList.toggle('budget-active', !!isBudget);
+      heroCopy.classList.toggle('is-hidden', !!isBudget);
     }
     function switchPane(target){
       paneActions.classList.add('hidden');

@@ -762,7 +762,8 @@
 
     function readDrawerPreviewDraft() {
       try {
-        const raw = window.sessionStorage.getItem("hagav_proposta_preview_draft");
+        const raw = window.sessionStorage.getItem("hagav_proposta_preview_draft")
+          || window.localStorage.getItem("hagav_proposta_preview_draft_live");
         if (!raw) return null;
         const parsed = JSON.parse(raw);
         if (!parsed || typeof parsed !== "object") return null;
@@ -793,6 +794,12 @@
       const observacao = cleanDraftValue(draft.observacao_adicional);
       const formaPagamento = cleanDraftValue(draft.forma_pagamento);
       const dataValidade = cleanDraftValue(draft.data_validade);
+      const quantidadeMensal = cleanDraftValue(draft.quantidade_mensal);
+      const duracaoMensal = cleanDraftValue(draft.duracao_contrato_meses);
+      const valorMensal = cleanDraftValue(draft.valor_mensal_moeda);
+      const valorPersonalizado = cleanDraftValue(draft.valor_personalizado_moeda);
+      const escopoMensal = cleanDraftValue(draft.escopo_mensal);
+      const condicoesComerciais = cleanDraftValue(draft.condicoes_comerciais);
 
       if (clienteNome) data.cliente.nome = clienteNome;
       if (whatsapp) data.cliente.whatsapp = whatsapp;
@@ -805,10 +812,17 @@
       if (valor) data.valor = valor;
       if (observacao) data.observacao = observacao;
 
-      const condicoes = Array.isArray(data.condicoes) ? [...data.condicoes] : [];
-      if (formaPagamento) condicoes[0] = `Forma de pagamento: ${formaPagamento}`;
-      if (dataValidade) condicoes[1] = `Proposta valida ate ${dataValidade}`;
-      data.condicoes = condicoes.filter(Boolean);
+      if (condicoesComerciais) {
+        data.condicoes = condicoesComerciais
+          .split("\n")
+          .map((line) => cleanDraftValue(line))
+          .filter(Boolean);
+      } else {
+        const condicoes = Array.isArray(data.condicoes) ? [...data.condicoes] : [];
+        if (formaPagamento) condicoes[0] = `Forma de pagamento: ${formaPagamento}`;
+        if (dataValidade) condicoes[1] = `Proposta valida ate ${dataValidade}`;
+        data.condicoes = condicoes.filter(Boolean);
+      }
 
       if (mode === "opcoes") {
         const options = [1, 2, 3].map((index) => {
@@ -844,10 +858,29 @@
         if (textoComparativo) data.opcoesTextoApoio = textoComparativo;
       }
 
+      if (mode === "mensal") {
+        if (quantidadeMensal) data.resumo.quantidade = quantidadeMensal;
+        if (duracaoMensal) {
+          data.mensal = data.mensal || {};
+          data.mensal.duracao = `Contrato de ${duracaoMensal} meses`;
+        }
+        if (valorMensal) {
+          data.valor = valorMensal.toLowerCase().includes("/mes")
+            ? valorMensal
+            : `${valorMensal}/mes`;
+        }
+        if (escopoMensal) data.escopo = escopoMensal;
+      }
+
+      if (mode === "personalizada") {
+        if (valorPersonalizado) data.valor = valorPersonalizado;
+      }
+
       return data;
     }
 
-    const DRAWER_PREVIEW_PAYLOAD = readDrawerPreviewDraft();
+    let DRAWER_PREVIEW_PAYLOAD = readDrawerPreviewDraft();
+    let CURRENT_MODE = "direta";
 
     function byId(id) {
       return document.getElementById(id);
@@ -941,6 +974,7 @@
       const baseData = MODOS[modo] || MODOS.direta;
       const data = applyDrawerDraft(baseData, modo, DRAWER_PREVIEW_PAYLOAD);
       const keys = Object.keys(MODOS);
+      CURRENT_MODE = Object.prototype.hasOwnProperty.call(MODOS, modo) ? modo : "direta";
 
       document.querySelectorAll(".mode-btn").forEach((btn) => {
         btn.classList.toggle("active", btn.dataset.mode === modo);
@@ -1010,6 +1044,34 @@
         ? queryMode
         : (draftMode || "direta");
       renderModo(initial);
+
+      window.addEventListener("storage", (event) => {
+        if (event.key !== "hagav_proposta_preview_draft_live" || !event.newValue) return;
+        try {
+          const parsed = JSON.parse(event.newValue);
+          if (!parsed || typeof parsed !== "object") return;
+          DRAWER_PREVIEW_PAYLOAD = parsed;
+          const nextMode = Object.prototype.hasOwnProperty.call(MODOS, parsed.mode)
+            ? parsed.mode
+            : CURRENT_MODE;
+          renderModo(nextMode || "direta");
+        } catch {
+          // ignore parse error
+        }
+      });
+
+      if (typeof window.BroadcastChannel === "function") {
+        const channel = new window.BroadcastChannel("hagav_proposta_preview");
+        channel.addEventListener("message", (event) => {
+          const parsed = event?.data;
+          if (!parsed || typeof parsed !== "object") return;
+          DRAWER_PREVIEW_PAYLOAD = parsed;
+          const nextMode = Object.prototype.hasOwnProperty.call(MODOS, parsed.mode)
+            ? parsed.mode
+            : CURRENT_MODE;
+          renderModo(nextMode || "direta");
+        });
+      }
     }
 
     initPreview();

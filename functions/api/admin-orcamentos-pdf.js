@@ -1003,6 +1003,69 @@ function buildCommercialScope({
   ].join(" ");
 }
 
+function parseDetalhesAnswers(detalhes = {}) {
+  const raw = detalhes?.respostasCompletas || detalhes?.answers || detalhes?.respostas || null;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  return raw;
+}
+
+function parseMoneyNumber(value, fallback = 0) {
+  const raw = String(value || "").trim();
+  if (!raw) return fallback;
+  const normalized = raw
+    .replace(/R\$/gi, "")
+    .replace(/\s+/g, "")
+    .replace(/\./g, "")
+    .replace(",", ".")
+    .replace(/[^0-9.-]/g, "");
+  const parsed = Number(normalized);
+  if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
+  return parsed;
+}
+
+function formatComparativeOptions(qtyBase, totalBase) {
+  const safeQty = Math.max(1, Math.round(Number(qtyBase || 0) || 1));
+  const safeTotal = Number(totalBase || 0) > 0 ? Number(totalBase) : (safeQty * 170);
+  const unitBase = safeTotal / safeQty;
+  const qty2 = Math.max(safeQty + 1, Math.round(safeQty * 1.5));
+  const qty3 = Math.max(30, Math.round(safeQty * 3));
+  const discount2 = qty2 >= 30 ? 15 : (qty2 >= 15 ? 5 : 0);
+  const discount3 = qty3 >= 30 ? 15 : (qty3 >= 15 ? 5 : 0);
+  const unit2 = unitBase * (1 - (discount2 / 100));
+  const unit3 = unitBase * (1 - (discount3 / 100));
+  const total2 = qty2 * unit2;
+  const total3 = qty3 * unit3;
+
+  return {
+    opcao1_titulo: "Pedido atual",
+    opcao1_qtd: `${safeQty} videos`,
+    opcao1_preco: formatMoney(safeTotal),
+    opcao1_unitario: `${formatMoney(unitBase)} por video`,
+    opcao1_desc: "Sem desconto aplicado",
+    opcao1_desconto: "",
+    opcao2_titulo: "Mais volume",
+    opcao2_qtd: `${qty2} videos`,
+    opcao2_preco: formatMoney(total2),
+    opcao2_unitario: `${formatMoney(unit2)} por video`,
+    opcao2_desc: discount2 > 0 ? `${discount2}% de desconto por volume` : "Sem desconto aplicado",
+    opcao2_desconto: discount2 > 0 ? `-${discount2}%` : "",
+    opcao3_titulo: "Melhor custo-beneficio",
+    opcao3_qtd: `${qty3} videos`,
+    opcao3_preco: formatMoney(total3),
+    opcao3_unitario: `${formatMoney(unit3)} por video`,
+    opcao3_desc: discount3 > 0 ? `${discount3}% de desconto por volume` : "Sem desconto aplicado",
+    opcao3_desconto: discount3 > 0 ? `-${discount3}%` : "",
+    texto_comparativo: "Quanto maior o volume, menor o custo por video. As opcoes acima usam descontos progressivos conforme quantidade.",
+  };
+}
+
+function splitCondicoesText(value = "") {
+  return String(value || "")
+    .split(/\r?\n/)
+    .map((line) => normalizeTemplateText(line, 260, { allowEmpty: true }))
+    .filter(Boolean);
+}
+
 function getOfficialWhatsapp(env, detalhes) {
   const envValue = firstEnvValue(env, [
     "WHATSAPP_HAGAV",
@@ -1023,15 +1086,26 @@ const TEMPLATE_OVERRIDE_ALLOWLIST = new Set([
   "cliente_nome",
   "nome_cliente",
   "whatsapp",
+  "empresa",
+  "instagram",
+  "email_cliente",
+  "email",
   "servico_principal",
   "quantidade",
+  "quantidade_mensal",
   "prazo",
   "formato_entrega",
   "escopo_comercial",
+  "escopo_mensal",
+  "condicoes_comerciais",
   "valor_total_moeda",
+  "valor_mensal_moeda",
+  "valor_personalizado_moeda",
   "forma_pagamento",
   "data_validade",
   "data_emissao",
+  "duracao_contrato_meses",
+  "investimento_label",
   "referencia_texto",
   "observacao_adicional",
   "cta_aprovacao",
@@ -1100,12 +1174,17 @@ function isTruthyFlag(value) {
 }
 
 function buildTemplateValues(row, env, options = {}) {
-  const proposalMode = normalizeProposalMode(options?.proposalMode);
+  const requestedMode = normalizeProposalMode(options?.proposalMode);
   const templateOverrides = sanitizeTemplateOverrides(options?.templateOverrides);
   const detalhes = readDetalhes(row);
   const comercial = (detalhes?.comercial && typeof detalhes.comercial === "object")
     ? detalhes.comercial
     : {};
+  const respostas = parseDetalhesAnswers(detalhes);
+  const flowHintMode = String(row?.fluxo || "").toUpperCase() === "DR" ? "mensal" : "direta";
+  const savedMode = normalizeProposalMode(firstNonEmptyValue(comercial?.proposta_modo, comercial?.proposal_mode));
+  const proposalMode = requestedMode || savedMode || flowHintMode || "direta";
+
   const dataHojeIso = new Date().toISOString();
   const serviceItems = extractServiceItems(row, detalhes);
   const quantitySummary = buildQuantitySummary(serviceItems);
@@ -1120,23 +1199,56 @@ function buildTemplateValues(row, env, options = {}) {
   const quantidade = serviceItems.length > 1
     ? `${quantitySummary.quantityLabel} (${quantitySummary.breakdown})`
     : quantitySummary.quantityLabel;
+
+  const empresa = firstNonEmptyValue(
+    comercial?.empresa,
+    detalhes?.empresa,
+    respostas?.empresa,
+    row?.empresa
+  );
+  const instagram = firstNonEmptyValue(
+    comercial?.instagram,
+    detalhes?.instagram,
+    respostas?.instagram,
+    row?.instagram
+  );
+  const emailCliente = firstNonEmptyValue(
+    comercial?.email_cliente,
+    comercial?.email,
+    detalhes?.email_cliente,
+    detalhes?.email,
+    respostas?.email_cliente,
+    respostas?.email,
+    row?.email
+  );
+
   const prazo = firstNonEmptyValue(
+    comercial?.prazo,
     detalhes?.prazo,
     row?.prazo,
-    comercial?.prazo,
+    respostas?.flow_prazo,
+    respostas?.unica_prazo,
+    respostas?.rec_inicio,
     "A combinar"
   );
   const referenciaRaw = firstNonEmptyValue(
+    templateOverrides?.referencia_texto,
+    comercial?.referencia_texto,
     comercial?.referencia_publica,
     detalhes?.referencia,
     row?.referencia,
+    respostas?.flow_referencia,
+    respostas?.unica_referencia,
+    respostas?.rec_referencia,
     ""
   );
   const referenciaCliente = normalizeReferenceText(referenciaRaw);
   const observacaoManual = normalizeObservationForClient(
     firstNonEmptyValue(
+      templateOverrides?.observacao_adicional,
       comercial?.observacao_adicional,
       detalhes?.observacao_adicional,
+      respostas?.extras,
       ""
     )
   );
@@ -1163,7 +1275,9 @@ function buildTemplateValues(row, env, options = {}) {
     ?? 0
   );
   const escopo = firstNonEmptyValue(
+    templateOverrides?.escopo_comercial,
     comercial?.descricao_escopo,
+    comercial?.escopo_comercial,
     buildCommercialScope({
       serviceItems,
       quantitySummary,
@@ -1172,13 +1286,32 @@ function buildTemplateValues(row, env, options = {}) {
       ),
     })
   );
-  const clienteNome = firstNonEmptyValue(row?.nome, detalhes?.nome, "-");
-  const whatsappCliente = formatWhatsapp(firstNonEmptyValue(row?.whatsapp, detalhes?.whatsapp, ""));
+  const clienteNome = firstNonEmptyValue(
+    templateOverrides?.cliente_nome,
+    templateOverrides?.nome_cliente,
+    comercial?.cliente_nome,
+    row?.nome,
+    detalhes?.nome,
+    "-"
+  );
+  const whatsappCliente = formatWhatsapp(firstNonEmptyValue(
+    templateOverrides?.whatsapp,
+    comercial?.whatsapp,
+    row?.whatsapp,
+    detalhes?.whatsapp,
+    ""
+  ));
   const propostaNumero = normalizeTemplateText(
-    firstNonEmptyValue(comercial?.numero_proposta, `PROP-${row?.id || "-"}`),
+    firstNonEmptyValue(templateOverrides?.numero_proposta, comercial?.numero_proposta, `PROP-${row?.id || "-"}`),
     80
   );
+  const dataEmissao = firstNonEmptyValue(
+    templateOverrides?.data_emissao,
+    comercial?.data_emissao,
+    formatDateBr(dataHojeIso)
+  );
   const formaPagamento = firstNonEmptyValue(
+    templateOverrides?.forma_pagamento,
     comercial?.forma_pagamento,
     detalhes?.forma_pagamento,
     "PIX / Transferencia / A combinar"
@@ -1198,11 +1331,108 @@ function buildTemplateValues(row, env, options = {}) {
     detalhes?.formato_entrega,
     "Arquivo final pronto para publicacao em MP4."
   );
-  const dataValidadeInput = firstNonEmptyValue(comercial?.data_validade, row?.validade_ate);
+  const dataValidadeInput = firstNonEmptyValue(
+    templateOverrides?.data_validade,
+    comercial?.data_validade,
+    row?.validade_ate
+  );
   const dataValidadeFormatted = dataValidadeInput ? formatDateBr(dataValidadeInput) : "";
   const dataValidade = (dataValidadeFormatted && dataValidadeFormatted !== "-")
     ? dataValidadeFormatted
     : formatDatePlusDaysBr(dataHojeIso, 7);
+  const condicoesDefault = [
+    `Forma de pagamento: ${formaPagamento}.`,
+    `Proposta valida ate ${dataValidade}.`,
+    "O projeto inicia apos aprovacao e envio dos materiais.",
+    "Inclui 1 rodada de ajustes por entrega. Alteracoes de estrutura, roteiro, estilo ou escopo podem gerar novo orcamento.",
+  ];
+  const condicoesComerciais = firstNonEmptyValue(
+    templateOverrides?.condicoes_comerciais,
+    comercial?.condicoes_comerciais,
+    condicoesDefault.join("\n")
+  );
+  const condicoesLinhas = splitCondicoesText(condicoesComerciais);
+
+  const valorTotalBase = Number(
+    parseMoneyNumber(templateOverrides?.valor_total_moeda, 0)
+    || parseMoneyNumber(comercial?.valor_total_moeda, 0)
+    || valorTotalNum
+  );
+  const valorMensal = firstNonEmptyValue(
+    templateOverrides?.valor_mensal_moeda,
+    comercial?.valor_mensal_moeda
+  );
+  const valorPersonalizado = firstNonEmptyValue(
+    templateOverrides?.valor_personalizado_moeda,
+    comercial?.valor_personalizado_moeda
+  );
+  let valorTotalMoeda = firstNonEmptyValue(
+    templateOverrides?.valor_total_moeda,
+    comercial?.valor_total_moeda,
+    formatMoney(valorTotalBase, { withCurrency: true })
+  );
+  if (proposalMode === "mensal") {
+    const mensalDisplay = firstNonEmptyValue(valorMensal, valorTotalMoeda);
+    if (mensalDisplay) {
+      valorTotalMoeda = mensalDisplay.toLowerCase().includes("/mes")
+        ? mensalDisplay
+        : `${mensalDisplay}/mes`;
+    }
+  }
+  if (proposalMode === "personalizada") {
+    valorTotalMoeda = firstNonEmptyValue(valorPersonalizado, valorTotalMoeda);
+  }
+
+  const qtyForOptions = parseQuantityNumber(firstNonEmptyValue(templateOverrides?.quantidade, comercial?.quantidade, quantidade));
+  const optionsDefaults = formatComparativeOptions(qtyForOptions, parseMoneyNumber(valorTotalMoeda, valorTotalBase));
+
+  const opcao1Titulo = firstNonEmptyValue(templateOverrides?.opcao1_titulo, comercial?.opcao1_titulo, optionsDefaults.opcao1_titulo);
+  const opcao1Qtd = firstNonEmptyValue(templateOverrides?.opcao1_qtd, comercial?.opcao1_qtd, optionsDefaults.opcao1_qtd);
+  const opcao1Preco = firstNonEmptyValue(templateOverrides?.opcao1_preco, comercial?.opcao1_preco, optionsDefaults.opcao1_preco);
+  const opcao1Unitario = firstNonEmptyValue(templateOverrides?.opcao1_unitario, comercial?.opcao1_unitario, optionsDefaults.opcao1_unitario);
+  const opcao1Desc = firstNonEmptyValue(templateOverrides?.opcao1_desc, comercial?.opcao1_desc, optionsDefaults.opcao1_desc);
+  const opcao1Desconto = firstNonEmptyValue(templateOverrides?.opcao1_desconto, comercial?.opcao1_desconto, optionsDefaults.opcao1_desconto);
+
+  const opcao2Titulo = firstNonEmptyValue(templateOverrides?.opcao2_titulo, comercial?.opcao2_titulo, optionsDefaults.opcao2_titulo);
+  const opcao2Qtd = firstNonEmptyValue(templateOverrides?.opcao2_qtd, comercial?.opcao2_qtd, optionsDefaults.opcao2_qtd);
+  const opcao2Preco = firstNonEmptyValue(templateOverrides?.opcao2_preco, comercial?.opcao2_preco, optionsDefaults.opcao2_preco);
+  const opcao2Unitario = firstNonEmptyValue(templateOverrides?.opcao2_unitario, comercial?.opcao2_unitario, optionsDefaults.opcao2_unitario);
+  const opcao2Desc = firstNonEmptyValue(templateOverrides?.opcao2_desc, comercial?.opcao2_desc, optionsDefaults.opcao2_desc);
+  const opcao2Desconto = firstNonEmptyValue(templateOverrides?.opcao2_desconto, comercial?.opcao2_desconto, optionsDefaults.opcao2_desconto);
+
+  const opcao3Titulo = firstNonEmptyValue(templateOverrides?.opcao3_titulo, comercial?.opcao3_titulo, optionsDefaults.opcao3_titulo);
+  const opcao3Qtd = firstNonEmptyValue(templateOverrides?.opcao3_qtd, comercial?.opcao3_qtd, optionsDefaults.opcao3_qtd);
+  const opcao3Preco = firstNonEmptyValue(templateOverrides?.opcao3_preco, comercial?.opcao3_preco, optionsDefaults.opcao3_preco);
+  const opcao3Unitario = firstNonEmptyValue(templateOverrides?.opcao3_unitario, comercial?.opcao3_unitario, optionsDefaults.opcao3_unitario);
+  const opcao3Desc = firstNonEmptyValue(templateOverrides?.opcao3_desc, comercial?.opcao3_desc, optionsDefaults.opcao3_desc);
+  const opcao3Desconto = firstNonEmptyValue(templateOverrides?.opcao3_desconto, comercial?.opcao3_desconto, optionsDefaults.opcao3_desconto);
+  const textoComparativo = firstNonEmptyValue(
+    templateOverrides?.texto_comparativo,
+    comercial?.texto_comparativo,
+    optionsDefaults.texto_comparativo
+  );
+
+  const quantidadeMensal = firstNonEmptyValue(
+    templateOverrides?.quantidade_mensal,
+    comercial?.quantidade_mensal,
+    proposalMode === "mensal" ? quantidade : ""
+  );
+  const duracaoMensal = firstNonEmptyValue(
+    templateOverrides?.duracao_contrato_meses,
+    comercial?.duracao_contrato_meses,
+    proposalMode === "mensal" ? "3" : ""
+  );
+  const escopoMensal = firstNonEmptyValue(
+    templateOverrides?.escopo_mensal,
+    comercial?.escopo_mensal,
+    proposalMode === "mensal" ? escopo : ""
+  );
+  const valorMensalFinal = firstNonEmptyValue(valorMensal, proposalMode === "mensal" ? valorTotalMoeda : "");
+  const investimentoLabel = firstNonEmptyValue(
+    templateOverrides?.investimento_label,
+    proposalMode === "mensal" ? "Valor mensal" : "Valor total"
+  );
+
   const revisoesTexto = normalizeRevisoesText(revisoesInclusas);
   const whatsappHagav = getOfficialWhatsapp(env, detalhes);
   const logoUrl = firstNonEmptyValue(
@@ -1216,7 +1446,7 @@ function buildTemplateValues(row, env, options = {}) {
     id: normalizeTemplateText(row?.id || "-", 80),
     proposta_numero: propostaNumero,
     numero_proposta: propostaNumero,
-    data_emissao: formatDateBr(dataHojeIso),
+    data_emissao: dataEmissao,
     data_hoje: formatDateBr(dataHojeIso),
     data_criacao: formatDateBr(row?.created_at || dataHojeIso),
     data_validade: dataValidade,
@@ -1226,6 +1456,9 @@ function buildTemplateValues(row, env, options = {}) {
     cliente_nome: clienteNome,
     nome_cliente: clienteNome,
     nome: clienteNome,
+    empresa,
+    instagram,
+    email_cliente: emailCliente,
     whatsapp: whatsappCliente || "-",
     whatsapp_cliente: whatsappCliente || "-",
     whatsapp_hagav: whatsappHagav || "-",
@@ -1237,9 +1470,11 @@ function buildTemplateValues(row, env, options = {}) {
     formato_entrega_curto: "MP4 pronto para publicacao",
     escopo,
     escopo_comercial: escopo,
+    escopo_mensal: escopoMensal,
     descricao_escopo: escopo,
     resumo_orcamento: escopo,
     quantidade,
+    quantidade_mensal: quantidadeMensal,
     prazo,
     preco_base: formatMoney(precoBaseNum),
     valor_base: formatMoney(precoBaseNum),
@@ -1247,7 +1482,10 @@ function buildTemplateValues(row, env, options = {}) {
     valor_final: formatMoney(precoFinalNum),
     valor_sugerido: formatMoney(valorSugeridoNum),
     valor_total: formatMoney(valorTotalNum, { withCurrency: false }),
-    valor_total_moeda: formatMoney(valorTotalNum, { withCurrency: true }),
+    valor_total_moeda: valorTotalMoeda,
+    valor_mensal_moeda: valorMensalFinal,
+    valor_personalizado_moeda: valorPersonalizado,
+    investimento_label: investimentoLabel,
     valor_unitario_referencia: `${formatMoney(baseUnitValue)} por video`,
     desconto_tabela_15: `${formatMoney(2550)} -> ${formatMoney(2295)} (10% de desconto)`,
     desconto_tabela_30: `${formatMoney(5100)} -> ${formatMoney(4335)} (15% de desconto)`,
@@ -1258,6 +1496,15 @@ function buildTemplateValues(row, env, options = {}) {
     total_referencia_com_desconto_moeda: formatMoney(totalReferenceWithDiscount),
     condicao_pagamento: condicaoPagamento,
     forma_pagamento: formaPagamento,
+    condicoes_comerciais: condicoesComerciais,
+    condicao_linha_1: condicoesLinhas[0] || "",
+    condicao_linha_2: condicoesLinhas[1] || "",
+    condicao_linha_3: condicoesLinhas[2] || "",
+    condicao_linha_4: condicoesLinhas[3] || "",
+    condicao_linha_1_style: condicoesLinhas[0] ? "display:block;" : "display:none;",
+    condicao_linha_2_style: condicoesLinhas[1] ? "display:block;" : "display:none;",
+    condicao_linha_3_style: condicoesLinhas[2] ? "display:block;" : "display:none;",
+    condicao_linha_4_style: condicoesLinhas[3] ? "display:block;" : "display:none;",
     revisoes_inclusas: revisoesTexto,
     revisoes_inclusas_texto: revisoesTexto,
     inicio_producao_texto: "O projeto inicia apos aprovacao e envio dos materiais.",
@@ -1268,36 +1515,66 @@ function buildTemplateValues(row, env, options = {}) {
     referencia_texto: referenciaCliente.text,
     referencia_bloco_style: referenciaCliente.show ? "display:block;" : "display:none;",
     resumo_quantidade_breakdown: quantitySummary.breakdown,
-    modo_proposta: proposalMode || "direta",
+    modo_proposta: proposalMode,
     modo_proposta_label: proposalModeLabel(proposalMode),
+    opcoes_bloco_style: proposalMode === "opcoes" ? "display:block;" : "display:none;",
+    investimento_bloco_style: proposalMode === "opcoes" ? "display:none;" : "display:block;",
+    mensal_bloco_style: proposalMode === "mensal" ? "display:block;" : "display:none;",
+    personalizada_bloco_style: proposalMode === "personalizada" ? "display:block;" : "display:none;",
+    empresa_bloco_style: empresa ? "display:block;" : "display:none;",
+    instagram_bloco_style: instagram ? "display:block;" : "display:none;",
+    email_bloco_style: emailCliente ? "display:block;" : "display:none;",
+    duracao_contrato_meses: duracaoMensal,
+    opcao1_titulo: opcao1Titulo,
+    opcao1_qtd: opcao1Qtd,
+    opcao1_preco: opcao1Preco,
+    opcao1_unitario: opcao1Unitario,
+    opcao1_desc: opcao1Desc,
+    opcao1_desconto: opcao1Desconto,
+    opcao1_desconto_style: opcao1Desconto ? "display:flex;" : "display:none;",
+    opcao2_titulo: opcao2Titulo,
+    opcao2_qtd: opcao2Qtd,
+    opcao2_preco: opcao2Preco,
+    opcao2_unitario: opcao2Unitario,
+    opcao2_desc: opcao2Desc,
+    opcao2_desconto: opcao2Desconto,
+    opcao2_desconto_style: opcao2Desconto ? "display:flex;" : "display:none;",
+    opcao3_titulo: opcao3Titulo,
+    opcao3_qtd: opcao3Qtd,
+    opcao3_preco: opcao3Preco,
+    opcao3_unitario: opcao3Unitario,
+    opcao3_desc: opcao3Desc,
+    opcao3_desconto: opcao3Desconto,
+    opcao3_desconto_style: opcao3Desconto ? "display:flex;" : "display:none;",
+    texto_comparativo: textoComparativo,
   };
 
-  if (templateOverrides.cliente_nome || templateOverrides.nome_cliente) {
-    const nome = templateOverrides.cliente_nome || templateOverrides.nome_cliente;
+  Object.assign(base, templateOverrides);
+  if (base.cliente_nome || base.nome_cliente) {
+    const nome = firstNonEmptyValue(base.cliente_nome, base.nome_cliente);
     base.cliente_nome = nome;
     base.nome_cliente = nome;
     base.nome = nome;
   }
-  if (templateOverrides.whatsapp) {
-    base.whatsapp = templateOverrides.whatsapp;
-    base.whatsapp_cliente = templateOverrides.whatsapp;
+  if (base.whatsapp) {
+    base.whatsapp_cliente = base.whatsapp;
   }
-  if (templateOverrides.servico_principal) {
-    base.servico_principal = templateOverrides.servico_principal;
-    base.servico = templateOverrides.servico_principal;
-    base.servico_plano = templateOverrides.servico_principal;
-    base.plano_servico = templateOverrides.servico_principal;
+  if (base.servico_principal) {
+    base.servico = base.servico_principal;
+    base.servico_plano = base.servico_principal;
+    base.plano_servico = base.servico_principal;
   }
-  if (templateOverrides.escopo_comercial) {
-    base.escopo = templateOverrides.escopo_comercial;
-    base.escopo_comercial = templateOverrides.escopo_comercial;
-    base.descricao_escopo = templateOverrides.escopo_comercial;
-    base.resumo_orcamento = templateOverrides.escopo_comercial;
+  if (base.escopo_comercial) {
+    base.escopo = base.escopo_comercial;
+    base.descricao_escopo = base.escopo_comercial;
+    base.resumo_orcamento = base.escopo_comercial;
   }
-  if (templateOverrides.valor_total_moeda) {
-    base.valor_total_moeda = templateOverrides.valor_total_moeda;
+  if (String(base.modo_proposta || "") === "mensal" && base.valor_mensal_moeda) {
+    base.valor_total_moeda = base.valor_mensal_moeda;
   }
-  Object.assign(base, templateOverrides);
+  if (String(base.modo_proposta || "") === "personalizada" && base.valor_personalizado_moeda) {
+    base.valor_total_moeda = base.valor_personalizado_moeda;
+  }
 
   const expanded = {};
   for (const [key, value] of Object.entries(base)) {

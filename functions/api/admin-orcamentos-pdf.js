@@ -752,28 +752,255 @@ function readDetalhes(row) {
   return {};
 }
 
-function listDeliverables(detalhes, servico, prazo, formatoEntrega, revisoesInclusas) {
-  const rawList = Array.isArray(detalhes?.entregaveis)
-    ? detalhes.entregaveis
-    : Array.isArray(detalhes?.comercial?.entregaveis)
-      ? detalhes.comercial.entregaveis
-      : [];
-  const cleanedList = rawList
-    .map((item) => normalizeTemplateText(item, 180, { allowEmpty: true }))
-    .filter(Boolean)
-    .slice(0, 4);
+function parseQuantityNumber(value) {
+  if (Number.isFinite(Number(value))) {
+    const parsed = Math.round(Number(value));
+    return parsed > 0 ? parsed : 0;
+  }
+  const match = String(value || "").match(/(\d{1,5})/);
+  if (!match || !match[1]) return 0;
+  const parsed = Number.parseInt(match[1], 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+}
 
-  if (cleanedList.length > 0) {
-    while (cleanedList.length < 4) cleanedList.push("");
-    return cleanedList;
+function normalizeServiceName(value) {
+  const cleaned = normalizeTemplateText(value, 120, { allowEmpty: true });
+  if (!cleaned) return "";
+  const key = cleaned
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+
+  if (/reels?|shorts?|tiktok/.test(key)) return "Reels, TikTok e Shorts";
+  if (/criativo/.test(key) && /(ads|trafego)/.test(key)) return "Criativo para Ads";
+  if (/corte/.test(key) && /podcast/.test(key)) return "Corte Podcast / Clipe";
+  if (/youtube/.test(key)) return "YouTube";
+  if (/vsl/.test(key) && /(15|ate|curta)/.test(key)) return "VSL ate 15 min";
+  if (/vsl/.test(key) && /(longa|30|min)/.test(key)) return "VSL longa (15-30 min)";
+  if (/videoaula|modulo/.test(key)) return "Videoaula / Modulo";
+  if (/depoimento/.test(key)) return "Depoimento";
+  if (/motion|vinheta/.test(key)) return "Motion / Vinheta";
+  if (/conteudo.*rede/.test(key)) return "Conteudo para redes sociais";
+  return cleaned;
+}
+
+function parseItemsFromArray(rawItems) {
+  if (!Array.isArray(rawItems)) return [];
+  return rawItems
+    .map((item) => {
+      if (!item || typeof item !== "object") return null;
+      const servico = normalizeServiceName(
+        item?.servico
+        ?? item?.tipo
+        ?? item?.operacao
+        ?? item?.nome
+        ?? ""
+      );
+      const quantidade = parseQuantityNumber(
+        item?.quantidade
+        ?? item?.qtd
+        ?? item?.volume
+        ?? item?.valor
+        ?? 0
+      );
+      if (!servico || quantidade <= 0) return null;
+      return { servico, quantidade };
+    })
+    .filter(Boolean);
+}
+
+function parseItemsFromMap(rawMap) {
+  if (!rawMap || typeof rawMap !== "object" || Array.isArray(rawMap)) return [];
+  return Object.entries(rawMap)
+    .map(([serviceRaw, qtyRaw]) => {
+      const servico = normalizeServiceName(serviceRaw);
+      const quantidade = parseQuantityNumber(qtyRaw);
+      if (!servico || quantidade <= 0) return null;
+      return { servico, quantidade };
+    })
+    .filter(Boolean);
+}
+
+function parseItemsFromQuantityText(rawText) {
+  const text = normalizeTemplateText(rawText, 600, { allowEmpty: true });
+  if (!text) return [];
+  return text
+    .split(/\||;|\n/)
+    .map((segment) => normalizeTemplateText(segment, 220, { allowEmpty: true }))
+    .filter(Boolean)
+    .map((segment) => {
+      const match = segment.match(/^(.+?)\s*[:=-]\s*(\d{1,5})/);
+      if (!match) return null;
+      const servico = normalizeServiceName(match[1]);
+      const quantidade = parseQuantityNumber(match[2]);
+      if (!servico || quantidade <= 0) return null;
+      return { servico, quantidade };
+    })
+    .filter(Boolean);
+}
+
+function mergeServiceItems(items, fallbackService = "Conteudo audiovisual", fallbackQty = 1) {
+  const map = new Map();
+  (Array.isArray(items) ? items : []).forEach((item) => {
+    if (!item || typeof item !== "object") return;
+    const servico = normalizeServiceName(item?.servico || "");
+    const quantidade = parseQuantityNumber(item?.quantidade);
+    if (!servico || quantidade <= 0) return;
+    map.set(servico, (map.get(servico) || 0) + quantidade);
+  });
+
+  const merged = Array.from(map.entries()).map(([servico, quantidade]) => ({ servico, quantidade }));
+  if (merged.length > 0) return merged;
+
+  const safeService = normalizeServiceName(fallbackService) || "Conteudo audiovisual";
+  const safeQty = Math.max(1, parseQuantityNumber(fallbackQty) || 1);
+  return [{ servico: safeService, quantidade: safeQty }];
+}
+
+function extractServiceItems(row, detalhes) {
+  const answers = (
+    detalhes?.respostasCompletas
+    && typeof detalhes.respostasCompletas === "object"
+    && !Array.isArray(detalhes.respostasCompletas)
+  ) ? detalhes.respostasCompletas : {};
+
+  const fromArray = parseItemsFromArray(detalhes?.itensServico);
+  const fromMaps = [
+    parseItemsFromMap(answers?.flow_quantidades),
+    parseItemsFromMap(answers?.unica_quantidades),
+    parseItemsFromMap(answers?.rec_quantidades),
+    parseItemsFromMap(detalhes?.quantidade_por_servico),
+    parseItemsFromMap(detalhes?.quantidades_por_servico),
+  ].flat();
+  const fromText = parseItemsFromQuantityText(
+    firstNonEmptyValue(
+      detalhes?.quantidade,
+      detalhes?.quantidade_texto,
+      row?.quantidade
+    )
+  );
+
+  const fallbackService = firstNonEmptyValue(
+    detalhes?.servicoOuOperacao,
+    detalhes?.servico,
+    row?.servico,
+    row?.pacote_sugerido,
+    "Conteudo audiovisual"
+  );
+  const fallbackQty = firstNonEmptyValue(
+    row?.quantidade,
+    detalhes?.quantidade,
+    "1"
+  );
+
+  return mergeServiceItems(
+    [...fromArray, ...fromMaps, ...fromText],
+    fallbackService,
+    fallbackQty
+  ).slice(0, 8);
+}
+
+function inferUnitByService(serviceLabel, quantity) {
+  const key = String(serviceLabel || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+  if (/motion|vinheta/.test(key)) return quantity === 1 ? "projeto" : "projetos";
+  if (/videoaula|modulo/.test(key)) return quantity === 1 ? "modulo" : "modulos";
+  return quantity === 1 ? "video" : "videos";
+}
+
+function buildQuantitySummary(items) {
+  const safeItems = Array.isArray(items) ? items.filter(Boolean) : [];
+  const total = safeItems.reduce((sum, item) => sum + parseQuantityNumber(item?.quantidade), 0) || 1;
+  if (safeItems.length <= 1) {
+    const unit = inferUnitByService(safeItems[0]?.servico || "", total);
+    return {
+      total,
+      quantityLabel: `${total} ${unit}`,
+      breakdown: `${total} ${safeItems[0]?.servico || "conteudo audiovisual"}`,
+    };
+  }
+  const compactBreakdown = safeItems
+    .slice(0, 4)
+    .map((item) => `${item.quantidade} ${item.servico}`)
+    .join(" + ");
+  return {
+    total,
+    quantityLabel: `${total} itens`,
+    breakdown: compactBreakdown,
+  };
+}
+
+function isLikelyInternalText(value) {
+  const key = String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+  return (
+    key.includes("du |")
+    || key.includes("dr |")
+    || key.includes("material gravado")
+    || key.includes("tempo bruto")
+    || key.includes("origem")
+    || key.includes("respostascompletas")
+  );
+}
+
+function normalizeReferenceText(referenceRaw) {
+  const raw = normalizeTemplateText(referenceRaw, 450, { allowEmpty: true });
+  if (!raw) return { show: false, text: "" };
+  const shortUrlMatch = raw.match(/https?:\/\/[^\s]+/i);
+  if (shortUrlMatch && shortUrlMatch[0] && shortUrlMatch[0].length <= 120) {
+    return { show: true, text: `Referencia: ${shortUrlMatch[0]}` };
+  }
+  return { show: true, text: "Referencia enviada pelo cliente sera considerada no briefing." };
+}
+
+function normalizeObservationForClient(rawValue) {
+  const text = normalizeTemplateText(rawValue, 320, { allowEmpty: true });
+  if (!text) return { show: false, text: "" };
+  if (text.length < 8 || text.length > 260) return { show: false, text: "" };
+  if (isLikelyInternalText(text)) return { show: false, text: "" };
+  const separators = (text.match(/\|/g) || []).length;
+  if (separators >= 2) return { show: false, text: "" };
+  return { show: true, text };
+}
+
+function normalizeRevisoesText(rawValue) {
+  const text = normalizeTemplateText(rawValue, 80, { allowEmpty: true });
+  if (!text) return "1 rodada de ajustes inclusa.";
+  const qty = parseQuantityNumber(text);
+  if (qty <= 1) return "1 rodada de ajustes inclusa.";
+  return `${qty} rodadas de ajustes inclusas.`;
+}
+
+function buildCommercialScope({
+  serviceItems,
+  quantitySummary,
+  revisoesText,
+}) {
+  const safeItems = Array.isArray(serviceItems) ? serviceItems : [];
+  if (safeItems.length <= 1) {
+    const single = safeItems[0] || { servico: "conteudo audiovisual", quantidade: 1 };
+    const unit = inferUnitByService(single.servico, single.quantidade);
+    return [
+      `Edicao e finalizacao de ${single.quantidade} ${unit} de ${single.servico} conforme briefing aprovado.`,
+      "Inclui organizacao do material, cortes, ritmo, acabamento visual e exportacao final em MP4.",
+      `O projeto contempla ${revisoesText.toLowerCase()}`,
+    ].join(" ");
   }
 
+  const compactServices = safeItems
+    .slice(0, 4)
+    .map((item) => `${item.quantidade} ${item.servico}`)
+    .join(" + ");
+
   return [
-    `Edicao e finalizacao de ${servico || "conteudo"} conforme escopo aprovado.`,
-    `Entrega final em ${formatoEntrega || "formato digital padrao"}.`,
-    `Prazo estimado de producao: ${prazo || "a combinar"}.`,
-    `${revisoesInclusas || "1 rodada"} incluida(s) no projeto.`,
-  ];
+    `Edicao e finalizacao de ${quantitySummary.total} itens (${compactServices}) conforme briefing aprovado.`,
+    "Inclui organizacao do material, cortes, ritmo, acabamento visual e exportacao final em MP4.",
+    `O projeto contempla ${revisoesText.toLowerCase()}`,
+  ].join(" ");
 }
 
 function getOfficialWhatsapp(env, detalhes) {
@@ -797,27 +1024,33 @@ function buildTemplateValues(row, env) {
     ? detalhes.comercial
     : {};
   const dataHojeIso = new Date().toISOString();
-  const servico = firstNonEmptyValue(row?.servico, detalhes?.servicoOuOperacao, detalhes?.servico, "-");
-  const quantidade = firstNonEmptyValue(detalhes?.quantidade, row?.quantidade, "1");
-  const material = firstNonEmptyValue(detalhes?.materialGravado, row?.material_gravado, "A combinar");
-  const tempo = firstNonEmptyValue(detalhes?.tempoBruto, row?.tempo_bruto, "A combinar");
+  const serviceItems = extractServiceItems(row, detalhes);
+  const quantitySummary = buildQuantitySummary(serviceItems);
+  const primaryService = serviceItems.length > 1
+    ? `Multiplos servicos (${serviceItems.length})`
+    : (serviceItems[0]?.servico || "Conteudo audiovisual");
+  const quantidade = serviceItems.length > 1
+    ? `${quantitySummary.quantityLabel} (${quantitySummary.breakdown})`
+    : quantitySummary.quantityLabel;
   const prazo = firstNonEmptyValue(
     detalhes?.prazo,
     row?.prazo,
     comercial?.prazo,
     "A combinar"
   );
-  const referencia = firstNonEmptyValue(detalhes?.referencia, row?.referencia, "A combinar");
-  const observacoesCliente = firstNonEmptyValue(
-    detalhes?.observacoes,
-    row?.observacoes,
-    comercial?.observacoes_cliente,
+  const referenciaRaw = firstNonEmptyValue(
+    comercial?.referencia_publica,
+    detalhes?.referencia,
+    row?.referencia,
     ""
   );
-  const observacoesInternas = firstNonEmptyValue(
-    row?.observacoes_internas,
-    comercial?.observacoes_internas,
-    ""
+  const referenciaCliente = normalizeReferenceText(referenciaRaw);
+  const observacaoManual = normalizeObservationForClient(
+    firstNonEmptyValue(
+      comercial?.observacao_adicional,
+      detalhes?.observacao_adicional,
+      ""
+    )
   );
   const precoBaseNum = Number(row?.preco_base || 0);
   const precoFinalNum = Number(
@@ -841,15 +1074,16 @@ function buildTemplateValues(row, env) {
     ?? row?.preco_base
     ?? 0
   );
-  const origem = firstNonEmptyValue(row?.origem, detalhes?.origem, "-");
-  const fluxo = firstNonEmptyValue(detalhes?.fluxo, row?.fluxo, "-");
   const escopo = firstNonEmptyValue(
     comercial?.descricao_escopo,
-    row?.resumo_orcamento,
-    detalhes?.resumo_orcamento,
-    `Servico ${servico} com entrega conforme briefing e referencia ${referencia}.`
+    buildCommercialScope({
+      serviceItems,
+      quantitySummary,
+      revisoesText: normalizeRevisoesText(
+        firstNonEmptyValue(comercial?.revisoes_inclusas, detalhes?.revisoes_inclusas, "1 rodada")
+      ),
+    })
   );
-  const pacote = firstNonEmptyValue(row?.pacote_sugerido, comercial?.pacote, "-");
   const clienteNome = firstNonEmptyValue(row?.nome, detalhes?.nome, "-");
   const whatsappCliente = formatWhatsapp(firstNonEmptyValue(row?.whatsapp, detalhes?.whatsapp, ""));
   const propostaNumero = normalizeTemplateText(
@@ -874,29 +1108,20 @@ function buildTemplateValues(row, env) {
   const formatoEntrega = firstNonEmptyValue(
     comercial?.formato_entrega,
     detalhes?.formato_entrega,
-    "Arquivo digital final em MP4"
+    "Arquivo final pronto para publicacao em MP4."
   );
   const dataValidadeInput = firstNonEmptyValue(comercial?.data_validade, row?.validade_ate);
   const dataValidadeFormatted = dataValidadeInput ? formatDateBr(dataValidadeInput) : "";
   const dataValidade = (dataValidadeFormatted && dataValidadeFormatted !== "-")
     ? dataValidadeFormatted
     : formatDatePlusDaysBr(dataHojeIso, 7);
-  const observacaoAdicional = normalizeTemplateText(
-    firstNonEmptyValue(
-      comercial?.observacao_adicional,
-      detalhes?.observacao_adicional,
-      ""
-    ),
-    400,
-    { allowEmpty: true }
-  );
+  const revisoesTexto = normalizeRevisoesText(revisoesInclusas);
   const whatsappHagav = getOfficialWhatsapp(env, detalhes);
-  const entregaveis = listDeliverables(
-    detalhes,
-    servico,
-    prazo,
-    formatoEntrega,
-    revisoesInclusas
+  const logoUrl = firstNonEmptyValue(
+    comercial?.logo_url,
+    detalhes?.logo_url,
+    firstEnvValue(env, ["PROPOSTA_LOGO_URL", "HAGAV_LOGO_URL", "NEXT_PUBLIC_HAGAV_LOGO_URL"]),
+    "https://hagav.com.br/assets/hagav-master-horizontal-transparente-4000.png"
   );
 
   const base = {
@@ -909,26 +1134,25 @@ function buildTemplateValues(row, env) {
     data_validade: dataValidade,
     validade_dias: "7",
     validade_comercial: dataValidade,
+    logo_url: logoUrl,
     cliente_nome: clienteNome,
     nome_cliente: clienteNome,
     nome: clienteNome,
     whatsapp: whatsappCliente || "-",
     whatsapp_cliente: whatsappCliente || "-",
     whatsapp_hagav: whatsappHagav || "-",
-    fluxo,
-    origem,
-    servico,
-    servico_plano: servico,
-    plano_servico: servico,
+    servico: primaryService,
+    servico_plano: primaryService,
+    plano_servico: primaryService,
+    servico_principal: primaryService,
     formato_entrega: formatoEntrega,
+    formato_entrega_curto: "MP4 pronto para publicacao",
     escopo,
+    escopo_comercial: escopo,
     descricao_escopo: escopo,
     resumo_orcamento: escopo,
     quantidade,
-    material_gravado: material,
-    tempo_bruto: tempo,
     prazo,
-    referencia,
     preco_base: formatMoney(precoBaseNum),
     valor_base: formatMoney(precoBaseNum),
     preco_final: formatMoney(precoFinalNum),
@@ -938,16 +1162,16 @@ function buildTemplateValues(row, env) {
     valor_total_moeda: formatMoney(valorTotalNum, { withCurrency: true }),
     condicao_pagamento: condicaoPagamento,
     forma_pagamento: formaPagamento,
-    revisoes_inclusas: revisoesInclusas,
-    entregavel_1: entregaveis[0] || "",
-    entregavel_2: entregaveis[1] || "",
-    entregavel_3: entregaveis[2] || "",
-    entregavel_4: entregaveis[3] || "",
-    observacao_adicional: observacaoAdicional,
-    pacote_sugerido: pacote,
-    observacoes_cliente: observacoesCliente,
-    observacoes: observacoesCliente || observacoesInternas || "",
-    observacoes_internas: observacoesInternas,
+    revisoes_inclusas: revisoesTexto,
+    revisoes_inclusas_texto: revisoesTexto,
+    inicio_producao_texto: "O projeto inicia apos aprovacao e envio dos materiais.",
+    ajustes_texto: "Inclui 1 rodada de ajustes. Alteracoes adicionais ou mudancas de escopo podem gerar novo orcamento.",
+    cta_aprovacao: "Para aprovar, responda APROVADO no WhatsApp.",
+    observacao_adicional: observacaoManual.text,
+    observacoes_bloco_style: observacaoManual.show ? "display:block;" : "display:none;",
+    referencia_texto: referenciaCliente.text,
+    referencia_bloco_style: referenciaCliente.show ? "display:block;" : "display:none;",
+    resumo_quantidade_breakdown: quantitySummary.breakdown,
   };
 
   const expanded = {};

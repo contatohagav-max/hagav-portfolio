@@ -206,8 +206,6 @@
       border-radius: 2.8mm;
       border: 0.5pt solid #332a16;
       overflow: hidden;
-      display: grid;
-      grid-template-columns: 1.45fr 1fr;
       background: linear-gradient(135deg, #0f0f11 0%, #1a1a1d 58%, #2b2416 100%);
       page-break-inside: avoid;
     }
@@ -244,36 +242,21 @@
       font-weight: 700;
     }
 
-    .investment-side {
-      border-left: 0.45pt solid rgba(200, 162, 58, 0.32);
-      background: rgba(200, 162, 58, 0.08);
-      padding: 3.6mm 3.2mm;
-      display: grid;
-      gap: 1.4mm;
-      align-content: center;
-    }
-
-    .mini {
+    .investment-rules {
+      margin-top: 2.1mm;
       border: 0.4pt solid rgba(244, 221, 156, 0.3);
-      border-radius: 1.8mm;
+      border-radius: 2mm;
       background: rgba(0, 0, 0, 0.22);
-      padding: 1.4mm 1.8mm;
+      padding: 2.1mm 2.4mm;
+      display: grid;
+      gap: 0.7mm;
     }
 
-    .mini .k {
-      margin: 0 0 0.6mm;
-      color: #d8c894;
-      text-transform: uppercase;
-      letter-spacing: 0.12em;
-      font-size: 5.2pt;
-      font-weight: 700;
-    }
-
-    .mini .v {
+    .investment-rules p {
       margin: 0;
-      color: #fff;
-      font-size: 8pt;
-      font-weight: 650;
+      color: #f5efe0;
+      font-size: 7.7pt;
+      font-weight: 600;
       line-height: 1.35;
       word-break: break-word;
       overflow-wrap: anywhere;
@@ -408,17 +391,13 @@
           <p class="investment-tag">Valor total</p>
           <p class="investment-value">{{valor_total_moeda}}</p>
           <p class="investment-note">Investimento comercial da proposta</p>
+          <div class="investment-rules">
+            <p><b>Base de referencia:</b> {{valor_unitario_referencia}}</p>
+            <p><b>15 videos:</b> {{desconto_tabela_15}}</p>
+            <p><b>30 videos:</b> {{desconto_tabela_30}}</p>
+            <p>{{desconto_aplicado_texto}}</p>
+          </div>
         </div>
-        <aside class="investment-side">
-          <div class="mini">
-            <p class="k">Forma de pagamento</p>
-            <p class="v">{{forma_pagamento}}</p>
-          </div>
-          <div class="mini">
-            <p class="k">Validade</p>
-            <p class="v">{{data_validade}}</p>
-          </div>
-        </aside>
       </article>
 
       <article class="section">

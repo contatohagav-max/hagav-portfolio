@@ -1026,6 +1026,11 @@ function buildTemplateValues(row, env) {
   const dataHojeIso = new Date().toISOString();
   const serviceItems = extractServiceItems(row, detalhes);
   const quantitySummary = buildQuantitySummary(serviceItems);
+  const qtyTotal = Math.max(1, Number(quantitySummary?.total || 1));
+  const baseUnitValue = 170;
+  const subtotalReference = qtyTotal * baseUnitValue;
+  const discountPercent = qtyTotal >= 30 ? 15 : (qtyTotal >= 15 ? 10 : 0);
+  const totalReferenceWithDiscount = subtotalReference * (1 - (discountPercent / 100));
   const primaryService = serviceItems.length > 1
     ? `Multiplos servicos (${serviceItems.length})`
     : (serviceItems[0]?.servico || "Conteudo audiovisual");
@@ -1160,6 +1165,14 @@ function buildTemplateValues(row, env) {
     valor_sugerido: formatMoney(valorSugeridoNum),
     valor_total: formatMoney(valorTotalNum, { withCurrency: false }),
     valor_total_moeda: formatMoney(valorTotalNum, { withCurrency: true }),
+    valor_unitario_referencia: `${formatMoney(baseUnitValue)} por video`,
+    desconto_tabela_15: `${formatMoney(2550)} -> ${formatMoney(2295)} (10% de desconto)`,
+    desconto_tabela_30: `${formatMoney(5100)} -> ${formatMoney(4335)} (15% de desconto)`,
+    desconto_aplicado_texto: discountPercent > 0
+      ? `Nesta proposta, a faixa de ${discountPercent}% foi considerada na referencia comercial de volume.`
+      : "Nesta proposta, ainda nao foi aplicada faixa de desconto progressivo por volume.",
+    subtotal_referencia_moeda: formatMoney(subtotalReference),
+    total_referencia_com_desconto_moeda: formatMoney(totalReferenceWithDiscount),
     condicao_pagamento: condicaoPagamento,
     forma_pagamento: formaPagamento,
     revisoes_inclusas: revisoesTexto,

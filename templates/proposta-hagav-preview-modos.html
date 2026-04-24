@@ -752,6 +752,103 @@
       },
     };
 
+    function deepClone(value) {
+      return JSON.parse(JSON.stringify(value || {}));
+    }
+
+    function cleanDraftValue(value) {
+      return String(value || "").trim();
+    }
+
+    function readDrawerPreviewDraft() {
+      try {
+        const raw = window.sessionStorage.getItem("hagav_proposta_preview_draft");
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        if (!parsed || typeof parsed !== "object") return null;
+        if (!parsed.draft || typeof parsed.draft !== "object") return null;
+        return {
+          mode: cleanDraftValue(parsed.mode),
+          draft: parsed.draft,
+        };
+      } catch {
+        return null;
+      }
+    }
+
+    function applyDrawerDraft(baseData, mode, payload) {
+      const data = deepClone(baseData);
+      const draft = payload?.draft;
+      if (!draft || typeof draft !== "object") return data;
+
+      const clienteNome = cleanDraftValue(draft.cliente_nome);
+      const whatsapp = cleanDraftValue(draft.whatsapp);
+      const numeroProposta = cleanDraftValue(draft.numero_proposta);
+      const dataEmissao = cleanDraftValue(draft.data_emissao);
+      const servico = cleanDraftValue(draft.servico_principal);
+      const quantidade = cleanDraftValue(draft.quantidade);
+      const prazo = cleanDraftValue(draft.prazo);
+      const escopo = cleanDraftValue(draft.escopo_comercial);
+      const valor = cleanDraftValue(draft.valor_total_moeda);
+      const observacao = cleanDraftValue(draft.observacao_adicional);
+      const formaPagamento = cleanDraftValue(draft.forma_pagamento);
+      const dataValidade = cleanDraftValue(draft.data_validade);
+
+      if (clienteNome) data.cliente.nome = clienteNome;
+      if (whatsapp) data.cliente.whatsapp = whatsapp;
+      if (numeroProposta) data.numero = numeroProposta;
+      if (dataEmissao) data.data = dataEmissao;
+      if (servico) data.resumo.servico = servico;
+      if (quantidade) data.resumo.quantidade = quantidade;
+      if (prazo) data.resumo.prazo = prazo;
+      if (escopo) data.escopo = escopo;
+      if (valor) data.valor = valor;
+      if (observacao) data.observacao = observacao;
+
+      const condicoes = Array.isArray(data.condicoes) ? [...data.condicoes] : [];
+      if (formaPagamento) condicoes[0] = `Forma de pagamento: ${formaPagamento}`;
+      if (dataValidade) condicoes[1] = `Proposta valida ate ${dataValidade}`;
+      data.condicoes = condicoes.filter(Boolean);
+
+      if (mode === "opcoes") {
+        const options = [1, 2, 3].map((index) => {
+          const nome = cleanDraftValue(draft[`opcao${index}_titulo`]);
+          const preco = cleanDraftValue(draft[`opcao${index}_preco`]);
+          const qtd = cleanDraftValue(draft[`opcao${index}_qtd`]);
+          const unitario = cleanDraftValue(draft[`opcao${index}_unitario`]);
+          const desc = cleanDraftValue(draft[`opcao${index}_desc`]);
+          const desconto = cleanDraftValue(draft[`opcao${index}_desconto`]);
+          return {
+            nome: nome || undefined,
+            preco: preco || undefined,
+            quantidade: qtd || undefined,
+            unitario: unitario || undefined,
+            desc: desc || undefined,
+            desconto: desconto || undefined,
+          };
+        });
+        const hasAnyOptionDraft = options.some((option) => (
+          option.nome || option.preco || option.quantidade || option.unitario || option.desc || option.desconto
+        ));
+        if (hasAnyOptionDraft) {
+          data.opcoes = options.map((option, index) => ({
+            nome: option.nome || `Opcao ${index + 1}`,
+            preco: option.preco || "",
+            quantidade: option.quantidade || "",
+            unitario: option.unitario || "",
+            desc: option.desc || "",
+            desconto: option.desconto || "",
+          }));
+        }
+        const textoComparativo = cleanDraftValue(draft.texto_comparativo);
+        if (textoComparativo) data.opcoesTextoApoio = textoComparativo;
+      }
+
+      return data;
+    }
+
+    const DRAWER_PREVIEW_PAYLOAD = readDrawerPreviewDraft();
+
     function byId(id) {
       return document.getElementById(id);
     }
@@ -841,7 +938,8 @@
     }
 
     function renderModo(modo) {
-      const data = MODOS[modo] || MODOS.direta;
+      const baseData = MODOS[modo] || MODOS.direta;
+      const data = applyDrawerDraft(baseData, modo, DRAWER_PREVIEW_PAYLOAD);
       const keys = Object.keys(MODOS);
 
       document.querySelectorAll(".mode-btn").forEach((btn) => {
@@ -905,7 +1003,12 @@
       });
 
       const queryMode = new URLSearchParams(window.location.search).get("modo");
-      const initial = Object.prototype.hasOwnProperty.call(MODOS, queryMode) ? queryMode : "direta";
+      const draftMode = Object.prototype.hasOwnProperty.call(MODOS, DRAWER_PREVIEW_PAYLOAD?.mode)
+        ? DRAWER_PREVIEW_PAYLOAD.mode
+        : "";
+      const initial = Object.prototype.hasOwnProperty.call(MODOS, queryMode)
+        ? queryMode
+        : (draftMode || "direta");
       renderModo(initial);
     }
 

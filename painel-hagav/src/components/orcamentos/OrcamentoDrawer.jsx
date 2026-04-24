@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { X, Save, Loader2, MessageCircle, ExternalLink, AlertTriangle, CheckCircle2, Send, Ban, RotateCw } from 'lucide-react';
+import { X, Save, Loader2, MessageCircle, ExternalLink, AlertTriangle, CheckCircle2, Send, Ban, RotateCw, Eye, Download } from 'lucide-react';
 import { OrcStatusBadge, PrioridadeBadge, UrgenciaBadge, TemperaturaBadge } from '@/components/ui/StatusBadge';
 import EduTooltip from '@/components/ui/EduTooltip';
 import { generateDealPdf, updateOrcamento } from '@/lib/supabase';
@@ -30,30 +30,65 @@ const PROPOSAL_MODE_OPTIONS = [
 
 const PROPOSAL_MODE_PRESETS = {
   direta: {
-    servico_principal: 'VSL ate 15 min',
-    quantidade: '1 video',
+    servico_principal: 'Conteudo para redes sociais',
+    quantidade: '10 videos',
     prazo: '24h',
-    formato_entrega: 'Arquivo final pronto para publicacao em MP4.',
+    escopo_comercial: 'Edicao estrategica com acabamento profissional, ritmo otimizado para retencao e entrega pronta para publicacao em MP4. Inclui 1 rodada de ajustes.',
   },
   opcoes: {
-    servico_principal: 'Planos de conteudo mensal',
-    quantidade: 'Comparativo de 3 opcoes',
+    servico_principal: 'Conteudo para redes sociais',
+    quantidade: '10 videos',
     prazo: 'Inicio imediato apos aprovacao',
-    formato_entrega: 'MP4 pronto para publicacao',
+    escopo_comercial: 'Comparativo comercial com pedido atual e duas opcoes de maior volume para reduzir custo medio por entrega.',
   },
   mensal: {
     servico_principal: 'Plano mensal de conteudo',
     quantidade: '12 videos mensais',
     prazo: 'Cronograma mensal',
-    formato_entrega: 'MP4 pronto para publicacao',
+    escopo_comercial: 'Operacao mensal de edicao com padrao visual consistente, organizacao de entregas e acompanhamento por cronograma aprovado.',
   },
   personalizada: {
     servico_principal: 'Proposta personalizada',
     quantidade: 'Escopo sob medida',
     prazo: 'Conforme alinhamento',
-    formato_entrega: 'MP4 + formatos complementares',
+    escopo_comercial: 'Estrutura personalizada para atender necessidades especificas, com planejamento de escopo, organizacao de materiais e execucao premium.',
   },
 };
+
+const PROPOSAL_DRAW_FIELDS = [
+  'cliente_nome',
+  'whatsapp',
+  'servico_principal',
+  'quantidade',
+  'prazo',
+  'escopo_comercial',
+  'observacao_adicional',
+  'valor_total_moeda',
+  'forma_pagamento',
+  'data_validade',
+  'numero_proposta',
+  'data_emissao',
+  'cta_aprovacao',
+  'opcao1_titulo',
+  'opcao1_qtd',
+  'opcao1_preco',
+  'opcao1_unitario',
+  'opcao1_desc',
+  'opcao1_desconto',
+  'opcao2_titulo',
+  'opcao2_qtd',
+  'opcao2_preco',
+  'opcao2_unitario',
+  'opcao2_desc',
+  'opcao2_desconto',
+  'opcao3_titulo',
+  'opcao3_qtd',
+  'opcao3_preco',
+  'opcao3_unitario',
+  'opcao3_desc',
+  'opcao3_desconto',
+  'texto_comparativo',
+];
 
 function InfoRow({ label, value }) {
   return (
@@ -135,19 +170,112 @@ function normalizeProposalMode(value) {
   return 'direta';
 }
 
-function buildProposalResumoFromRecord(record) {
+function parseQuantityNumber(value, fallback = 10) {
+  const match = String(value || '').match(/(\d{1,5})/);
+  if (!match) return fallback;
+  const parsed = Number(match[1]);
+  if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
+  return Math.max(1, parsed);
+}
+
+function buildDefaultOptionCards(baseQuantity = 10) {
+  const pedidoAtualQty = Math.max(1, Number(baseQuantity || 10));
+  const maisVolumeQty = Math.max(pedidoAtualQty + 1, Math.round(pedidoAtualQty * 1.5));
+  const melhorCustoQty = Math.max(30, Math.round(pedidoAtualQty * 3));
+  const baseUnit = 170;
+  const option1Total = pedidoAtualQty * baseUnit;
+  const option2Unit = baseUnit * 0.95;
+  const option3Unit = baseUnit * 0.85;
+  const option2Total = maisVolumeQty * option2Unit;
+  const option3Total = melhorCustoQty * option3Unit;
+
+  return {
+    opcao1_titulo: 'Pedido atual',
+    opcao1_qtd: `${pedidoAtualQty} videos`,
+    opcao1_preco: fmtBRL(option1Total),
+    opcao1_unitario: `${fmtBRL(baseUnit)} por video`,
+    opcao1_desc: 'Sem desconto aplicado',
+    opcao1_desconto: '',
+    opcao2_titulo: 'Mais volume',
+    opcao2_qtd: `${maisVolumeQty} videos`,
+    opcao2_preco: fmtBRL(option2Total),
+    opcao2_unitario: `${fmtBRL(option2Unit)} por video`,
+    opcao2_desc: '5% de desconto por volume',
+    opcao2_desconto: '-5%',
+    opcao3_titulo: 'Melhor custo-beneficio',
+    opcao3_qtd: `${melhorCustoQty} videos`,
+    opcao3_preco: fmtBRL(option3Total),
+    opcao3_unitario: `${fmtBRL(option3Unit)} por video`,
+    opcao3_desc: '15% de desconto por volume',
+    opcao3_desconto: '-15%',
+    texto_comparativo: 'Quanto maior o volume, menor o custo por video. As opcoes acima usam descontos progressivos conforme quantidade.',
+  };
+}
+
+function buildProposalDraftFromRecord(record, forcedMode) {
   const detalhes = parseDetalhes(record?.detalhes);
   const comercial = parseDetalhes(detalhes?.comercial);
+  const proposalMode = normalizeProposalMode(
+    forcedMode || comercial?.proposta_modo || comercial?.proposal_mode || 'direta'
+  );
+  const modePreset = PROPOSAL_MODE_PRESETS[proposalMode] || PROPOSAL_MODE_PRESETS.direta;
+  const quantityNumber = parseQuantityNumber(
+    comercial?.quantidade
+      || comercial?.opcao1_qtd
+      || record?.quantidade
+      || modePreset.quantidade,
+    10
+  );
+  const optionDefaults = buildDefaultOptionCards(quantityNumber);
+  const defaultValor = fmtBRL(
+    record?.preco_final
+    || record?.valor_sugerido
+    || record?.preco_base
+    || quantityNumber * 170
+  );
+
   return {
-    servico_principal: normalizeText(comercial?.servico_principal || record?.servico || ''),
-    quantidade: normalizeText(comercial?.quantidade || record?.quantidade || ''),
-    prazo: normalizeText(comercial?.prazo || record?.prazo || ''),
-    formato_entrega: normalizeText(
-      comercial?.formato_entrega
-      || detalhes?.formato_entrega
-      || 'Arquivo final pronto para publicacao em MP4.'
-    ),
+    cliente_nome: normalizeText(comercial?.cliente_nome || comercial?.nome_cliente || record?.nome || ''),
+    whatsapp: normalizeText(comercial?.whatsapp || record?.whatsapp || ''),
+    servico_principal: normalizeText(comercial?.servico_principal || record?.servico || modePreset.servico_principal),
+    quantidade: normalizeText(comercial?.quantidade || record?.quantidade || modePreset.quantidade),
+    prazo: normalizeText(comercial?.prazo || record?.prazo || modePreset.prazo),
+    escopo_comercial: normalizeText(comercial?.escopo_comercial || comercial?.descricao_escopo || modePreset.escopo_comercial || ''),
+    observacao_adicional: normalizeText(comercial?.observacao_adicional || ''),
+    valor_total_moeda: normalizeText(comercial?.valor_total_moeda || defaultValor),
+    forma_pagamento: normalizeText(comercial?.forma_pagamento || 'PIX / Transferencia / Conforme combinado'),
+    data_validade: normalizeText(comercial?.data_validade || ''),
+    numero_proposta: normalizeText(comercial?.numero_proposta || `PROP-${record?.id || ''}`),
+    data_emissao: normalizeText(comercial?.data_emissao || ''),
+    cta_aprovacao: normalizeText(comercial?.cta_aprovacao || 'Para aprovar, responda APROVADO no WhatsApp.'),
+    opcao1_titulo: normalizeText(comercial?.opcao1_titulo || optionDefaults.opcao1_titulo),
+    opcao1_qtd: normalizeText(comercial?.opcao1_qtd || optionDefaults.opcao1_qtd),
+    opcao1_preco: normalizeText(comercial?.opcao1_preco || optionDefaults.opcao1_preco),
+    opcao1_unitario: normalizeText(comercial?.opcao1_unitario || optionDefaults.opcao1_unitario),
+    opcao1_desc: normalizeText(comercial?.opcao1_desc || optionDefaults.opcao1_desc),
+    opcao1_desconto: normalizeText(comercial?.opcao1_desconto || optionDefaults.opcao1_desconto),
+    opcao2_titulo: normalizeText(comercial?.opcao2_titulo || optionDefaults.opcao2_titulo),
+    opcao2_qtd: normalizeText(comercial?.opcao2_qtd || optionDefaults.opcao2_qtd),
+    opcao2_preco: normalizeText(comercial?.opcao2_preco || optionDefaults.opcao2_preco),
+    opcao2_unitario: normalizeText(comercial?.opcao2_unitario || optionDefaults.opcao2_unitario),
+    opcao2_desc: normalizeText(comercial?.opcao2_desc || optionDefaults.opcao2_desc),
+    opcao2_desconto: normalizeText(comercial?.opcao2_desconto || optionDefaults.opcao2_desconto),
+    opcao3_titulo: normalizeText(comercial?.opcao3_titulo || optionDefaults.opcao3_titulo),
+    opcao3_qtd: normalizeText(comercial?.opcao3_qtd || optionDefaults.opcao3_qtd),
+    opcao3_preco: normalizeText(comercial?.opcao3_preco || optionDefaults.opcao3_preco),
+    opcao3_unitario: normalizeText(comercial?.opcao3_unitario || optionDefaults.opcao3_unitario),
+    opcao3_desc: normalizeText(comercial?.opcao3_desc || optionDefaults.opcao3_desc),
+    opcao3_desconto: normalizeText(comercial?.opcao3_desconto || optionDefaults.opcao3_desconto),
+    texto_comparativo: normalizeText(comercial?.texto_comparativo || optionDefaults.texto_comparativo),
   };
+}
+
+function buildTemplateOverridesFromDraft(draft = {}) {
+  return Object.fromEntries(
+    PROPOSAL_DRAW_FIELDS
+      .map((field) => [field, normalizeText(draft?.[field])])
+      .filter(([, value]) => Boolean(value))
+  );
 }
 
 function readPropostaPdfMeta(record) {
@@ -269,6 +397,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
   const [propostaGeradaEm, setPropostaGeradaEm] = useState(orc?.proposta_gerada_em || null);
   const [propostaPdfMeta, setPropostaPdfMeta] = useState(() => readPropostaPdfMeta(orc));
   const [saving, setSaving] = useState(false);
+  const [draftSaving, setDraftSaving] = useState(false);
   const [pdfLoading, setPdfLoading] = useState(false);
   const [error, setError] = useState('');
   const [info, setInfo] = useState('');
@@ -277,7 +406,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
     const comercial = parseDetalhes(detalhes?.comercial);
     return normalizeProposalMode(comercial?.proposta_modo || comercial?.proposal_mode || 'direta');
   });
-  const [proposalResumo, setProposalResumo] = useState(() => buildProposalResumoFromRecord(orc));
+  const [proposalDraft, setProposalDraft] = useState(() => buildProposalDraftFromRecord(orc));
 
   if (!orc) return null;
   const itensServico = Array.isArray(orc.itens_servico) ? orc.itens_servico : [];
@@ -337,22 +466,52 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
     [orc, precoFinal]
   );
 
+  function buildProposalDraftForMode(mode) {
+    const normalizedMode = normalizeProposalMode(mode);
+    const preset = PROPOSAL_MODE_PRESETS[normalizedMode] || PROPOSAL_MODE_PRESETS.direta;
+    return {
+      ...buildProposalDraftFromRecord(orc, normalizedMode),
+      servico_principal: preset.servico_principal,
+      quantidade: preset.quantidade,
+      prazo: preset.prazo,
+      escopo_comercial: preset.escopo_comercial,
+    };
+  }
+
+  function buildProposalDraftCommercialState() {
+    const values = {};
+    PROPOSAL_DRAW_FIELDS.forEach((field) => {
+      values[field] = normalizeText(proposalDraft?.[field]);
+    });
+    return {
+      proposal_mode: proposalMode,
+      proposta_modo: proposalMode,
+      proposta_ultima_edicao_em: new Date().toISOString(),
+      ...values,
+    };
+  }
+
+  function buildProposalTemplateOverrides() {
+    return buildTemplateOverridesFromDraft(proposalDraft);
+  }
+
   function applyProposalMode(mode) {
     const normalizedMode = normalizeProposalMode(mode);
     setProposalMode(normalizedMode);
-    const preset = PROPOSAL_MODE_PRESETS[normalizedMode];
-    if (!preset) return;
-    setProposalResumo((prev) => ({
-      ...prev,
-      ...preset,
-    }));
+    setProposalDraft(buildProposalDraftForMode(normalizedMode));
   }
 
-  function updateProposalResumoField(field, value) {
-    setProposalResumo((prev) => ({
+  function updateProposalDraftField(field, value) {
+    setProposalDraft((prev) => ({
       ...prev,
       [field]: value,
     }));
+  }
+
+  function hydrateProposalDraft() {
+    setError('');
+    setProposalDraft(buildProposalDraftFromRecord(orc, proposalMode));
+    setInfo('Campos do PDF preenchidos automaticamente com os dados do orcamento.');
   }
 
   function buildFinancialPersistencePatch() {
@@ -361,6 +520,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
     const margemAutomaticaAtual = Number(orc?.margem_automatica ?? orc?.margem_estimada ?? 0);
     const margemComercialAtual = Number(financialMetrics.margem_percentual || 0);
     const nowIso = new Date().toISOString();
+    const proposalState = buildProposalDraftCommercialState();
 
     return {
       preco_final: Number(financialMetrics.preco_final || 0),
@@ -369,6 +529,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
         ...detalhesAtual,
         comercial: {
           ...comercialAtual,
+          ...proposalState,
           margem_automatica: Number.isFinite(margemAutomaticaAtual) ? margemAutomaticaAtual : 0,
           margem_percentual: Number.isFinite(margemComercialAtual) ? margemComercialAtual : 0,
           margem_comercial: Number.isFinite(margemComercialAtual) ? margemComercialAtual : 0,
@@ -395,8 +556,9 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
     setPropostaPdfMeta(readPropostaPdfMeta(orc));
     const detalhes = parseDetalhes(orc?.detalhes);
     const comercial = parseDetalhes(detalhes?.comercial);
-    setProposalMode(normalizeProposalMode(comercial?.proposta_modo || comercial?.proposal_mode || 'direta'));
-    setProposalResumo(buildProposalResumoFromRecord(orc));
+    const nextMode = normalizeProposalMode(comercial?.proposta_modo || comercial?.proposal_mode || 'direta');
+    setProposalMode(nextMode);
+    setProposalDraft(buildProposalDraftFromRecord(orc, nextMode));
   }, [
     orc?.id,
     orc?.status_orcamento,
@@ -411,6 +573,31 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
     orc?.proposta_gerada_em,
     orc?.detalhes,
   ]);
+
+  async function handleSaveProposalDraft() {
+    setDraftSaving(true);
+    setError('');
+    setInfo('');
+    try {
+      const detalhesAtual = parseDetalhes(orc?.detalhes);
+      const comercialAtual = parseDetalhes(detalhesAtual?.comercial);
+      const updated = await updateOrcamento(orc.id, {
+        detalhes: {
+          ...detalhesAtual,
+          comercial: {
+            ...comercialAtual,
+            ...buildProposalDraftCommercialState(),
+          },
+        },
+      });
+      onUpdated?.(updated);
+      setInfo('Rascunho do PDF salvo no orcamento.');
+    } catch (err) {
+      setError(err.message ?? 'Erro ao salvar rascunho do PDF.');
+    } finally {
+      setDraftSaving(false);
+    }
+  }
 
   async function handleSave() {
     setSaving(true);
@@ -467,11 +654,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
     setError('');
     setInfo('Gerando proposta PDF em modo teste...');
     try {
-      const templateOverrides = Object.fromEntries(
-        Object.entries(proposalResumo || {})
-          .map(([key, value]) => [key, normalizeText(value)])
-          .filter(([, value]) => Boolean(value))
-      );
+      const templateOverrides = buildProposalTemplateOverrides();
       const result = await generateDealPdf(orc.id, {
         payload: {
           test_mode: true,
@@ -516,6 +699,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
       const nowIso = new Date().toISOString();
       const detalhesAtual = parseDetalhes(orc?.detalhes);
       const comercialAtual = parseDetalhes(detalhesAtual?.comercial);
+      const proposalState = buildProposalDraftCommercialState();
       setPropostaPdfMeta(nextPdfMeta);
       if (!isHtmlPdfReady(nextPdfMeta)) {
         setPropostaLink('');
@@ -528,6 +712,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
             ...detalhesAtual,
             comercial: {
               ...comercialAtual,
+              ...proposalState,
               proposta_link: nextLink,
               proposta_gerada_em: nowIso,
               proposta_pdf_render_mode: nextPdfMeta.renderMode,
@@ -565,6 +750,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
           ...detalhesAtual,
           comercial: {
             ...comercialAtual,
+            ...proposalState,
             proposta_link: nextLink,
             proposta_gerada_em: nowIso,
             proposta_pdf_render_mode: nextPdfMeta.renderMode,
@@ -595,6 +781,44 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
     } finally {
       setPdfLoading(false);
     }
+  }
+
+  function handleOpenProposalPreview() {
+    if (typeof window === 'undefined') return;
+    try {
+      const payload = {
+        mode: proposalMode,
+        source: 'orcamento_drawer',
+        deal_id: orc.id,
+        draft: proposalDraft,
+        updated_at: new Date().toISOString(),
+      };
+      window.sessionStorage.setItem('hagav_proposta_preview_draft', JSON.stringify(payload));
+    } catch (err) {
+      console.warn('[Orcamentos][PDF][Preview]', err);
+    }
+    const url = new URL('/templates/proposta-hagav-preview-modos', window.location.origin);
+    url.searchParams.set('modo', proposalMode);
+    window.open(url.toString(), '_blank', 'noopener,noreferrer');
+  }
+
+  async function handleDownloadPropostaPdf() {
+    if (!propostaLink) {
+      setError('Nenhuma proposta PDF disponivel para download.');
+      return;
+    }
+    if (!propostaPdfLiberada) {
+      setError(propostaPdfBlockedMessage || 'PDF bloqueado para uso comercial.');
+      return;
+    }
+    setError('');
+    const fileName = `proposta-${orc.id}.pdf`;
+    const mode = await openOrDownloadPropostaPdf(propostaLink, fileName);
+    if (mode === 'none') {
+      setError('Nao foi possivel abrir o PDF agora.');
+      return;
+    }
+    setInfo('PDF aberto para download.');
   }
 
   async function handleEnviarProposta() {
@@ -832,8 +1056,8 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
 
           <div className="bg-hagav-surface border border-hagav-gold/25 rounded-lg p-3 space-y-3">
             <div className="flex items-center justify-between gap-2">
-              <p className="text-xs text-hagav-gold uppercase tracking-wider">Modo teste da proposta</p>
-              <span className="text-[11px] text-hagav-gray">Nao altera o funil. Ajusta apenas a apresentacao do PDF.</span>
+              <p className="text-xs text-hagav-gold uppercase tracking-wider">PDF comercial (drawer)</p>
+              <span className="text-[11px] text-hagav-gray">Ajuste os parametros da proposta sem alterar o funil.</span>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
               {PROPOSAL_MODE_OPTIONS.map((mode) => (
@@ -847,13 +1071,76 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
                 </button>
               ))}
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">
+              <div>
+                <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Nome do cliente</label>
+                <input
+                  type="text"
+                  value={proposalDraft.cliente_nome || ''}
+                  onChange={(e) => updateProposalDraftField('cliente_nome', e.target.value)}
+                  className="hinput w-full"
+                  placeholder="{{cliente_nome}}"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">WhatsApp</label>
+                <input
+                  type="text"
+                  value={proposalDraft.whatsapp || ''}
+                  onChange={(e) => updateProposalDraftField('whatsapp', e.target.value)}
+                  className="hinput w-full"
+                  placeholder="{{whatsapp}}"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Numero da proposta</label>
+                <input
+                  type="text"
+                  value={proposalDraft.numero_proposta || ''}
+                  onChange={(e) => updateProposalDraftField('numero_proposta', e.target.value)}
+                  className="hinput w-full"
+                  placeholder="{{numero_proposta}}"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Data de emissao</label>
+                <input
+                  type="text"
+                  value={proposalDraft.data_emissao || ''}
+                  onChange={(e) => updateProposalDraftField('data_emissao', e.target.value)}
+                  className="hinput w-full"
+                  placeholder="{{data_emissao}}"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Data de validade</label>
+                <input
+                  type="text"
+                  value={proposalDraft.data_validade || ''}
+                  onChange={(e) => updateProposalDraftField('data_validade', e.target.value)}
+                  className="hinput w-full"
+                  placeholder="{{data_validade}}"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Forma de pagamento</label>
+                <input
+                  type="text"
+                  value={proposalDraft.forma_pagamento || ''}
+                  onChange={(e) => updateProposalDraftField('forma_pagamento', e.target.value)}
+                  className="hinput w-full"
+                  placeholder="{{forma_pagamento}}"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-2">
               <div>
                 <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Servico principal</label>
                 <input
                   type="text"
-                  value={proposalResumo.servico_principal || ''}
-                  onChange={(e) => updateProposalResumoField('servico_principal', e.target.value)}
+                  value={proposalDraft.servico_principal || ''}
+                  onChange={(e) => updateProposalDraftField('servico_principal', e.target.value)}
                   className="hinput w-full"
                   placeholder="{{servico_principal}}"
                 />
@@ -862,8 +1149,8 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
                 <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Quantidade</label>
                 <input
                   type="text"
-                  value={proposalResumo.quantidade || ''}
-                  onChange={(e) => updateProposalResumoField('quantidade', e.target.value)}
+                  value={proposalDraft.quantidade || ''}
+                  onChange={(e) => updateProposalDraftField('quantidade', e.target.value)}
                   className="hinput w-full"
                   placeholder="{{quantidade}}"
                 />
@@ -872,22 +1159,168 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
                 <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Prazo de entrega</label>
                 <input
                   type="text"
-                  value={proposalResumo.prazo || ''}
-                  onChange={(e) => updateProposalResumoField('prazo', e.target.value)}
+                  value={proposalDraft.prazo || ''}
+                  onChange={(e) => updateProposalDraftField('prazo', e.target.value)}
                   className="hinput w-full"
                   placeholder="{{prazo}}"
                 />
               </div>
               <div>
-                <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Formato de entrega</label>
+                <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Valor total (moeda)</label>
                 <input
                   type="text"
-                  value={proposalResumo.formato_entrega || ''}
-                  onChange={(e) => updateProposalResumoField('formato_entrega', e.target.value)}
+                  value={proposalDraft.valor_total_moeda || ''}
+                  onChange={(e) => updateProposalDraftField('valor_total_moeda', e.target.value)}
                   className="hinput w-full"
-                  placeholder="{{formato_entrega}}"
+                  placeholder="{{valor_total_moeda}}"
                 />
               </div>
+            </div>
+
+            <div>
+              <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Escopo comercial</label>
+              <textarea
+                value={proposalDraft.escopo_comercial || ''}
+                onChange={(e) => updateProposalDraftField('escopo_comercial', e.target.value)}
+                rows={3}
+                className="hinput w-full resize-none"
+                placeholder="{{escopo_comercial}}"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              <div>
+                <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Observacao adicional</label>
+                <textarea
+                  value={proposalDraft.observacao_adicional || ''}
+                  onChange={(e) => updateProposalDraftField('observacao_adicional', e.target.value)}
+                  rows={2}
+                  className="hinput w-full resize-none"
+                  placeholder="{{observacao_adicional}}"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">CTA final</label>
+                <textarea
+                  value={proposalDraft.cta_aprovacao || ''}
+                  onChange={(e) => updateProposalDraftField('cta_aprovacao', e.target.value)}
+                  rows={2}
+                  className="hinput w-full resize-none"
+                  placeholder="{{cta_aprovacao}}"
+                />
+              </div>
+            </div>
+
+            {proposalMode === 'opcoes' && (
+              <div className="space-y-2 border border-hagav-border rounded-lg p-2.5 bg-hagav-dark/35">
+                <p className="text-[11px] text-hagav-gold uppercase tracking-wider">Opcoes de investimento</p>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                  {[1, 2, 3].map((index) => (
+                    <div key={index} className="space-y-1.5 border border-hagav-border rounded-lg p-2">
+                      <input
+                        type="text"
+                        value={proposalDraft[`opcao${index}_titulo`] || ''}
+                        onChange={(e) => updateProposalDraftField(`opcao${index}_titulo`, e.target.value)}
+                        className="hinput w-full"
+                        placeholder={`{{opcao${index}_titulo}}`}
+                      />
+                      <input
+                        type="text"
+                        value={proposalDraft[`opcao${index}_qtd`] || ''}
+                        onChange={(e) => updateProposalDraftField(`opcao${index}_qtd`, e.target.value)}
+                        className="hinput w-full"
+                        placeholder={`{{opcao${index}_qtd}}`}
+                      />
+                      <input
+                        type="text"
+                        value={proposalDraft[`opcao${index}_preco`] || ''}
+                        onChange={(e) => updateProposalDraftField(`opcao${index}_preco`, e.target.value)}
+                        className="hinput w-full"
+                        placeholder={`{{opcao${index}_preco}}`}
+                      />
+                      <input
+                        type="text"
+                        value={proposalDraft[`opcao${index}_unitario`] || ''}
+                        onChange={(e) => updateProposalDraftField(`opcao${index}_unitario`, e.target.value)}
+                        className="hinput w-full"
+                        placeholder={`{{opcao${index}_unitario}}`}
+                      />
+                      <input
+                        type="text"
+                        value={proposalDraft[`opcao${index}_desc`] || ''}
+                        onChange={(e) => updateProposalDraftField(`opcao${index}_desc`, e.target.value)}
+                        className="hinput w-full"
+                        placeholder={`{{opcao${index}_desc}}`}
+                      />
+                      <input
+                        type="text"
+                        value={proposalDraft[`opcao${index}_desconto`] || ''}
+                        onChange={(e) => updateProposalDraftField(`opcao${index}_desconto`, e.target.value)}
+                        className="hinput w-full"
+                        placeholder={`{{opcao${index}_desconto}}`}
+                      />
+                    </div>
+                  ))}
+                </div>
+                <div>
+                  <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Texto comparativo</label>
+                  <textarea
+                    value={proposalDraft.texto_comparativo || ''}
+                    onChange={(e) => updateProposalDraftField('texto_comparativo', e.target.value)}
+                    rows={2}
+                    className="hinput w-full resize-none"
+                    placeholder="{{texto_comparativo}}"
+                  />
+                </div>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-2">
+              <button
+                type="button"
+                onClick={hydrateProposalDraft}
+                disabled={saving || pdfLoading || draftSaving}
+                className="btn-ghost btn-sm"
+              >
+                <RotateCw size={13} />
+                Preencher automatico
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveProposalDraft}
+                disabled={saving || pdfLoading || draftSaving}
+                className="btn-ghost btn-sm"
+              >
+                {draftSaving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
+                Salvar rascunho
+              </button>
+              <button
+                type="button"
+                onClick={handleOpenProposalPreview}
+                disabled={saving || pdfLoading || draftSaving}
+                className="btn-ghost btn-sm"
+              >
+                <Eye size={13} />
+                Preview HTML
+              </button>
+              <button
+                type="button"
+                onClick={handleGeneratePdf}
+                disabled={pdfLoading || saving || draftSaving}
+                className="btn-ghost btn-sm"
+              >
+                {pdfLoading ? <Loader2 size={13} className="animate-spin" /> : <ExternalLink size={13} />}
+                Gerar PDF
+              </button>
+              <button
+                type="button"
+                onClick={handleDownloadPropostaPdf}
+                disabled={!propostaLink || !propostaPdfLiberada || pdfLoading || saving || draftSaving}
+                className={`btn-ghost btn-sm ${!propostaLink || !propostaPdfLiberada ? 'opacity-60 cursor-not-allowed' : ''}`}
+              >
+                <Download size={13} />
+                Baixar PDF
+              </button>
             </div>
           </div>
 
@@ -1002,24 +1435,24 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
           <div className="orcamento-action-block">
             <div className="orcamento-action-head">
               <p className="orcamento-action-kicker">Proposta e contato</p>
-              <p className="orcamento-action-caption">Gere o PDF, envie a proposta e avance a conversa com o cliente.</p>
+              <p className="orcamento-action-caption">Envie a proposta e avance a conversa com o cliente.</p>
             </div>
             <div className="orcamento-action-grid">
               <button
                 type="button"
-                onClick={handleGeneratePdf}
-                disabled={pdfLoading}
-                className="btn-ghost btn-sm orcamento-action-button"
+                onClick={handleDownloadPropostaPdf}
+                disabled={!propostaLink || !propostaPdfLiberada || saving || pdfLoading || draftSaving}
+                className={`btn-ghost btn-sm orcamento-action-button ${!propostaLink || !propostaPdfLiberada ? 'opacity-60 cursor-not-allowed' : ''}`}
               >
-                {pdfLoading ? <Loader2 size={13} className="animate-spin" /> : <ExternalLink size={13} />}
-                Gerar proposta PDF
+                <Download size={13} />
+                Baixar PDF
               </button>
               <EduTooltip {...SEND_PROPOSTA_TOOLTIP} className="w-full">
                 <span className="inline-flex w-full">
                   <button
                     type="button"
                     onClick={handleEnviarProposta}
-                    disabled={saving || pdfLoading || !canSendProposta}
+                    disabled={saving || pdfLoading || draftSaving || !canSendProposta}
                     className={`btn-ghost btn-sm orcamento-action-button ${!canSendProposta ? 'opacity-60 cursor-not-allowed' : ''}`}
                   >
                     <Send size={13} />
@@ -1053,7 +1486,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
               <button
                 type="button"
                 onClick={handleRecalculateValues}
-                disabled={saving || pdfLoading}
+                disabled={saving || pdfLoading || draftSaving}
                 className="btn-ghost btn-sm orcamento-action-button"
               >
                 {saving ? <Loader2 size={13} className="animate-spin" /> : <RotateCw size={13} />}
@@ -1062,7 +1495,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
               <button
                 type="button"
                 onClick={() => handleQuickStatus('perdido')}
-                disabled={saving || pdfLoading}
+                disabled={saving || pdfLoading || draftSaving}
                 className="btn-ghost btn-sm orcamento-action-button"
               >
                 <Ban size={13} />
@@ -1076,14 +1509,14 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
               <button
                 type="button"
                 onClick={() => handleQuickStatus('aprovado')}
-                disabled={saving || pdfLoading}
+                disabled={saving || pdfLoading || draftSaving}
                 className="btn-gold btn-sm orcamento-approve-button"
               >
                 <CheckCircle2 size={13} />
                 Cliente aprovou
               </button>
             )}
-            <button onClick={handleSave} disabled={saving || pdfLoading} className="btn-gold orcamento-save-button">
+            <button onClick={handleSave} disabled={saving || pdfLoading || draftSaving} className="btn-gold orcamento-save-button">
               {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
               Salvar
             </button>

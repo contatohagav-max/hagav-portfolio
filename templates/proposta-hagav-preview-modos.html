@@ -435,18 +435,6 @@
       font-size: 11px;
     }
 
-    .helper-copy {
-      margin: 10px 0 0;
-      border: 1px dashed #d8caa2;
-      border-radius: 9px;
-      background: #fff9e9;
-      padding: 9px 10px;
-      font-size: 13px;
-      line-height: 1.45;
-      color: #5a4a20;
-      font-weight: 600;
-    }
-
     .hidden {
       display: none !important;
     }
@@ -540,7 +528,6 @@
         <article class="section hidden" id="opcoesSection">
           <h3 class="section-title">Opcoes de investimento</h3>
           <div class="options-grid" id="opcoesGrid"></div>
-          <p class="helper-copy hidden" id="opcoesHelper"></p>
         </article>
 
         <article class="section hidden" id="mensalSection">
@@ -626,13 +613,12 @@
           prazo: "Inicio imediato apos aprovacao"
         },
         escopo: "Proposta comparativa para operacao mensal com foco comercial. Cada opcao contempla edicao estrategica, acabamento profissional e entregas prontas para publicacao, mantendo consistencia visual e ritmo para escala de conteudo.",
-        valor: "Plano recomendado: R$ 1.800",
+        valor: "R$ 1.800",
         opcoes: [
           { nome: "Essencial", preco: "R$ 1.200", desc: "8 videos por mes" },
           { nome: "Performance", preco: "R$ 1.800", desc: "12 videos por mes", destaque: true },
           { nome: "Escala", preco: "R$ 2.900", desc: "20 videos por mes" },
         ],
-        recomendacao: "Recomendamos o plano Performance pelo melhor equilibrio entre volume e custo-beneficio.",
         condicoes: [
           "Forma de pagamento: PIX / Transferencia / Conforme combinado",
           "Proposta valida ate 01/05/2026",
@@ -748,13 +734,6 @@
         card.appendChild(price);
         card.appendChild(desc);
 
-        if (opt.destaque) {
-          const badge = document.createElement("span");
-          badge.className = "recommended-badge";
-          badge.textContent = "Opcao recomendada";
-          card.appendChild(badge);
-        }
-
         wrap.appendChild(card);
       });
     }
@@ -787,14 +766,8 @@
       opcoesSection.classList.toggle("hidden", !Array.isArray(data.opcoes));
       if (Array.isArray(data.opcoes)) {
         renderOptions(data.opcoes);
-        const helper = byId("opcoesHelper");
-        const helperText = String(data.recomendacao || "").trim();
-        helper.textContent = helperText;
-        helper.classList.toggle("hidden", !helperText);
       } else {
         byId("opcoesGrid").innerHTML = "";
-        byId("opcoesHelper").textContent = "";
-        byId("opcoesHelper").classList.add("hidden");
       }
 
       const mensalSection = byId("mensalSection");

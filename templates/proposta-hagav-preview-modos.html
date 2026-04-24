@@ -185,18 +185,18 @@
     .wrap {
       padding: 24px 24px 38px;
       display: grid;
-      gap: 12px;
+      gap: 14px;
     }
 
     .section {
       background: var(--card);
       border: 1px solid var(--line);
       border-radius: 11px;
-      padding: 14px 15px;
+      padding: 16px 16px;
     }
 
     .section-title {
-      margin: 0 0 10px;
+      margin: 0 0 12px;
       color: #7a6a3c;
       font-size: 11px;
       text-transform: uppercase;
@@ -226,6 +226,12 @@
     .grid-4 {
       display: grid;
       grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: 8px;
     }
 
@@ -267,9 +273,9 @@
 
     .scope p {
       margin: 0;
-      font-size: 14px;
+      font-size: 14.5px;
       color: #2c2c2c;
-      line-height: 1.5;
+      line-height: 1.58;
     }
 
     .investment {
@@ -377,8 +383,8 @@
 
     .conditions p {
       margin: 0;
-      font-size: 13px;
-      line-height: 1.45;
+      font-size: 14px;
+      line-height: 1.52;
       color: #2b2b2b;
     }
 
@@ -391,19 +397,21 @@
 
     .steps p {
       margin: 0;
-      font-size: 13px;
-      line-height: 1.45;
+      font-size: 14px;
+      line-height: 1.52;
       color: #282828;
     }
 
     .cta {
-      margin-top: 9px;
+      margin-top: 12px;
       border-radius: 9px;
       border: 1px solid #c4a55e;
       background: linear-gradient(90deg, #f0d684 0%, #c8a23a 100%);
-      padding: 10px 12px;
-      font-size: 13px;
-      font-weight: 760;
+      padding: 12px 14px;
+      font-size: 14px;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      font-weight: 780;
       color: #1b1508;
       text-align: center;
     }
@@ -411,19 +419,32 @@
     .footer {
       border-top: 1px solid #d7cfbf;
       margin-top: 6px;
-      padding-top: 8px;
+      padding-top: 10px;
       display: flex;
       justify-content: space-between;
       gap: 10px;
       color: #777;
-      font-size: 10px;
+      font-size: 11px;
+      line-height: 1.4;
     }
 
     .footer strong {
       color: #1e1e1e;
       text-transform: uppercase;
       letter-spacing: 0.11em;
-      font-size: 10px;
+      font-size: 11px;
+    }
+
+    .helper-copy {
+      margin: 10px 0 0;
+      border: 1px dashed #d8caa2;
+      border-radius: 9px;
+      background: #fff9e9;
+      padding: 9px 10px;
+      font-size: 13px;
+      line-height: 1.45;
+      color: #5a4a20;
+      font-weight: 600;
     }
 
     .hidden {
@@ -441,6 +462,7 @@
       .wrap { padding: 12px 10px 24px; gap: 10px; }
       .grid-2 { grid-template-columns: 1fr; }
       .grid-4 { grid-template-columns: 1fr 1fr; }
+      .grid-3 { grid-template-columns: 1fr; }
       .options-grid { grid-template-columns: 1fr; }
       .investment-value { font-size: 34px; }
       .footer { flex-direction: column; align-items: flex-start; }
@@ -451,7 +473,7 @@
   <div class="preview-shell">
     <section class="top">
       <h1>Preview PDF Comercial (Ambiente de Teste)</h1>
-      <p>Protitipo visual da proposta HAGAV com dados mockados. Nao substitui producao e nao altera o sistema atual.</p>
+      <p>Prototipo visual da proposta HAGAV com dados mockados. Nao substitui producao e nao altera o sistema atual.</p>
       <div class="mode-grid">
         <button class="mode-btn" data-mode="direta">Modo 1 - Direta<small>VSL ate 15 min</small></button>
         <button class="mode-btn" data-mode="opcoes">Modo 2 - Com Opcoes<small>3 pacotes lado a lado</small></button>
@@ -492,22 +514,18 @@
 
         <article class="section">
           <h3 class="section-title">Resumo da Demanda</h3>
-          <div class="grid-4">
-            <div class="field soft">
+          <div class="grid-3">
+            <div class="field soft" id="resumoServicoField">
               <p class="field-label">Servico</p>
               <p class="field-value" id="resumoServico"></p>
             </div>
-            <div class="field soft">
+            <div class="field soft" id="resumoQuantidadeField">
               <p class="field-label">Quantidade</p>
               <p class="field-value" id="resumoQuantidade"></p>
             </div>
-            <div class="field soft">
+            <div class="field soft" id="resumoPrazoField">
               <p class="field-label">Prazo</p>
               <p class="field-value" id="resumoPrazo"></p>
-            </div>
-            <div class="field soft">
-              <p class="field-label">Formato de entrega</p>
-              <p class="field-value" id="resumoFormato"></p>
             </div>
           </div>
         </article>
@@ -522,6 +540,7 @@
         <article class="section hidden" id="opcoesSection">
           <h3 class="section-title">Opcoes de investimento</h3>
           <div class="options-grid" id="opcoesGrid"></div>
+          <p class="helper-copy hidden" id="opcoesHelper"></p>
         </article>
 
         <article class="section hidden" id="mensalSection">
@@ -546,7 +565,7 @@
           </div>
         </article>
 
-        <article class="section">
+        <article class="section" id="condicoesSection">
           <h3 class="section-title">Condicoes comerciais</h3>
           <div class="conditions" id="condicoesList"></div>
         </article>
@@ -563,11 +582,11 @@
             <p>02 - Envio dos materiais e referencias pelo cliente.</p>
             <p>03 - Inicio da edicao conforme prazo combinado.</p>
           </div>
-          <div class="cta">Para aprovar, responda APROVADO no WhatsApp.</div>
+          <div class="cta">APROVAR PROPOSTA NO WHATSAPP</div>
         </article>
 
         <footer class="footer">
-          <span><strong>HAGAV Studio</strong> - proposta comercial (preview)</span>
+          <span><strong>HAGAV Studio</strong> - Pos-producao para marcas que precisam de velocidade e consistencia.</span>
           <span id="footerRef"></span>
         </footer>
       </section>
@@ -584,10 +603,9 @@
         resumo: {
           servico: "VSL ate 15 min",
           quantidade: "1 video",
-          prazo: "24h",
-          formato: "Arquivo final pronto para publicacao em MP4."
+          prazo: "24h"
         },
-        escopo: "Edicao e finalizacao de 1 video VSL ate 15 min conforme briefing aprovado. Inclui organizacao do material, cortes, ritmo, acabamento visual e exportacao final em MP4. O projeto contempla 1 rodada de ajustes inclusa.",
+        escopo: "Edicao estrategica e finalizacao premium de 1 video VSL ate 15 min conforme briefing aprovado. O fluxo contempla ritmo otimizado para retencao, acabamento profissional e entrega final pronta para publicacao em MP4. Inclui 1 rodada de ajustes para refinamento final.",
         valor: "R$ 880,00",
         condicoes: [
           "Forma de pagamento: PIX / Transferencia / Conforme combinado",
@@ -605,16 +623,16 @@
         resumo: {
           servico: "Planos de conteudo mensal",
           quantidade: "Comparativo de 3 opcoes",
-          prazo: "Inicio imediato apos aprovacao",
-          formato: "MP4 pronto para publicacao"
+          prazo: "Inicio imediato apos aprovacao"
         },
-        escopo: "Proposta comparativa para operacao mensal de conteudo. Cada opcao considera edicao, acabamento e entrega final em MP4, mantendo consistencia visual e ritmo comercial.",
+        escopo: "Proposta comparativa para operacao mensal com foco comercial. Cada opcao contempla edicao estrategica, acabamento profissional e entregas prontas para publicacao, mantendo consistencia visual e ritmo para escala de conteudo.",
         valor: "Plano recomendado: R$ 1.800",
         opcoes: [
           { nome: "Essencial", preco: "R$ 1.200", desc: "8 videos por mes" },
           { nome: "Performance", preco: "R$ 1.800", desc: "12 videos por mes", destaque: true },
           { nome: "Escala", preco: "R$ 2.900", desc: "20 videos por mes" },
         ],
+        recomendacao: "Recomendamos o plano Performance pelo melhor equilibrio entre volume e custo-beneficio.",
         condicoes: [
           "Forma de pagamento: PIX / Transferencia / Conforme combinado",
           "Proposta valida ate 01/05/2026",
@@ -631,10 +649,9 @@
         resumo: {
           servico: "Plano mensal de conteudo",
           quantidade: "12 videos mensais",
-          prazo: "Cronograma mensal",
-          formato: "MP4 pronto para publicacao"
+          prazo: "Cronograma mensal"
         },
-        escopo: "Operacao mensal de edicao para 12 videos por mes, com padrao visual consistente, ritmo otimizado para redes sociais e entregas conforme cronograma acordado.",
+        escopo: "Operacao mensal estruturada para 12 videos por mes com calendario recorrente, padrao visual consistente e velocidade de entrega. Ideal para manter previsibilidade, ritmo comercial e estabilidade de publicacao da marca.",
         valor: "R$ 2.500/mes",
         mensal: {
           plano: "Plano Mensal",
@@ -656,10 +673,9 @@
         resumo: {
           servico: "Proposta personalizada",
           quantidade: "Escopo sob medida",
-          prazo: "Conforme alinhamento",
-          formato: "MP4 + formatos complementares"
+          prazo: "Conforme alinhamento"
         },
-        escopo: "Estrutura personalizada para atender necessidades especificas da operacao, incluindo planejamento de entregas, organizacao de materiais, edicao em lotes e padronizacao de identidade visual.",
+        escopo: "Solucao personalizada para necessidades especificas da operacao, com desenho estrategico de escopo, organizacao de materiais e execucao de alto padrao. O foco e entregar consistencia criativa e performance de publicacao com flexibilidade comercial.",
         valor: "R$ 4.200,00",
         condicoes: [
           "Forma de pagamento: PIX / Transferencia / Conforme combinado",
@@ -675,10 +691,27 @@
       return document.getElementById(id);
     }
 
-    function setText(id, value) {
+    function setText(id, value, fallback = "-") {
       const el = byId(id);
       if (!el) return;
-      el.textContent = value || "-";
+      const clean = String(value || "").trim();
+      el.textContent = clean || fallback;
+    }
+
+    function setHidden(id, hide) {
+      const el = byId(id);
+      if (!el) return;
+      el.classList.toggle("hidden", Boolean(hide));
+    }
+
+    function setFieldValue(fieldId, valueId, value) {
+      const clean = String(value || "").trim();
+      setHidden(fieldId, !clean);
+      if (!clean) {
+        setText(valueId, "", "");
+        return;
+      }
+      setText(valueId, clean, "");
     }
 
     function setList(containerId, rows) {
@@ -740,22 +773,28 @@
       setText("clienteNome", data.cliente?.nome);
       setText("clienteWhatsapp", data.cliente?.whatsapp);
 
-      setText("resumoServico", data.resumo?.servico);
-      setText("resumoQuantidade", data.resumo?.quantidade);
-      setText("resumoPrazo", data.resumo?.prazo);
-      setText("resumoFormato", data.resumo?.formato);
+      setFieldValue("resumoServicoField", "resumoServico", data.resumo?.servico);
+      setFieldValue("resumoQuantidadeField", "resumoQuantidade", data.resumo?.quantidade);
+      setFieldValue("resumoPrazoField", "resumoPrazo", data.resumo?.prazo);
       setText("escopoTexto", data.escopo);
 
       setText("valorPrincipal", data.valor);
       setList("condicoesList", data.condicoes);
+      setHidden("condicoesSection", !Array.isArray(data.condicoes) || data.condicoes.length === 0);
       setText("footerRef", `${data.numero} | ${data.data}`);
 
       const opcoesSection = byId("opcoesSection");
       opcoesSection.classList.toggle("hidden", !Array.isArray(data.opcoes));
       if (Array.isArray(data.opcoes)) {
         renderOptions(data.opcoes);
+        const helper = byId("opcoesHelper");
+        const helperText = String(data.recomendacao || "").trim();
+        helper.textContent = helperText;
+        helper.classList.toggle("hidden", !helperText);
       } else {
         byId("opcoesGrid").innerHTML = "";
+        byId("opcoesHelper").textContent = "";
+        byId("opcoesHelper").classList.add("hidden");
       }
 
       const mensalSection = byId("mensalSection");

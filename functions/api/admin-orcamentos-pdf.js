@@ -1018,7 +1018,70 @@ function getOfficialWhatsapp(env, detalhes) {
   return formatWhatsapp(envValue || fromDetalhes || "5573982284382");
 }
 
-function buildTemplateValues(row, env) {
+const PROPOSAL_MODES = new Set(["direta", "opcoes", "mensal", "personalizada"]);
+const TEMPLATE_OVERRIDE_ALLOWLIST = new Set([
+  "cliente_nome",
+  "nome_cliente",
+  "whatsapp",
+  "servico_principal",
+  "quantidade",
+  "prazo",
+  "formato_entrega",
+  "escopo_comercial",
+  "valor_total_moeda",
+  "forma_pagamento",
+  "data_validade",
+  "referencia_texto",
+  "observacao_adicional",
+  "cta_aprovacao",
+  "numero_proposta",
+]);
+
+function normalizeProposalMode(rawValue) {
+  const key = normalizeTemplateText(rawValue, 40, { allowEmpty: true })
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z]/g, "");
+  if (!key) return "";
+  if (key.includes("direta")) return "direta";
+  if (key.includes("opcao")) return "opcoes";
+  if (key.includes("mensal") || key.includes("recorrente")) return "mensal";
+  if (key.includes("personalizada") || key.includes("custom")) return "personalizada";
+  return PROPOSAL_MODES.has(key) ? key : "";
+}
+
+function sanitizeTemplateOverrides(input) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return {};
+  const output = {};
+  for (const [rawKey, rawValue] of Object.entries(input)) {
+    const key = normalizePlaceholderKey(rawKey);
+    if (!key || !TEMPLATE_OVERRIDE_ALLOWLIST.has(key)) continue;
+    const value = normalizeTemplateText(rawValue, 1600, { allowEmpty: true });
+    if (!value) continue;
+    output[key] = value;
+  }
+  return output;
+}
+
+function proposalModeLabel(mode) {
+  if (mode === "opcoes") return "Com opcoes";
+  if (mode === "mensal") return "Mensal";
+  if (mode === "personalizada") return "Personalizada";
+  return "Direta";
+}
+
+function isTruthyFlag(value) {
+  if (value === true) return true;
+  const normalized = String(value ?? "")
+    .trim()
+    .toLowerCase();
+  return normalized === "true" || normalized === "1" || normalized === "yes" || normalized === "sim";
+}
+
+function buildTemplateValues(row, env, options = {}) {
+  const proposalMode = normalizeProposalMode(options?.proposalMode);
+  const templateOverrides = sanitizeTemplateOverrides(options?.templateOverrides);
   const detalhes = readDetalhes(row);
   const comercial = (detalhes?.comercial && typeof detalhes.comercial === "object")
     ? detalhes.comercial
@@ -1185,7 +1248,36 @@ function buildTemplateValues(row, env) {
     referencia_texto: referenciaCliente.text,
     referencia_bloco_style: referenciaCliente.show ? "display:block;" : "display:none;",
     resumo_quantidade_breakdown: quantitySummary.breakdown,
+    modo_proposta: proposalMode || "direta",
+    modo_proposta_label: proposalModeLabel(proposalMode),
   };
+
+  if (templateOverrides.cliente_nome || templateOverrides.nome_cliente) {
+    const nome = templateOverrides.cliente_nome || templateOverrides.nome_cliente;
+    base.cliente_nome = nome;
+    base.nome_cliente = nome;
+    base.nome = nome;
+  }
+  if (templateOverrides.whatsapp) {
+    base.whatsapp = templateOverrides.whatsapp;
+    base.whatsapp_cliente = templateOverrides.whatsapp;
+  }
+  if (templateOverrides.servico_principal) {
+    base.servico_principal = templateOverrides.servico_principal;
+    base.servico = templateOverrides.servico_principal;
+    base.servico_plano = templateOverrides.servico_principal;
+    base.plano_servico = templateOverrides.servico_principal;
+  }
+  if (templateOverrides.escopo_comercial) {
+    base.escopo = templateOverrides.escopo_comercial;
+    base.escopo_comercial = templateOverrides.escopo_comercial;
+    base.descricao_escopo = templateOverrides.escopo_comercial;
+    base.resumo_orcamento = templateOverrides.escopo_comercial;
+  }
+  if (templateOverrides.valor_total_moeda) {
+    base.valor_total_moeda = templateOverrides.valor_total_moeda;
+  }
+  Object.assign(base, templateOverrides);
 
   const expanded = {};
   for (const [key, value] of Object.entries(base)) {
@@ -1198,8 +1290,9 @@ function buildTemplateValues(row, env) {
 
 const PROPOSTA_TEMPLATE_PATH = "/templates/proposta-hagav-template.html";
 
-async function loadOfficialPropostaTemplate(request, env) {
-  const templateUrl = new URL(PROPOSTA_TEMPLATE_PATH, request.url).toString();
+async function loadOfficialPropostaTemplate(request, env, templatePath = PROPOSTA_TEMPLATE_PATH) {
+  const safeTemplatePath = normalizeTemplateText(templatePath, 240, { allowEmpty: true }) || PROPOSTA_TEMPLATE_PATH;
+  const templateUrl = new URL(safeTemplatePath, request.url).toString();
   const readErrors = [];
 
   if (env?.ASSETS && typeof env.ASSETS.fetch === "function") {
@@ -1208,7 +1301,7 @@ async function loadOfficialPropostaTemplate(request, env) {
       if (response?.ok) {
         const html = await response.text();
         if (String(html || "").trim()) {
-          return { html, source: "assets", templatePath: PROPOSTA_TEMPLATE_PATH };
+          return { html, source: "assets", templatePath: safeTemplatePath };
         }
       }
       readErrors.push(`assets_http_${response?.status || 0}`);
@@ -1222,7 +1315,7 @@ async function loadOfficialPropostaTemplate(request, env) {
     if (response?.ok) {
       const html = await response.text();
       if (String(html || "").trim()) {
-        return { html, source: "http", templatePath: PROPOSTA_TEMPLATE_PATH };
+        return { html, source: "http", templatePath: safeTemplatePath };
       }
     }
     readErrors.push(`http_${response?.status || 0}`);
@@ -1230,15 +1323,18 @@ async function loadOfficialPropostaTemplate(request, env) {
     readErrors.push(`http_fetch_${stripDangerousText(String(err?.message || "erro_desconhecido"), 120)}`);
   }
 
-  const error = new Error(`template_not_found:${PROPOSTA_TEMPLATE_PATH}:${readErrors.join("|")}`);
+  const error = new Error(`template_not_found:${safeTemplatePath}:${readErrors.join("|")}`);
   error.code = "template_not_found";
-  error.templatePath = PROPOSTA_TEMPLATE_PATH;
+  error.templatePath = safeTemplatePath;
   throw error;
 }
 
-async function renderPropostaTemplateToLines(row, request, env) {
-  const templateInfo = await loadOfficialPropostaTemplate(request, env);
-  const values = buildTemplateValues(row, env);
+async function renderPropostaTemplateToLines(row, request, env, options = {}) {
+  const templateInfo = await loadOfficialPropostaTemplate(request, env, options?.templatePath);
+  const values = buildTemplateValues(row, env, {
+    proposalMode: options?.proposalMode,
+    templateOverrides: options?.templateOverrides,
+  });
   const rendered = applyTemplatePlaceholders(templateInfo.html, values);
   const renderedHtml = ensureHtmlDocument(rendered.html);
   const htmlDiagnostics = inspectRenderedHtml(renderedHtml);
@@ -1296,6 +1392,7 @@ async function updatePdfLink(config, row, linkPdf, pdfMeta = {}) {
   const pdfFallbackUsed = Boolean(pdfMeta?.pdf_fallback_used);
   const pdfFallbackFrom = stripDangerousText(String(pdfMeta?.pdf_fallback_from || ""), 80);
   const pdfFallbackReason = stripDangerousText(String(pdfMeta?.pdf_fallback_reason || ""), 120);
+  const proposalMode = normalizeProposalMode(pdfMeta?.proposal_mode);
   const pdfComercialLiberado = Boolean(
     linkPdf
     && pdfEngine
@@ -1326,6 +1423,7 @@ async function updatePdfLink(config, row, linkPdf, pdfMeta = {}) {
             proposta_pdf_fallback_from: pdfFallbackFrom,
             proposta_pdf_fallback_reason: pdfFallbackReason,
             proposta_pdf_comercial_liberado: pdfComercialLiberado,
+            proposta_modo: proposalMode || comercial?.proposta_modo || "direta",
             atualizado_em: nowIso,
           },
         },
@@ -1368,6 +1466,19 @@ export async function onRequestPost(context) {
   if (!id || !/^[a-zA-Z0-9-]+$/.test(id)) {
     return fail(requestId, "request", "id_invalido", 400);
   }
+  const proposalMode = normalizeProposalMode(
+    firstNonEmptyValue(
+      body?.proposal_mode,
+      body?.modo_proposta,
+      body?.modo,
+      body?.mode
+    )
+  );
+  const templateOverrides = {
+    ...sanitizeTemplateOverrides(body),
+    ...sanitizeTemplateOverrides(body?.template_overrides),
+  };
+  const testMode = isTruthyFlag(body?.test_mode) || isTruthyFlag(body?.modo_teste) || isTruthyFlag(body?.preview_mode);
 
   const getResult = await fetchSupabase(
     config,
@@ -1383,7 +1494,10 @@ export async function onRequestPost(context) {
 
   let rendered;
   try {
-    rendered = await renderPropostaTemplateToLines(row, request, env);
+    rendered = await renderPropostaTemplateToLines(row, request, env, {
+      proposalMode,
+      templateOverrides,
+    });
   } catch (err) {
     const reason = String(err?.code || "").toLowerCase() === "template_not_found"
       || String(err?.message || "").includes("template_not_found")
@@ -1415,6 +1529,9 @@ export async function onRequestPost(context) {
   logPdf(requestId, "template_render", "Template renderizado para proposta", {
     template_source: templateSource,
     template_path: templatePath,
+    proposal_mode: proposalMode || "direta",
+    test_mode: testMode,
+    template_overrides_count: Object.keys(templateOverrides || {}).length,
     placeholders_total: Number(placeholdersTotal || 0),
     placeholders_substituidos: Number(placeholdersSubstituidos || 0),
     placeholders_restantes: Array.isArray(placeholdersRestantes) ? placeholdersRestantes : [],
@@ -1473,6 +1590,8 @@ export async function onRequestPost(context) {
     provider_content_type: String(pdfRender.providerContentType || ""),
     provider_endpoint: String(pdfRender.providerEndpoint || ""),
     provider_auth_mode: String(pdfRender.providerAuthMode || ""),
+    proposal_mode: proposalMode || "direta",
+    test_mode: testMode,
     html_has_style_tag: Boolean(htmlHasStyleTag),
     html_has_header_class: Boolean(htmlHasHeaderClass),
   });
@@ -1509,6 +1628,7 @@ export async function onRequestPost(context) {
     pdf_fallback_used: fallbackUsed,
     pdf_fallback_from: String(pdfRender?.fallbackFrom || ""),
     pdf_fallback_reason: String(pdfRender?.fallbackReason || ""),
+    proposal_mode: proposalMode,
   });
   if (!updateResult.ok) {
     return fail(requestId, "persist_link", "deal_link_update_failed", 502, {

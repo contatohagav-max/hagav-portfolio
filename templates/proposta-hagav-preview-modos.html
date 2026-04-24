@@ -375,6 +375,19 @@
       line-height: 1.4;
     }
 
+    .option-card .meta {
+      margin: 8px 0 0;
+      display: grid;
+      gap: 4px;
+    }
+
+    .option-card .meta p {
+      margin: 0;
+      font-size: 12px;
+      line-height: 1.35;
+      color: #4d4d4d;
+    }
+
     .option-card.recommended {
       border: 2px solid #c8a23a;
       background: #fff8e8;
@@ -382,18 +395,11 @@
       transform: translateY(-1px);
     }
 
-    .recommended-badge {
-      display: inline-block;
-      margin-top: 8px;
-      border-radius: 999px;
-      border: 1px solid #c8a23a;
-      background: #f6e7b9;
-      color: #5a4314;
-      font-size: 10px;
-      font-weight: 800;
-      letter-spacing: 0.1em;
-      text-transform: uppercase;
-      padding: 4px 8px;
+    .options-footnote {
+      margin: 10px 0 0;
+      font-size: 13px;
+      line-height: 1.45;
+      color: #5b4a20;
     }
 
     .conditions {
@@ -484,7 +490,7 @@
       <p>Prototipo visual da proposta HAGAV com dados mockados. Nao substitui producao e nao altera o sistema atual.</p>
       <div class="mode-grid">
         <button class="mode-btn" data-mode="direta">Modo 1 - Direta<small>VSL ate 15 min</small></button>
-        <button class="mode-btn" data-mode="opcoes">Modo 2 - Com Opcoes<small>3 pacotes lado a lado</small></button>
+        <button class="mode-btn" data-mode="opcoes">Modo 2 - Com Opcoes<small>Pedido atual + 2 sugestoes por volume</small></button>
         <button class="mode-btn" data-mode="mensal">Modo 3 - Mensal<small>Plano recorrente 3 meses</small></button>
         <button class="mode-btn" data-mode="personalizada">Modo 4 - Personalizada<small>Texto comercial livre</small></button>
       </div>
@@ -548,6 +554,7 @@
         <article class="section hidden" id="opcoesSection">
           <h3 class="section-title">Opcoes de investimento</h3>
           <div class="options-grid" id="opcoesGrid"></div>
+          <p class="options-footnote" id="opcoesFootnote"></p>
         </article>
 
         <article class="section hidden" id="mensalSection">
@@ -564,9 +571,9 @@
           </div>
         </article>
 
-        <article class="investment">
+        <article class="investment" id="investmentSection">
           <div class="investment-main">
-            <p class="investment-tag">Valor total</p>
+            <p class="investment-tag" id="investmentTag">Valor total</p>
             <p class="investment-value" id="valorPrincipal"></p>
             <p class="investment-note">Investimento comercial da proposta</p>
           </div>
@@ -593,7 +600,7 @@
         </article>
 
         <footer class="footer">
-          <span><strong>HAGAV Studio</strong> - Pos-producao para marcas que precisam de velocidade e consistencia.</span>
+          <span><strong>HAGAV Studio</strong> - P&oacute;s-produ&ccedil;&atilde;o para marcas que precisam de velocidade e consist&ecirc;ncia.</span>
           <span id="footerRef"></span>
         </footer>
       </section>
@@ -628,17 +635,41 @@
         data: "24/04/2026",
         cliente: { nome: "Studio Aurora", whatsapp: "(73) 98205-4283" },
         resumo: {
-          servico: "Planos de conteudo mensal",
-          quantidade: "Comparativo de 3 opcoes",
+          servico: "Conteudo para redes sociais",
+          quantidade: "10 videos",
           prazo: "Inicio imediato apos aprovacao"
         },
-        escopo: "Proposta comparativa para operacao mensal com foco comercial. Cada opcao contempla edicao estrategica, acabamento profissional e entregas prontas para publicacao, mantendo consistencia visual e ritmo para escala de conteudo.",
-        valor: "R$ 1.800",
+        escopo: "Comparativo de investimento baseado no pedido atual e em dois cenarios de maior volume. Cada opcao considera edicao estrategica com acabamento profissional, ritmo otimizado para retencao e entregas prontas para publicacao.",
+        showInvestment: false,
+        investimentoTag: "Comparativo de investimento",
+        valor: "",
         opcoes: [
-          { nome: "Essencial", preco: "R$ 1.200", desc: "8 videos por mes" },
-          { nome: "Performance", preco: "R$ 1.800", desc: "12 videos por mes", desconto: "-12%" },
-          { nome: "Escala", preco: "R$ 2.900", desc: "20 videos por mes", desconto: "-15%" },
+          {
+            nome: "Pedido atual",
+            preco: "R$ 1.700",
+            quantidade: "10 videos",
+            unitario: "R$ 170,00 por video",
+            desc: "Sem desconto aplicado"
+          },
+          {
+            nome: "Mais volume",
+            preco: "R$ 2.422,50",
+            quantidade: "15 videos",
+            unitario: "R$ 161,50 por video",
+            desc: "5% de desconto por volume",
+            desconto: "-5%",
+            destaque: true
+          },
+          {
+            nome: "Melhor custo-beneficio",
+            preco: "R$ 4.335,00",
+            quantidade: "30 videos",
+            unitario: "R$ 144,50 por video",
+            desc: "15% de desconto por volume",
+            desconto: "-15%"
+          },
         ],
+        opcoesTextoApoio: "Quanto maior o volume, menor o custo por video. As opcoes acima usam descontos progressivos conforme quantidade.",
         condicoes: [
           "Forma de pagamento: PIX / Transferencia / Conforme combinado",
           "Proposta valida ate 01/05/2026",
@@ -659,6 +690,7 @@
         },
         escopo: "Operacao mensal estruturada para 12 videos por mes com calendario recorrente, padrao visual consistente e velocidade de entrega. Ideal para manter previsibilidade, ritmo comercial e estabilidade de publicacao da marca.",
         valor: "R$ 2.500/mes",
+        investimentoTag: "Valor mensal",
         mensal: {
           plano: "Plano Mensal",
           duracao: "Contrato de 3 meses"
@@ -683,6 +715,7 @@
         },
         escopo: "Solucao personalizada para necessidades especificas da operacao, com desenho estrategico de escopo, organizacao de materiais e execucao de alto padrao. O foco e entregar consistencia criativa e performance de publicacao com flexibilidade comercial.",
         valor: "R$ 4.200,00",
+        investimentoTag: "Valor total",
         condicoes: [
           "Forma de pagamento: PIX / Transferencia / Conforme combinado",
           "Proposta valida ate 01/05/2026",
@@ -759,6 +792,22 @@
 
         card.appendChild(name);
         card.appendChild(price);
+
+        const metaWrap = document.createElement("div");
+        metaWrap.className = "meta";
+
+        if (opt.quantidade) {
+          const qty = document.createElement("p");
+          qty.textContent = opt.quantidade;
+          metaWrap.appendChild(qty);
+        }
+        if (opt.unitario) {
+          const unit = document.createElement("p");
+          unit.textContent = opt.unitario;
+          metaWrap.appendChild(unit);
+        }
+
+        card.appendChild(metaWrap);
         card.appendChild(desc);
 
         wrap.appendChild(card);
@@ -784,7 +833,10 @@
       setFieldValue("resumoPrazoField", "resumoPrazo", data.resumo?.prazo);
       setText("escopoTexto", data.escopo);
 
-      setText("valorPrincipal", data.valor);
+      const showInvestment = data.showInvestment !== false && String(data.valor || "").trim().length > 0;
+      setHidden("investmentSection", !showInvestment);
+      setText("investmentTag", data.investimentoTag || "Valor total");
+      setText("valorPrincipal", data.valor, "");
       setList("condicoesList", data.condicoes);
       setHidden("condicoesSection", !Array.isArray(data.condicoes) || data.condicoes.length === 0);
       setText("footerRef", `${data.numero} | ${data.data}`);
@@ -793,8 +845,13 @@
       opcoesSection.classList.toggle("hidden", !Array.isArray(data.opcoes));
       if (Array.isArray(data.opcoes)) {
         renderOptions(data.opcoes);
+        const footnote = String(data.opcoesTextoApoio || "").trim();
+        setText("opcoesFootnote", footnote, "");
+        setHidden("opcoesFootnote", !footnote);
       } else {
         byId("opcoesGrid").innerHTML = "";
+        setText("opcoesFootnote", "", "");
+        setHidden("opcoesFootnote", true);
       }
 
       const mensalSection = byId("mensalSection");

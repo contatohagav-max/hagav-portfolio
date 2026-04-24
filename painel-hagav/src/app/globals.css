@@ -335,6 +335,57 @@
     backdrop-filter: blur(8px);
   }
 
+  .orcamento-actions-foot {
+    @apply flex-col items-stretch gap-3;
+  }
+
+  .orcamento-feedback {
+    @apply w-full rounded-xl border px-3.5 py-2.5 text-xs;
+  }
+
+  .orcamento-action-block {
+    @apply w-full rounded-2xl border border-hagav-border bg-hagav-surface/35 p-3.5;
+    background-image: linear-gradient(180deg, rgba(255,255,255,0.015), rgba(255,255,255,0));
+  }
+
+  .orcamento-action-head {
+    @apply mb-3;
+  }
+
+  .orcamento-action-kicker {
+    @apply text-[10px] font-medium uppercase tracking-[0.24em] text-hagav-gray;
+  }
+
+  .orcamento-action-caption {
+    @apply mt-1 text-[11px] leading-5 text-hagav-gray;
+  }
+
+  .orcamento-action-grid {
+    @apply grid w-full grid-cols-1 gap-2.5 md:grid-cols-2 xl:grid-cols-3;
+  }
+
+  .orcamento-action-grid-compact {
+    @apply xl:grid-cols-2;
+  }
+
+  .orcamento-action-button {
+    @apply w-full justify-center md:justify-start;
+    min-height: 40px;
+  }
+
+  .orcamento-action-commit {
+    @apply flex w-full flex-col gap-2.5 sm:flex-row;
+  }
+
+  .orcamento-approve-button {
+    @apply w-full justify-center sm:w-auto sm:min-w-[190px];
+  }
+
+  .orcamento-save-button {
+    @apply w-full justify-center text-sm;
+    min-height: 46px;
+  }
+
   .modal-panel {
     @apply relative w-full bg-hagav-dark border border-hagav-border rounded-2xl shadow-modal animate-slide-up overflow-hidden flex flex-col;
     max-height: calc(100vh - 2.5rem);
@@ -378,6 +429,17 @@
     }
     .dashboard-chart-shell {
       @apply p-2.5;
+    }
+    .orcamento-action-block {
+      @apply p-3;
+    }
+    .orcamento-action-grid {
+      @apply grid-cols-1;
+    }
+    .orcamento-action-button,
+    .orcamento-approve-button,
+    .orcamento-save-button {
+      @apply justify-center;
     }
     .drawer-panel {
       @apply w-[calc(100vw-1rem)] max-h-[calc(100vh-1rem)] rounded-xl;

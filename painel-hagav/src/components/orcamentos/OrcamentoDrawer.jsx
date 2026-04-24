@@ -820,10 +820,10 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
           )}
         </div>
 
-        <div className="drawer-foot flex-wrap gap-2">
+        <div className="drawer-foot orcamento-actions-foot">
           {(error || info) && (
             <p
-              className={`w-full text-xs rounded-lg px-3 py-2 border ${
+              className={`orcamento-feedback ${
                 error
                   ? 'text-red-300 bg-red-500/10 border-red-500/25'
                   : 'text-hagav-light bg-hagav-surface border-hagav-border'
@@ -832,75 +832,95 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
               {error || info}
             </p>
           )}
-          <EduTooltip {...SEND_PROPOSTA_TOOLTIP} className="w-auto">
-            <span className="inline-flex">
+          <div className="orcamento-action-block">
+            <div className="orcamento-action-head">
+              <p className="orcamento-action-kicker">Proposta e contato</p>
+              <p className="orcamento-action-caption">Gere o PDF, envie a proposta e avance a conversa com o cliente.</p>
+            </div>
+            <div className="orcamento-action-grid">
               <button
                 type="button"
-                onClick={handleEnviarProposta}
-                disabled={saving || pdfLoading || !canSendProposta}
-                className={`btn-ghost btn-sm ${!canSendProposta ? 'opacity-60 cursor-not-allowed' : ''}`}
+                onClick={handleGeneratePdf}
+                disabled={pdfLoading}
+                className="btn-ghost btn-sm orcamento-action-button"
               >
-                <Send size={13} />
-                Enviar proposta
+                {pdfLoading ? <Loader2 size={13} className="animate-spin" /> : <ExternalLink size={13} />}
+                Gerar proposta PDF
               </button>
-            </span>
-          </EduTooltip>
-          <button
-            type="button"
-            onClick={() => handleQuickStatus('perdido')}
-            disabled={saving || pdfLoading}
-            className="btn-ghost btn-sm"
-          >
-            <Ban size={13} />
-            Marcar perdido
-          </button>
-          <button
-            type="button"
-            onClick={handleGeneratePdf}
-            disabled={pdfLoading}
-            className="btn-ghost btn-sm"
-          >
-            {pdfLoading ? <Loader2 size={13} className="animate-spin" /> : <ExternalLink size={13} />}
-            Gerar proposta PDF
-          </button>
-          <button
-            type="button"
-            onClick={handleRecalculateValues}
-            disabled={saving || pdfLoading}
-            className="btn-ghost btn-sm"
-          >
-            {saving ? <Loader2 size={13} className="animate-spin" /> : <RotateCw size={13} />}
-            Recalcular valores
-          </button>
-          {canApproveOrcamento && (
-            <button
-              type="button"
-              onClick={() => handleQuickStatus('aprovado')}
-              disabled={saving || pdfLoading}
-              className="btn-gold btn-sm"
-            >
-              <CheckCircle2 size={13} />
-              Cliente aprovou
-            </button>
-          )}
-          <EduTooltip {...WHATSAPP_TOOLTIP} className="w-auto">
-            {hasWhatsapp ? (
-              <a href={waLink} target="_blank" rel="noreferrer" className="btn-ghost btn-sm">
-                <MessageCircle size={13} />
-                WhatsApp
-                <ExternalLink size={11} className="opacity-50" />
-              </a>
-            ) : (
-              <span className="btn-ghost btn-sm opacity-60 cursor-not-allowed">
-                <MessageCircle size={13} />
-                WhatsApp indisponivel
-              </span>
+              <EduTooltip {...SEND_PROPOSTA_TOOLTIP} className="w-full">
+                <span className="inline-flex w-full">
+                  <button
+                    type="button"
+                    onClick={handleEnviarProposta}
+                    disabled={saving || pdfLoading || !canSendProposta}
+                    className={`btn-ghost btn-sm orcamento-action-button ${!canSendProposta ? 'opacity-60 cursor-not-allowed' : ''}`}
+                  >
+                    <Send size={13} />
+                    Enviar proposta
+                  </button>
+                </span>
+              </EduTooltip>
+              <EduTooltip {...WHATSAPP_TOOLTIP} className="w-full">
+                {hasWhatsapp ? (
+                  <a href={waLink} target="_blank" rel="noreferrer" className="btn-ghost btn-sm orcamento-action-button">
+                    <MessageCircle size={13} />
+                    WhatsApp
+                    <ExternalLink size={11} className="opacity-50" />
+                  </a>
+                ) : (
+                  <span className="btn-ghost btn-sm orcamento-action-button opacity-60 cursor-not-allowed">
+                    <MessageCircle size={13} />
+                    WhatsApp indisponivel
+                  </span>
+                )}
+              </EduTooltip>
+            </div>
+          </div>
+
+          <div className="orcamento-action-block">
+            <div className="orcamento-action-head">
+              <p className="orcamento-action-kicker">Operação</p>
+              <p className="orcamento-action-caption">Ajustes manuais e encerramento da negociação quando necessário.</p>
+            </div>
+            <div className="orcamento-action-grid orcamento-action-grid-compact">
+              <button
+                type="button"
+                onClick={handleRecalculateValues}
+                disabled={saving || pdfLoading}
+                className="btn-ghost btn-sm orcamento-action-button"
+              >
+                {saving ? <Loader2 size={13} className="animate-spin" /> : <RotateCw size={13} />}
+                Recalcular valores
+              </button>
+              <button
+                type="button"
+                onClick={() => handleQuickStatus('perdido')}
+                disabled={saving || pdfLoading}
+                className="btn-ghost btn-sm orcamento-action-button"
+              >
+                <Ban size={13} />
+                Marcar perdido
+              </button>
+            </div>
+          </div>
+
+          <div className="orcamento-action-commit">
+            {canApproveOrcamento && (
+              <button
+                type="button"
+                onClick={() => handleQuickStatus('aprovado')}
+                disabled={saving || pdfLoading}
+                className="btn-gold btn-sm orcamento-approve-button"
+              >
+                <CheckCircle2 size={13} />
+                Cliente aprovou
+              </button>
             )}
-          </EduTooltip>
-          <button onClick={handleSave} disabled={saving || pdfLoading} className="btn-gold flex-1 justify-center">
-            {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-            Salvar
-          </button>
+            <button onClick={handleSave} disabled={saving || pdfLoading} className="btn-gold orcamento-save-button">
+              {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+              Salvar
+            </button>
+          </div>
         </div>
       </aside>
     </>

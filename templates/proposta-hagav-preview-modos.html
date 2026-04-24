@@ -329,6 +329,26 @@
       border-radius: 10px;
       padding: 10px;
       background: #fff;
+      position: relative;
+    }
+
+    .discount-dot {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      width: 38px;
+      height: 38px;
+      border-radius: 999px;
+      border: 1px solid #d2b165;
+      background: radial-gradient(circle at 35% 30%, #ffeec0 0%, #d8b15a 62%, #b7882d 100%);
+      color: #3a2a08;
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 5px 12px rgba(180, 131, 37, 0.28);
     }
 
     .option-card .name {
@@ -616,8 +636,8 @@
         valor: "R$ 1.800",
         opcoes: [
           { nome: "Essencial", preco: "R$ 1.200", desc: "8 videos por mes" },
-          { nome: "Performance", preco: "R$ 1.800", desc: "12 videos por mes" },
-          { nome: "Escala", preco: "R$ 2.900", desc: "20 videos por mes" },
+          { nome: "Performance", preco: "R$ 1.800", desc: "12 videos por mes", desconto: "-12%" },
+          { nome: "Escala", preco: "R$ 2.900", desc: "20 videos por mes", desconto: "-15%" },
         ],
         condicoes: [
           "Forma de pagamento: PIX / Transferencia / Conforme combinado",
@@ -729,6 +749,13 @@
         const desc = document.createElement("p");
         desc.className = "desc";
         desc.textContent = opt.desc;
+
+        if (opt.desconto) {
+          const discount = document.createElement("span");
+          discount.className = "discount-dot";
+          discount.textContent = opt.desconto;
+          card.appendChild(discount);
+        }
 
         card.appendChild(name);
         card.appendChild(price);

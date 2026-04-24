@@ -159,6 +159,12 @@
       gap: 2mm;
     }
 
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 2mm;
+    }
+
     .field {
       border: 0.4pt solid #e8e2d4;
       border-radius: 2mm;
@@ -186,6 +192,11 @@
       line-height: 1.4;
       word-break: break-word;
       overflow-wrap: anywhere;
+    }
+
+    .field-pre {
+      white-space: pre-line;
+      line-height: 1.5;
     }
 
     .scope {
@@ -262,6 +273,81 @@
       overflow-wrap: anywhere;
     }
 
+    .options-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 2.1mm;
+    }
+
+    .option-card {
+      border: 0.45pt solid #decf9f;
+      border-radius: 2mm;
+      background: #fffbef;
+      padding: 2.4mm;
+      position: relative;
+      display: grid;
+      gap: 1.2mm;
+      min-height: 34mm;
+    }
+
+    .option-title {
+      margin: 0;
+      font-size: 7.1pt;
+      color: #6a5b34;
+      text-transform: uppercase;
+      letter-spacing: 0.16em;
+      font-weight: 760;
+    }
+
+    .option-price {
+      margin: 0;
+      font-size: 13pt;
+      color: #151515;
+      font-weight: 800;
+      letter-spacing: -0.01em;
+    }
+
+    .option-meta {
+      margin: 0;
+      font-size: 7.7pt;
+      color: #444;
+      line-height: 1.4;
+      word-break: break-word;
+      overflow-wrap: anywhere;
+    }
+
+    .option-desc {
+      margin: 0;
+      font-size: 7.3pt;
+      color: #5a513f;
+      line-height: 1.35;
+    }
+
+    .discount-dot {
+      position: absolute;
+      top: 2.1mm;
+      right: 2.1mm;
+      width: 8.2mm;
+      height: 8.2mm;
+      border-radius: 999px;
+      border: 0.45pt solid #d6b460;
+      background: #f7dea0;
+      color: #5f4712;
+      font-size: 7pt;
+      font-weight: 780;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      line-height: 1;
+    }
+
+    .options-footnote {
+      margin: 2mm 0 0;
+      font-size: 7.8pt;
+      color: #565656;
+      line-height: 1.45;
+    }
+
     .conditions {
       display: grid;
       gap: 1.1mm;
@@ -335,7 +421,7 @@
         <p class="brand-kicker">HAGAV STUDIO DE EDICAO</p>
       </div>
       <h1>PROPOSTA COMERCIAL</h1>
-      <p class="subtitle">Proposta objetiva para validacao de escopo, investimento e inicio da producao.</p>
+      <p class="subtitle">Proposta objetiva para validação de escopo, investimento e início da produção.</p>
       <div class="meta">
         <span class="chip">Proposta {{numero_proposta}}</span>
         <span class="chip">Emitida em {{data_emissao}}</span>
@@ -355,11 +441,25 @@
             <p class="field-value">{{whatsapp}}</p>
           </div>
         </div>
+        <div class="grid-3" style="margin-top:2mm;">
+          <div class="field" style="{{empresa_bloco_style}}">
+            <p class="field-label">Empresa</p>
+            <p class="field-value">{{empresa}}</p>
+          </div>
+          <div class="field" style="{{instagram_bloco_style}}">
+            <p class="field-label">Instagram</p>
+            <p class="field-value">{{instagram}}</p>
+          </div>
+          <div class="field" style="{{email_bloco_style}}">
+            <p class="field-label">E-mail</p>
+            <p class="field-value">{{email_cliente}}</p>
+          </div>
+        </div>
       </article>
 
       <article class="section">
         <h2 class="section-title">Resumo da Demanda</h2>
-        <div class="grid-4">
+        <div class="grid-3">
           <div class="field soft">
             <p class="field-label">Servico principal</p>
             <p class="field-value">{{servico_principal}}</p>
@@ -372,10 +472,6 @@
             <p class="field-label">Prazo de entrega</p>
             <p class="field-value">{{prazo}}</p>
           </div>
-          <div class="field soft">
-            <p class="field-label">Formato de entrega</p>
-            <p class="field-value">{{formato_entrega}}</p>
-          </div>
         </div>
       </article>
 
@@ -386,9 +482,61 @@
         </div>
       </article>
 
-      <article class="investment">
+      <article class="section" style="{{opcoes_bloco_style}}">
+        <h2 class="section-title">Opções de investimento</h2>
+        <div class="options-grid">
+          <div class="option-card">
+            <span class="discount-dot" style="{{opcao1_desconto_style}}">{{opcao1_desconto}}</span>
+            <p class="option-title">{{opcao1_titulo}}</p>
+            <p class="option-price">{{opcao1_preco}}</p>
+            <p class="option-meta">{{opcao1_qtd}}</p>
+            <p class="option-meta">{{opcao1_unitario}}</p>
+            <p class="option-desc">{{opcao1_desc}}</p>
+          </div>
+          <div class="option-card">
+            <span class="discount-dot" style="{{opcao2_desconto_style}}">{{opcao2_desconto}}</span>
+            <p class="option-title">{{opcao2_titulo}}</p>
+            <p class="option-price">{{opcao2_preco}}</p>
+            <p class="option-meta">{{opcao2_qtd}}</p>
+            <p class="option-meta">{{opcao2_unitario}}</p>
+            <p class="option-desc">{{opcao2_desc}}</p>
+          </div>
+          <div class="option-card">
+            <span class="discount-dot" style="{{opcao3_desconto_style}}">{{opcao3_desconto}}</span>
+            <p class="option-title">{{opcao3_titulo}}</p>
+            <p class="option-price">{{opcao3_preco}}</p>
+            <p class="option-meta">{{opcao3_qtd}}</p>
+            <p class="option-meta">{{opcao3_unitario}}</p>
+            <p class="option-desc">{{opcao3_desc}}</p>
+          </div>
+        </div>
+        <p class="options-footnote">{{texto_comparativo}}</p>
+      </article>
+
+      <article class="section" style="{{mensal_bloco_style}}">
+        <h2 class="section-title">Estrutura mensal</h2>
+        <div class="grid-3">
+          <div class="field">
+            <p class="field-label">Quantidade mensal</p>
+            <p class="field-value">{{quantidade_mensal}}</p>
+          </div>
+          <div class="field">
+            <p class="field-label">Duração do contrato</p>
+            <p class="field-value">{{duracao_contrato_meses}} meses</p>
+          </div>
+          <div class="field">
+            <p class="field-label">Valor mensal</p>
+            <p class="field-value">{{valor_mensal_moeda}}</p>
+          </div>
+        </div>
+        <div class="scope" style="margin-top:2mm;">
+          <p>{{escopo_mensal}}</p>
+        </div>
+      </article>
+
+      <article class="investment" style="{{investimento_bloco_style}}">
         <div class="investment-main">
-          <p class="investment-tag">Valor total</p>
+          <p class="investment-tag">{{investimento_label}}</p>
           <p class="investment-value">{{valor_total_moeda}}</p>
           <p class="investment-note">Investimento comercial da proposta</p>
           <div class="investment-rules">
@@ -401,31 +549,31 @@
       </article>
 
       <article class="section">
-        <h2 class="section-title">Condicoes comerciais</h2>
+        <h2 class="section-title">Condições comerciais</h2>
         <div class="conditions">
-          <p><b>Forma de pagamento:</b> {{forma_pagamento}}</p>
-          <p><b>Proposta valida ate:</b> {{data_validade}}</p>
-          <p>{{inicio_producao_texto}}</p>
-          <p>{{ajustes_texto}}</p>
+          <p style="{{condicao_linha_1_style}}">{{condicao_linha_1}}</p>
+          <p style="{{condicao_linha_2_style}}">{{condicao_linha_2}}</p>
+          <p style="{{condicao_linha_3_style}}">{{condicao_linha_3}}</p>
+          <p style="{{condicao_linha_4_style}}">{{condicao_linha_4}}</p>
         </div>
       </article>
 
       <article class="section" style="{{referencia_bloco_style}}">
-        <h2 class="section-title">Referencia</h2>
+        <h2 class="section-title">Referência</h2>
         <p class="field-value">{{referencia_texto}}</p>
       </article>
 
       <article class="section" style="{{observacoes_bloco_style}}">
-        <h2 class="section-title">Observacoes adicionais</h2>
+        <h2 class="section-title">Observações adicionais</h2>
         <p class="field-value">{{observacao_adicional}}</p>
       </article>
 
       <article class="section">
-        <h2 class="section-title">Proximos passos</h2>
+        <h2 class="section-title">Próximos passos</h2>
         <div class="steps">
-          <p>01 - Aprovacao da proposta via WhatsApp.</p>
-          <p>02 - Envio dos materiais e referencias pelo cliente.</p>
-          <p>03 - Inicio da edicao conforme prazo combinado.</p>
+          <p>01 - Aprovação da proposta via WhatsApp.</p>
+          <p>02 - Envio dos materiais e referências pelo cliente.</p>
+          <p>03 - Início da edição conforme prazo combinado.</p>
         </div>
         <div class="cta">{{cta_aprovacao}}</div>
       </article>

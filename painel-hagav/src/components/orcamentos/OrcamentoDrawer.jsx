@@ -28,44 +28,77 @@ const PROPOSAL_MODE_OPTIONS = [
   { value: 'personalizada', label: 'Personalizada' },
 ];
 
+const DEFAULT_CONDICOES_COMERCIAIS = [
+  'Forma de pagamento: PIX / Transferencia / Conforme combinado.',
+  'Proposta valida ate [data].',
+  'O projeto inicia apos aprovacao e envio dos materiais.',
+  'Inclui 1 rodada de ajustes por entrega. Alteracoes de estrutura, roteiro, estilo ou escopo podem gerar novo orcamento.',
+].join('\n');
+
 const PROPOSAL_MODE_PRESETS = {
   direta: {
     servico_principal: 'Conteudo para redes sociais',
     quantidade: '10 videos',
     prazo: '24h',
     escopo_comercial: 'Edicao estrategica com acabamento profissional, ritmo otimizado para retencao e entrega pronta para publicacao em MP4. Inclui 1 rodada de ajustes.',
+    quantidade_mensal: '',
+    duracao_contrato_meses: '',
+    valor_mensal_moeda: '',
+    valor_personalizado_moeda: '',
   },
   opcoes: {
     servico_principal: 'Conteudo para redes sociais',
     quantidade: '10 videos',
     prazo: 'Inicio imediato apos aprovacao',
     escopo_comercial: 'Comparativo comercial com pedido atual e duas opcoes de maior volume para reduzir custo medio por entrega.',
+    quantidade_mensal: '',
+    duracao_contrato_meses: '',
+    valor_mensal_moeda: '',
+    valor_personalizado_moeda: '',
   },
   mensal: {
     servico_principal: 'Plano mensal de conteudo',
     quantidade: '12 videos mensais',
     prazo: 'Cronograma mensal',
     escopo_comercial: 'Operacao mensal de edicao com padrao visual consistente, organizacao de entregas e acompanhamento por cronograma aprovado.',
+    quantidade_mensal: '12 videos por mes',
+    duracao_contrato_meses: '3',
+    valor_mensal_moeda: '',
+    valor_personalizado_moeda: '',
   },
   personalizada: {
     servico_principal: 'Proposta personalizada',
     quantidade: 'Escopo sob medida',
     prazo: 'Conforme alinhamento',
     escopo_comercial: 'Estrutura personalizada para atender necessidades especificas, com planejamento de escopo, organizacao de materiais e execucao premium.',
+    quantidade_mensal: '',
+    duracao_contrato_meses: '',
+    valor_mensal_moeda: '',
+    valor_personalizado_moeda: '',
   },
 };
 
 const PROPOSAL_DRAW_FIELDS = [
   'cliente_nome',
   'whatsapp',
+  'empresa',
+  'instagram',
+  'email_cliente',
   'servico_principal',
   'quantidade',
+  'quantidade_mensal',
   'prazo',
   'escopo_comercial',
+  'escopo_mensal',
+  'condicoes_comerciais',
+  'referencia_texto',
   'observacao_adicional',
   'valor_total_moeda',
+  'valor_mensal_moeda',
+  'valor_personalizado_moeda',
   'forma_pagamento',
   'data_validade',
+  'duracao_contrato_meses',
   'numero_proposta',
   'data_emissao',
   'cta_aprovacao',
@@ -115,6 +148,16 @@ function fromDateTimeLocal(value) {
   return date.toISOString();
 }
 
+function formatDateBr(value) {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const year = String(date.getFullYear());
+  return `${day}/${month}/${year}`;
+}
+
 function normalizeText(value) {
   if (value === null || value === undefined) return '';
   return String(value).trim();
@@ -157,6 +200,29 @@ function parseDetalhes(value) {
   }
 }
 
+function firstFilledText(...values) {
+  for (const value of values) {
+    const normalized = normalizeText(value);
+    if (normalized) return normalized;
+  }
+  return '';
+}
+
+function inferProposalModeFromFlow(record, fallback = 'direta') {
+  const flow = normalizeText(record?.fluxo || record?.Fluxo).toUpperCase();
+  if (flow === 'DR') return 'mensal';
+  if (flow === 'DU') return fallback;
+  return fallback;
+}
+
+function readAnswersFromDetalhes(detalhes = {}) {
+  const rawAnswers = detalhes?.respostasCompletas
+    || detalhes?.answers
+    || detalhes?.respostas
+    || null;
+  return parseDetalhes(rawAnswers);
+}
+
 function normalizeProposalMode(value) {
   const key = String(value || '')
     .trim()
@@ -167,7 +233,7 @@ function normalizeProposalMode(value) {
   if (key.includes('mensal') || key.includes('recorrente')) return 'mensal';
   if (key.includes('personal')) return 'personalizada';
   if (key.includes('direta')) return 'direta';
-  return 'direta';
+  return '';
 }
 
 function parseQuantityNumber(value, fallback = 10) {
@@ -178,14 +244,40 @@ function parseQuantityNumber(value, fallback = 10) {
   return Math.max(1, parsed);
 }
 
-function buildDefaultOptionCards(baseQuantity = 10) {
+function parseCurrencyNumber(value, fallback = 0) {
+  const raw = normalizeText(value);
+  if (!raw) return fallback;
+  const normalized = raw
+    .replace(/R\$/gi, '')
+    .replace(/\s+/g, '')
+    .replace(/\./g, '')
+    .replace(',', '.')
+    .replace(/[^0-9.-]/g, '');
+  const parsed = Number(normalized);
+  if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
+  return parsed;
+}
+
+function getPreviewVolumeDiscountPercent(quantity) {
+  const safeQty = Math.max(1, Math.round(Number(quantity || 0) || 1));
+  if (safeQty >= 30) return 15;
+  if (safeQty >= 15) return 5;
+  return 0;
+}
+
+function buildDefaultOptionCards(baseQuantity = 10, baseTotalValue = 0) {
   const pedidoAtualQty = Math.max(1, Number(baseQuantity || 10));
   const maisVolumeQty = Math.max(pedidoAtualQty + 1, Math.round(pedidoAtualQty * 1.5));
   const melhorCustoQty = Math.max(30, Math.round(pedidoAtualQty * 3));
-  const baseUnit = 170;
+  const safeBaseTotal = Number(baseTotalValue || 0);
+  const baseUnit = safeBaseTotal > 0
+    ? safeBaseTotal / pedidoAtualQty
+    : 170;
   const option1Total = pedidoAtualQty * baseUnit;
-  const option2Unit = baseUnit * 0.95;
-  const option3Unit = baseUnit * 0.85;
+  const option2Discount = getPreviewVolumeDiscountPercent(maisVolumeQty);
+  const option3Discount = getPreviewVolumeDiscountPercent(melhorCustoQty);
+  const option2Unit = baseUnit * (1 - (option2Discount / 100));
+  const option3Unit = baseUnit * (1 - (option3Discount / 100));
   const option2Total = maisVolumeQty * option2Unit;
   const option3Total = melhorCustoQty * option3Unit;
 
@@ -200,14 +292,14 @@ function buildDefaultOptionCards(baseQuantity = 10) {
     opcao2_qtd: `${maisVolumeQty} videos`,
     opcao2_preco: fmtBRL(option2Total),
     opcao2_unitario: `${fmtBRL(option2Unit)} por video`,
-    opcao2_desc: '5% de desconto por volume',
-    opcao2_desconto: '-5%',
+    opcao2_desc: option2Discount > 0 ? `${option2Discount}% de desconto por volume` : 'Sem desconto aplicado',
+    opcao2_desconto: option2Discount > 0 ? `-${option2Discount}%` : '',
     opcao3_titulo: 'Melhor custo-beneficio',
     opcao3_qtd: `${melhorCustoQty} videos`,
     opcao3_preco: fmtBRL(option3Total),
     opcao3_unitario: `${fmtBRL(option3Unit)} por video`,
-    opcao3_desc: '15% de desconto por volume',
-    opcao3_desconto: '-15%',
+    opcao3_desc: option3Discount > 0 ? `${option3Discount}% de desconto por volume` : 'Sem desconto aplicado',
+    opcao3_desconto: option3Discount > 0 ? `-${option3Discount}%` : '',
     texto_comparativo: 'Quanto maior o volume, menor o custo por video. As opcoes acima usam descontos progressivos conforme quantidade.',
   };
 }
@@ -215,10 +307,24 @@ function buildDefaultOptionCards(baseQuantity = 10) {
 function buildProposalDraftFromRecord(record, forcedMode) {
   const detalhes = parseDetalhes(record?.detalhes);
   const comercial = parseDetalhes(detalhes?.comercial);
-  const proposalMode = normalizeProposalMode(
-    forcedMode || comercial?.proposta_modo || comercial?.proposal_mode || 'direta'
+  const respostas = readAnswersFromDetalhes(detalhes);
+  const savedMode = normalizeProposalMode(
+    forcedMode || comercial?.proposta_modo || comercial?.proposal_mode || ''
   );
+  const proposalMode = savedMode || inferProposalModeFromFlow(record, 'direta');
   const modePreset = PROPOSAL_MODE_PRESETS[proposalMode] || PROPOSAL_MODE_PRESETS.direta;
+  const dataValidade = firstFilledText(
+    comercial?.data_validade,
+    detalhes?.data_validade,
+    formatDateBr(record?.validade_ate),
+    ''
+  );
+  const valorBase = Number(
+    record?.preco_final
+    || record?.valor_sugerido
+    || record?.preco_base
+    || 0
+  );
   const quantityNumber = parseQuantityNumber(
     comercial?.quantidade
       || comercial?.opcao1_qtd
@@ -226,25 +332,99 @@ function buildProposalDraftFromRecord(record, forcedMode) {
       || modePreset.quantidade,
     10
   );
-  const optionDefaults = buildDefaultOptionCards(quantityNumber);
-  const defaultValor = fmtBRL(
-    record?.preco_final
-    || record?.valor_sugerido
-    || record?.preco_base
-    || quantityNumber * 170
+  const optionDefaults = buildDefaultOptionCards(quantityNumber, valorBase);
+  const defaultValor = fmtBRL(valorBase || quantityNumber * 170);
+  const referencia = firstFilledText(
+    comercial?.referencia_texto,
+    detalhes?.referencia,
+    record?.referencia,
+    respostas?.flow_referencia,
+    respostas?.unica_referencia,
+    respostas?.rec_referencia,
+    respostas?.referencia
+  );
+  const empresa = firstFilledText(
+    comercial?.empresa,
+    detalhes?.empresa,
+    respostas?.empresa,
+    record?.empresa
+  );
+  const instagram = firstFilledText(
+    comercial?.instagram,
+    detalhes?.instagram,
+    respostas?.instagram,
+    record?.instagram
+  );
+  const email = firstFilledText(
+    comercial?.email_cliente,
+    comercial?.email,
+    detalhes?.email_cliente,
+    detalhes?.email,
+    respostas?.email_cliente,
+    respostas?.email,
+    record?.email
+  );
+  const observacaoAdicional = firstFilledText(
+    comercial?.observacao_adicional,
+    detalhes?.observacao_adicional,
+    respostas?.extras,
+    ''
+  );
+  const prazo = firstFilledText(
+    comercial?.prazo,
+    record?.prazo,
+    respostas?.flow_prazo,
+    respostas?.unica_prazo,
+    respostas?.rec_inicio,
+    respostas?.recorrente_prazo,
+    modePreset.prazo
+  );
+  const condicoesComerciaisDefault = DEFAULT_CONDICOES_COMERCIAIS.replace('[data]', dataValidade || '[data]');
+  const quantidadePadrao = firstFilledText(
+    comercial?.quantidade,
+    record?.quantidade,
+    modePreset.quantidade
+  );
+  const valorMensalPadrao = firstFilledText(
+    comercial?.valor_mensal_moeda,
+    proposalMode === 'mensal' ? defaultValor : ''
+  );
+  const valorPersonalizadoPadrao = firstFilledText(
+    comercial?.valor_personalizado_moeda,
+    proposalMode === 'personalizada' ? defaultValor : ''
   );
 
   return {
-    cliente_nome: normalizeText(comercial?.cliente_nome || comercial?.nome_cliente || record?.nome || ''),
-    whatsapp: normalizeText(comercial?.whatsapp || record?.whatsapp || ''),
-    servico_principal: normalizeText(comercial?.servico_principal || record?.servico || modePreset.servico_principal),
-    quantidade: normalizeText(comercial?.quantidade || record?.quantidade || modePreset.quantidade),
-    prazo: normalizeText(comercial?.prazo || record?.prazo || modePreset.prazo),
+    cliente_nome: normalizeText(firstFilledText(comercial?.cliente_nome, comercial?.nome_cliente, record?.nome)),
+    whatsapp: normalizeText(firstFilledText(comercial?.whatsapp, record?.whatsapp)),
+    empresa: normalizeText(empresa),
+    instagram: normalizeText(instagram),
+    email_cliente: normalizeText(email),
+    servico_principal: normalizeText(firstFilledText(comercial?.servico_principal, record?.servico, modePreset.servico_principal)),
+    quantidade: normalizeText(quantidadePadrao),
+    quantidade_mensal: normalizeText(firstFilledText(
+      comercial?.quantidade_mensal,
+      proposalMode === 'mensal' ? quantidadePadrao : '',
+      modePreset.quantidade_mensal
+    )),
+    prazo: normalizeText(prazo),
     escopo_comercial: normalizeText(comercial?.escopo_comercial || comercial?.descricao_escopo || modePreset.escopo_comercial || ''),
-    observacao_adicional: normalizeText(comercial?.observacao_adicional || ''),
-    valor_total_moeda: normalizeText(comercial?.valor_total_moeda || defaultValor),
+    escopo_mensal: normalizeText(firstFilledText(
+      comercial?.escopo_mensal,
+      proposalMode === 'mensal' ? (comercial?.escopo_comercial || modePreset.escopo_comercial) : ''
+    )),
+    condicoes_comerciais: normalizeText(firstFilledText(comercial?.condicoes_comerciais, condicoesComerciaisDefault)),
+    referencia_texto: normalizeText(referencia),
+    observacao_adicional: normalizeText(observacaoAdicional),
+    valor_total_moeda: normalizeText(firstFilledText(comercial?.valor_total_moeda, defaultValor)),
+    valor_mensal_moeda: normalizeText(valorMensalPadrao),
+    valor_personalizado_moeda: normalizeText(valorPersonalizadoPadrao),
     forma_pagamento: normalizeText(comercial?.forma_pagamento || 'PIX / Transferencia / Conforme combinado'),
-    data_validade: normalizeText(comercial?.data_validade || ''),
+    data_validade: normalizeText(dataValidade),
+    duracao_contrato_meses: normalizeText(firstFilledText(
+      comercial?.duracao_contrato_meses,
+      proposalMode === 'mensal' ? modePreset.duracao_contrato_meses : ''
+    )),
     numero_proposta: normalizeText(comercial?.numero_proposta || `PROP-${record?.id || ''}`),
     data_emissao: normalizeText(comercial?.data_emissao || ''),
     cta_aprovacao: normalizeText(comercial?.cta_aprovacao || 'Para aprovar, responda APROVADO no WhatsApp.'),
@@ -404,7 +584,8 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
   const [proposalMode, setProposalMode] = useState(() => {
     const detalhes = parseDetalhes(orc?.detalhes);
     const comercial = parseDetalhes(detalhes?.comercial);
-    return normalizeProposalMode(comercial?.proposta_modo || comercial?.proposal_mode || 'direta');
+    return normalizeProposalMode(comercial?.proposta_modo || comercial?.proposal_mode || '')
+      || inferProposalModeFromFlow(orc, 'direta');
   });
   const [proposalDraft, setProposalDraft] = useState(() => buildProposalDraftFromRecord(orc));
 
@@ -467,15 +648,56 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
   );
 
   function buildProposalDraftForMode(mode) {
-    const normalizedMode = normalizeProposalMode(mode);
+    const normalizedMode = normalizeProposalMode(mode) || inferProposalModeFromFlow(orc, 'direta');
     const preset = PROPOSAL_MODE_PRESETS[normalizedMode] || PROPOSAL_MODE_PRESETS.direta;
-    return {
+    const next = {
       ...buildProposalDraftFromRecord(orc, normalizedMode),
-      servico_principal: preset.servico_principal,
-      quantidade: preset.quantidade,
-      prazo: preset.prazo,
-      escopo_comercial: preset.escopo_comercial,
     };
+    const qtyReference = parseQuantityNumber(next.quantidade, 10);
+    const valueReference = parseCurrencyNumber(
+      next.valor_total_moeda,
+      Number(financialMetrics.preco_final || orc?.valor_sugerido || orc?.preco_final || orc?.preco_base || 0)
+    );
+
+    if (normalizedMode === 'opcoes') {
+      const defaults = buildDefaultOptionCards(qtyReference, valueReference);
+      next.opcao1_titulo = defaults.opcao1_titulo;
+      next.opcao1_qtd = defaults.opcao1_qtd;
+      next.opcao1_preco = defaults.opcao1_preco;
+      next.opcao1_unitario = defaults.opcao1_unitario;
+      next.opcao1_desc = defaults.opcao1_desc;
+      next.opcao1_desconto = defaults.opcao1_desconto;
+      next.opcao2_titulo = defaults.opcao2_titulo;
+      next.opcao2_qtd = defaults.opcao2_qtd;
+      next.opcao2_preco = defaults.opcao2_preco;
+      next.opcao2_unitario = defaults.opcao2_unitario;
+      next.opcao2_desc = defaults.opcao2_desc;
+      next.opcao2_desconto = defaults.opcao2_desconto;
+      next.opcao3_titulo = defaults.opcao3_titulo;
+      next.opcao3_qtd = defaults.opcao3_qtd;
+      next.opcao3_preco = defaults.opcao3_preco;
+      next.opcao3_unitario = defaults.opcao3_unitario;
+      next.opcao3_desc = defaults.opcao3_desc;
+      next.opcao3_desconto = defaults.opcao3_desconto;
+      next.texto_comparativo = next.texto_comparativo || defaults.texto_comparativo;
+    }
+
+    if (normalizedMode === 'mensal') {
+      next.quantidade_mensal = next.quantidade_mensal || next.quantidade || preset.quantidade_mensal;
+      next.duracao_contrato_meses = next.duracao_contrato_meses || preset.duracao_contrato_meses || '3';
+      next.escopo_mensal = next.escopo_mensal || next.escopo_comercial || preset.escopo_comercial;
+      next.valor_mensal_moeda = next.valor_mensal_moeda || next.valor_total_moeda || fmtBRL(valueReference || 0);
+    }
+
+    if (normalizedMode === 'personalizada') {
+      next.valor_personalizado_moeda = next.valor_personalizado_moeda || next.valor_total_moeda || fmtBRL(valueReference || 0);
+    }
+
+    next.servico_principal = next.servico_principal || preset.servico_principal;
+    next.quantidade = next.quantidade || preset.quantidade;
+    next.prazo = next.prazo || preset.prazo;
+    next.escopo_comercial = next.escopo_comercial || preset.escopo_comercial;
+    return next;
   }
 
   function buildProposalDraftCommercialState() {
@@ -492,25 +714,81 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
   }
 
   function buildProposalTemplateOverrides() {
-    return buildTemplateOverridesFromDraft(proposalDraft);
+    const mode = normalizeProposalMode(proposalMode) || inferProposalModeFromFlow(orc, 'direta');
+    const nextDraft = {
+      ...proposalDraft,
+    };
+    const validade = normalizeText(nextDraft.data_validade || '[data]');
+    if (!normalizeText(nextDraft.condicoes_comerciais)) {
+      nextDraft.condicoes_comerciais = DEFAULT_CONDICOES_COMERCIAIS.replace('[data]', validade);
+    }
+
+    if (mode === 'mensal') {
+      const valorMensal = normalizeText(nextDraft.valor_mensal_moeda || nextDraft.valor_total_moeda);
+      if (valorMensal) {
+        nextDraft.valor_total_moeda = valorMensal.toLowerCase().includes('/mes')
+          ? valorMensal
+          : `${valorMensal}/mes`;
+      }
+      nextDraft.quantidade_mensal = normalizeText(nextDraft.quantidade_mensal || nextDraft.quantidade);
+    }
+
+    if (mode === 'personalizada') {
+      const valorCustom = normalizeText(nextDraft.valor_personalizado_moeda || nextDraft.valor_total_moeda);
+      if (valorCustom) nextDraft.valor_total_moeda = valorCustom;
+    }
+
+    return buildTemplateOverridesFromDraft(nextDraft);
+  }
+
+  function syncPreviewDraft(modeValue, draftValue) {
+    if (typeof window === 'undefined') return;
+    const safeMode = normalizeProposalMode(modeValue) || inferProposalModeFromFlow(orc, 'direta');
+    const payload = {
+      mode: safeMode,
+      source: 'orcamento_drawer',
+      deal_id: orc?.id,
+      draft: draftValue,
+      updated_at: new Date().toISOString(),
+    };
+    const serialized = JSON.stringify(payload);
+    try {
+      window.sessionStorage.setItem('hagav_proposta_preview_draft', serialized);
+      window.localStorage.setItem('hagav_proposta_preview_draft_live', serialized);
+      if (typeof window.BroadcastChannel === 'function') {
+        const channel = new window.BroadcastChannel('hagav_proposta_preview');
+        channel.postMessage(payload);
+        channel.close();
+      }
+    } catch (err) {
+      console.warn('[Orcamentos][PDF][PreviewSync]', err);
+    }
   }
 
   function applyProposalMode(mode) {
-    const normalizedMode = normalizeProposalMode(mode);
+    const normalizedMode = normalizeProposalMode(mode) || inferProposalModeFromFlow(orc, 'direta');
+    const nextDraft = buildProposalDraftForMode(normalizedMode);
     setProposalMode(normalizedMode);
-    setProposalDraft(buildProposalDraftForMode(normalizedMode));
+    setProposalDraft(nextDraft);
+    syncPreviewDraft(normalizedMode, nextDraft);
   }
 
   function updateProposalDraftField(field, value) {
-    setProposalDraft((prev) => ({
-      ...prev,
-      [field]: value,
-    }));
+    setProposalDraft((prev) => {
+      const nextDraft = {
+        ...prev,
+        [field]: value,
+      };
+      syncPreviewDraft(proposalMode, nextDraft);
+      return nextDraft;
+    });
   }
 
   function hydrateProposalDraft() {
     setError('');
-    setProposalDraft(buildProposalDraftFromRecord(orc, proposalMode));
+    const nextDraft = buildProposalDraftFromRecord(orc, proposalMode);
+    setProposalDraft(nextDraft);
+    syncPreviewDraft(proposalMode, nextDraft);
     setInfo('Campos do PDF preenchidos automaticamente com os dados do orcamento.');
   }
 
@@ -556,9 +834,12 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
     setPropostaPdfMeta(readPropostaPdfMeta(orc));
     const detalhes = parseDetalhes(orc?.detalhes);
     const comercial = parseDetalhes(detalhes?.comercial);
-    const nextMode = normalizeProposalMode(comercial?.proposta_modo || comercial?.proposal_mode || 'direta');
+    const nextMode = normalizeProposalMode(comercial?.proposta_modo || comercial?.proposal_mode || '')
+      || inferProposalModeFromFlow(orc, 'direta');
+    const nextDraft = buildProposalDraftFromRecord(orc, nextMode);
     setProposalMode(nextMode);
-    setProposalDraft(buildProposalDraftFromRecord(orc, nextMode));
+    setProposalDraft(nextDraft);
+    syncPreviewDraft(nextMode, nextDraft);
   }, [
     orc?.id,
     orc?.status_orcamento,
@@ -785,18 +1066,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
 
   function handleOpenProposalPreview() {
     if (typeof window === 'undefined') return;
-    try {
-      const payload = {
-        mode: proposalMode,
-        source: 'orcamento_drawer',
-        deal_id: orc.id,
-        draft: proposalDraft,
-        updated_at: new Date().toISOString(),
-      };
-      window.sessionStorage.setItem('hagav_proposta_preview_draft', JSON.stringify(payload));
-    } catch (err) {
-      console.warn('[Orcamentos][PDF][Preview]', err);
-    }
+    syncPreviewDraft(proposalMode, proposalDraft);
     const url = new URL('/templates/proposta-hagav-preview-modos', window.location.origin);
     url.searchParams.set('modo', proposalMode);
     window.open(url.toString(), '_blank', 'noopener,noreferrer');
@@ -1071,7 +1341,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
                 </button>
               ))}
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-2">
               <div>
                 <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Nome do cliente</label>
                 <input
@@ -1092,6 +1362,39 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
                   placeholder="{{whatsapp}}"
                 />
               </div>
+              <div>
+                <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Empresa</label>
+                <input
+                  type="text"
+                  value={proposalDraft.empresa || ''}
+                  onChange={(e) => updateProposalDraftField('empresa', e.target.value)}
+                  className="hinput w-full"
+                  placeholder="{{empresa}}"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Instagram</label>
+                <input
+                  type="text"
+                  value={proposalDraft.instagram || ''}
+                  onChange={(e) => updateProposalDraftField('instagram', e.target.value)}
+                  className="hinput w-full"
+                  placeholder="{{instagram}}"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">E-mail</label>
+                <input
+                  type="text"
+                  value={proposalDraft.email_cliente || ''}
+                  onChange={(e) => updateProposalDraftField('email_cliente', e.target.value)}
+                  className="hinput w-full"
+                  placeholder="{{email_cliente}}"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-2">
               <div>
                 <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Numero da proposta</label>
                 <input
@@ -1130,6 +1433,16 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
                   onChange={(e) => updateProposalDraftField('forma_pagamento', e.target.value)}
                   className="hinput w-full"
                   placeholder="{{forma_pagamento}}"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Duracao (meses)</label>
+                <input
+                  type="text"
+                  value={proposalDraft.duracao_contrato_meses || ''}
+                  onChange={(e) => updateProposalDraftField('duracao_contrato_meses', e.target.value)}
+                  className="hinput w-full"
+                  placeholder="{{duracao_contrato_meses}}"
                 />
               </div>
             </div>
@@ -1177,6 +1490,54 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
               </div>
             </div>
 
+            {proposalMode === 'mensal' && (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                <div>
+                  <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Quantidade mensal</label>
+                  <input
+                    type="text"
+                    value={proposalDraft.quantidade_mensal || ''}
+                    onChange={(e) => updateProposalDraftField('quantidade_mensal', e.target.value)}
+                    className="hinput w-full"
+                    placeholder="{{quantidade_mensal}}"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Valor mensal</label>
+                  <input
+                    type="text"
+                    value={proposalDraft.valor_mensal_moeda || ''}
+                    onChange={(e) => updateProposalDraftField('valor_mensal_moeda', e.target.value)}
+                    className="hinput w-full"
+                    placeholder="{{valor_mensal_moeda}}"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Escopo mensal</label>
+                  <input
+                    type="text"
+                    value={proposalDraft.escopo_mensal || ''}
+                    onChange={(e) => updateProposalDraftField('escopo_mensal', e.target.value)}
+                    className="hinput w-full"
+                    placeholder="{{escopo_mensal}}"
+                  />
+                </div>
+              </div>
+            )}
+
+            {proposalMode === 'personalizada' && (
+              <div>
+                <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Valor personalizado</label>
+                <input
+                  type="text"
+                  value={proposalDraft.valor_personalizado_moeda || ''}
+                  onChange={(e) => updateProposalDraftField('valor_personalizado_moeda', e.target.value)}
+                  className="hinput w-full"
+                  placeholder="{{valor_personalizado_moeda}}"
+                />
+              </div>
+            )}
+
             <div>
               <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Escopo comercial</label>
               <textarea
@@ -1186,6 +1547,29 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
                 className="hinput w-full resize-none"
                 placeholder="{{escopo_comercial}}"
               />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              <div>
+                <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Condições comerciais</label>
+                <textarea
+                  value={proposalDraft.condicoes_comerciais || ''}
+                  onChange={(e) => updateProposalDraftField('condicoes_comerciais', e.target.value)}
+                  rows={4}
+                  className="hinput w-full resize-none"
+                  placeholder="{{condicoes_comerciais}}"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Referencia</label>
+                <textarea
+                  value={proposalDraft.referencia_texto || ''}
+                  onChange={(e) => updateProposalDraftField('referencia_texto', e.target.value)}
+                  rows={4}
+                  className="hinput w-full resize-none"
+                  placeholder="{{referencia_texto}}"
+                />
+              </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">

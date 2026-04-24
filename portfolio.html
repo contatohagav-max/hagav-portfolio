@@ -22,11 +22,11 @@ body::after{content:'';position:fixed;inset:0;background:radial-gradient(ellipse
 .btn-back{position:absolute;top:8px;left:14px;display:inline-flex;align-items:center;gap:8px;background:linear-gradient(145deg,rgba(255,255,255,.1),rgba(255,255,255,.04));border:1.2px solid var(--glass);color:#fff;text-decoration:none;font-weight:700;font-size:13px;padding:9px 13px;border-radius:12px;letter-spacing:.01em;backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);box-shadow:0 14px 30px rgba(0,0,0,.36),0 0 20px rgba(255,184,0,.06),inset 0 1px 0 rgba(255,255,255,.12);transition:all .18s;-webkit-tap-highlight-color:transparent}
 .btn-back:focus,.btn-back:focus-visible{outline:none}
 @media(hover:hover){.btn-back:hover{transform:translateY(-1px);border-color:rgba(255,199,113,.4);box-shadow:0 18px 34px rgba(0,0,0,.4),0 0 26px rgba(255,184,0,.12)}}
-.header{display:flex;justify-content:center;padding:2px 0 0;margin-bottom:2px}
+.header{display:flex;justify-content:center;padding:2px 0 0;margin-bottom:0}
 .logo-link{display:inline-flex;align-items:center;justify-content:center;border:none;background:none;border-radius:14px;padding:2px;text-decoration:none;cursor:pointer;transition:transform .18s ease,filter .2s ease;-webkit-tap-highlight-color:transparent}
 .logo-link:focus-visible{outline:1px solid rgba(255,196,108,.58);outline-offset:3px}
 @media(hover:hover){.logo-link:hover{transform:translateY(-1px);filter:brightness(1.03)}}
-.header img{width:min(82vw,258px);height:auto;display:block;object-fit:contain;border-radius:16px;box-shadow:0 14px 30px rgba(0,0,0,.38)}
+.header img{width:min(82vw,258px);height:auto;display:block;object-fit:contain;border-radius:16px;box-shadow:0 14px 30px rgba(0,0,0,.38);margin-bottom:-68px}
 .title{text-align:center;font-family:'Manrope',sans-serif;font-size:clamp(18px,4.5vw,32px);font-weight:800;color:#fff;letter-spacing:.04em;text-transform:uppercase;padding:8px 0 0}
 .divider{width:32px;height:2px;background:#FFB800;opacity:.5;margin:8px auto 16px}
 .intro-note{text-align:center;color:rgba(255,255,255,.62);font-size:clamp(12.5px,2.6vw,14px);line-height:1.58;padding:2px 18px 6px;position:relative;z-index:1;max-width:620px;margin:0 auto;font-weight:500;text-wrap:pretty}
@@ -183,6 +183,7 @@ const cats=[
 
 const vids=[
   /* Conteúdo para Redes — mais recentes primeiro */
+  {id:72,title:'Reels, TikTok, Shorts \u2014 16',cat:'curtos',yt:'mzN4WzVtlqM'},
   {id:63,title:'Reels, TikTok, Shorts \u2014 15',cat:'curtos',yt:'e1PgXkM4QZE'},
   {id:61,title:'Reels, TikTok, Shorts \u2014 13',cat:'curtos',yt:'hQ4DgwdBMNg'},
   {id:54,title:'Reels, TikTok, Shorts \u2014 12',cat:'curtos',yt:'5ORpPc86nb8'},

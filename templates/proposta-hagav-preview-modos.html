@@ -1,0 +1,793 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>HAGAV - Preview PDF Comercial (Teste)</title>
+  <style>
+    :root {
+      --paper: #f7f4ec;
+      --ink: #181818;
+      --muted: #6e6e6e;
+      --line: #ddd5c3;
+      --gold: #c8a23a;
+      --gold-soft: #f4dd9c;
+      --dark: #0b0b0d;
+      --card: #ffffff;
+      --soft: #f4efe3;
+      --ok: #2f8f5f;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      font-family: "Segoe UI", "Inter", Arial, sans-serif;
+      background: #0d0e12;
+      color: #f2f2f2;
+    }
+
+    .preview-shell {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 20px 14px 30px;
+    }
+
+    .top {
+      border: 1px solid rgba(200, 162, 58, 0.35);
+      border-radius: 14px;
+      padding: 14px;
+      background: linear-gradient(140deg, #111318 0%, #171922 100%);
+      margin-bottom: 14px;
+    }
+
+    .top h1 {
+      margin: 0 0 6px;
+      font-size: 20px;
+      letter-spacing: 0.02em;
+    }
+
+    .top p {
+      margin: 0 0 12px;
+      color: #cbc8bf;
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .mode-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .mode-btn {
+      border: 1px solid rgba(200, 162, 58, 0.35);
+      border-radius: 11px;
+      background: rgba(255, 255, 255, 0.04);
+      color: #f4f2ea;
+      padding: 10px 10px;
+      font-size: 12px;
+      font-weight: 700;
+      text-align: left;
+      cursor: pointer;
+      transition: 180ms ease;
+    }
+
+    .mode-btn:hover {
+      background: rgba(200, 162, 58, 0.13);
+      border-color: rgba(200, 162, 58, 0.7);
+      transform: translateY(-1px);
+    }
+
+    .mode-btn.active {
+      background: rgba(200, 162, 58, 0.22);
+      border-color: rgba(244, 221, 156, 0.8);
+      color: #ffefc4;
+    }
+
+    .mode-btn small {
+      display: block;
+      margin-top: 4px;
+      font-size: 11px;
+      opacity: 0.84;
+      font-weight: 500;
+    }
+
+    .state {
+      margin-top: 10px;
+      color: #a7c9b7;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .page {
+      width: 100%;
+      max-width: 920px;
+      margin: 0 auto;
+      background: var(--paper);
+      border-radius: 14px;
+      overflow: hidden;
+      box-shadow: 0 16px 44px rgba(0, 0, 0, 0.42);
+      color: var(--ink);
+    }
+
+    .hero {
+      padding: 48px 56px 34px;
+      border-bottom: 5px solid var(--gold);
+      background:
+        radial-gradient(300px 240px at 92% -12%, rgba(244, 221, 156, 0.26), rgba(244, 221, 156, 0)),
+        linear-gradient(140deg, #09090a 0%, #111113 55%, #272012 100%);
+      color: #ffffff;
+    }
+
+    .brand-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 14px;
+    }
+
+    .brand-logo {
+      width: 214px;
+      max-height: 66px;
+      object-fit: contain;
+      display: block;
+    }
+
+    .brand-kicker {
+      margin: 0;
+      color: var(--gold-soft);
+      text-transform: uppercase;
+      letter-spacing: 0.22em;
+      font-size: 11px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .hero h2 {
+      margin: 0;
+      font-size: 42px;
+      line-height: 1.06;
+      letter-spacing: -0.02em;
+      font-weight: 760;
+    }
+
+    .subtitle {
+      margin: 10px 0 0;
+      max-width: 640px;
+      font-size: 16px;
+      color: #d7d7d7;
+      line-height: 1.4;
+    }
+
+    .meta {
+      margin-top: 18px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .chip {
+      border-radius: 999px;
+      border: 1px solid rgba(244, 221, 156, 0.62);
+      background: rgba(244, 221, 156, 0.08);
+      color: var(--gold-soft);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-weight: 700;
+      padding: 8px 12px;
+      white-space: nowrap;
+    }
+
+    .wrap {
+      padding: 24px 24px 38px;
+      display: grid;
+      gap: 12px;
+    }
+
+    .section {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 11px;
+      padding: 14px 15px;
+    }
+
+    .section-title {
+      margin: 0 0 10px;
+      color: #7a6a3c;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.2em;
+      font-weight: 800;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .section-title::before {
+      content: "";
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--gold);
+      display: inline-block;
+      flex: 0 0 auto;
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1.3fr 1fr;
+      gap: 8px;
+    }
+
+    .grid-4 {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .field {
+      border: 1px solid #e8e2d4;
+      border-radius: 9px;
+      background: #fff;
+      padding: 10px 11px;
+      min-height: 54px;
+    }
+
+    .field.soft { background: var(--soft); }
+
+    .field-label {
+      margin: 0 0 4px;
+      color: #8c8c8c;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      font-size: 9px;
+      font-weight: 700;
+    }
+
+    .field-value {
+      margin: 0;
+      font-size: 14px;
+      font-weight: 620;
+      color: #1b1b1b;
+      line-height: 1.35;
+      word-break: break-word;
+      overflow-wrap: anywhere;
+    }
+
+    .scope {
+      border: 1px solid #e2d9bf;
+      border-radius: 9px;
+      background: #fff9e9;
+      padding: 11px 12px;
+    }
+
+    .scope p {
+      margin: 0;
+      font-size: 14px;
+      color: #2c2c2c;
+      line-height: 1.5;
+    }
+
+    .investment {
+      border-radius: 11px;
+      border: 1px solid #332a16;
+      overflow: hidden;
+      background: linear-gradient(135deg, #0f0f11 0%, #1a1a1d 58%, #2b2416 100%);
+      color: #fff;
+    }
+
+    .investment-main {
+      padding: 16px 18px;
+    }
+
+    .investment-tag {
+      margin: 0 0 5px;
+      color: var(--gold-soft);
+      text-transform: uppercase;
+      letter-spacing: 0.2em;
+      font-size: 10px;
+      font-weight: 700;
+    }
+
+    .investment-value {
+      margin: 0;
+      font-size: 42px;
+      line-height: 1;
+      letter-spacing: -0.03em;
+      font-weight: 780;
+      color: #fff;
+    }
+
+    .investment-note {
+      margin-top: 7px;
+      font-size: 12px;
+      color: #d2c189;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      font-weight: 700;
+    }
+
+    .options-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .option-card {
+      border: 1px solid #e0d6c0;
+      border-radius: 10px;
+      padding: 10px;
+      background: #fff;
+    }
+
+    .option-card .name {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.11em;
+      color: #7b6a3d;
+      margin: 0 0 5px;
+      font-weight: 800;
+    }
+
+    .option-card .price {
+      font-size: 26px;
+      margin: 0;
+      line-height: 1;
+      color: #1a1a1a;
+      font-weight: 770;
+    }
+
+    .option-card .desc {
+      margin: 7px 0 0;
+      font-size: 12px;
+      color: #555;
+      line-height: 1.4;
+    }
+
+    .option-card.recommended {
+      border: 2px solid #c8a23a;
+      background: #fff8e8;
+      box-shadow: 0 6px 16px rgba(200, 162, 58, 0.24);
+      transform: translateY(-1px);
+    }
+
+    .recommended-badge {
+      display: inline-block;
+      margin-top: 8px;
+      border-radius: 999px;
+      border: 1px solid #c8a23a;
+      background: #f6e7b9;
+      color: #5a4314;
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      padding: 4px 8px;
+    }
+
+    .conditions {
+      display: grid;
+      gap: 5px;
+    }
+
+    .conditions p {
+      margin: 0;
+      font-size: 13px;
+      line-height: 1.45;
+      color: #2b2b2b;
+    }
+
+    .conditions b { color: #181818; }
+
+    .steps {
+      display: grid;
+      gap: 5px;
+    }
+
+    .steps p {
+      margin: 0;
+      font-size: 13px;
+      line-height: 1.45;
+      color: #282828;
+    }
+
+    .cta {
+      margin-top: 9px;
+      border-radius: 9px;
+      border: 1px solid #c4a55e;
+      background: linear-gradient(90deg, #f0d684 0%, #c8a23a 100%);
+      padding: 10px 12px;
+      font-size: 13px;
+      font-weight: 760;
+      color: #1b1508;
+      text-align: center;
+    }
+
+    .footer {
+      border-top: 1px solid #d7cfbf;
+      margin-top: 6px;
+      padding-top: 8px;
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      color: #777;
+      font-size: 10px;
+    }
+
+    .footer strong {
+      color: #1e1e1e;
+      text-transform: uppercase;
+      letter-spacing: 0.11em;
+      font-size: 10px;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    @media (max-width: 980px) {
+      .preview-shell { padding: 12px 8px 24px; }
+      .mode-grid { grid-template-columns: 1fr 1fr; }
+      .hero { padding: 24px 16px 18px; }
+      .brand-row { flex-direction: column; align-items: flex-start; gap: 8px; }
+      .brand-logo { width: 184px; max-height: 58px; }
+      .hero h2 { font-size: 30px; }
+      .subtitle { font-size: 14px; }
+      .wrap { padding: 12px 10px 24px; gap: 10px; }
+      .grid-2 { grid-template-columns: 1fr; }
+      .grid-4 { grid-template-columns: 1fr 1fr; }
+      .options-grid { grid-template-columns: 1fr; }
+      .investment-value { font-size: 34px; }
+      .footer { flex-direction: column; align-items: flex-start; }
+    }
+  </style>
+</head>
+<body>
+  <div class="preview-shell">
+    <section class="top">
+      <h1>Preview PDF Comercial (Ambiente de Teste)</h1>
+      <p>Protitipo visual da proposta HAGAV com dados mockados. Nao substitui producao e nao altera o sistema atual.</p>
+      <div class="mode-grid">
+        <button class="mode-btn" data-mode="direta">Modo 1 - Direta<small>VSL ate 15 min</small></button>
+        <button class="mode-btn" data-mode="opcoes">Modo 2 - Com Opcoes<small>3 pacotes lado a lado</small></button>
+        <button class="mode-btn" data-mode="mensal">Modo 3 - Mensal<small>Plano recorrente 3 meses</small></button>
+        <button class="mode-btn" data-mode="personalizada">Modo 4 - Personalizada<small>Texto comercial livre</small></button>
+      </div>
+      <div class="state" id="stateText">Modo ativo: -</div>
+    </section>
+
+    <main class="page">
+      <header class="hero">
+        <div class="brand-row">
+          <img class="brand-logo" src="/assets/hagav-master-horizontal-transparente-4000.png" alt="HAGAV" />
+          <p class="brand-kicker">HAGAV STUDIO DE EDICAO</p>
+        </div>
+        <h2>PROPOSTA COMERCIAL</h2>
+        <p class="subtitle">Proposta objetiva para validacao de escopo, investimento e inicio da producao.</p>
+        <div class="meta">
+          <span class="chip" id="proposalNumberChip">Proposta -</span>
+          <span class="chip" id="proposalDateChip">Emitida em -</span>
+        </div>
+      </header>
+
+      <section class="wrap">
+        <article class="section">
+          <h3 class="section-title">Cliente</h3>
+          <div class="grid-2">
+            <div class="field">
+              <p class="field-label">Nome</p>
+              <p class="field-value" id="clienteNome"></p>
+            </div>
+            <div class="field">
+              <p class="field-label">WhatsApp</p>
+              <p class="field-value" id="clienteWhatsapp"></p>
+            </div>
+          </div>
+        </article>
+
+        <article class="section">
+          <h3 class="section-title">Resumo da Demanda</h3>
+          <div class="grid-4">
+            <div class="field soft">
+              <p class="field-label">Servico</p>
+              <p class="field-value" id="resumoServico"></p>
+            </div>
+            <div class="field soft">
+              <p class="field-label">Quantidade</p>
+              <p class="field-value" id="resumoQuantidade"></p>
+            </div>
+            <div class="field soft">
+              <p class="field-label">Prazo</p>
+              <p class="field-value" id="resumoPrazo"></p>
+            </div>
+            <div class="field soft">
+              <p class="field-label">Formato de entrega</p>
+              <p class="field-value" id="resumoFormato"></p>
+            </div>
+          </div>
+        </article>
+
+        <article class="section">
+          <h3 class="section-title">Escopo</h3>
+          <div class="scope">
+            <p id="escopoTexto"></p>
+          </div>
+        </article>
+
+        <article class="section hidden" id="opcoesSection">
+          <h3 class="section-title">Opcoes de investimento</h3>
+          <div class="options-grid" id="opcoesGrid"></div>
+        </article>
+
+        <article class="section hidden" id="mensalSection">
+          <h3 class="section-title">Estrutura mensal</h3>
+          <div class="grid-2">
+            <div class="field soft">
+              <p class="field-label">Plano</p>
+              <p class="field-value" id="mensalPlano"></p>
+            </div>
+            <div class="field soft">
+              <p class="field-label">Duracao</p>
+              <p class="field-value" id="mensalDuracao"></p>
+            </div>
+          </div>
+        </article>
+
+        <article class="investment">
+          <div class="investment-main">
+            <p class="investment-tag">Valor total</p>
+            <p class="investment-value" id="valorPrincipal"></p>
+            <p class="investment-note">Investimento comercial da proposta</p>
+          </div>
+        </article>
+
+        <article class="section">
+          <h3 class="section-title">Condicoes comerciais</h3>
+          <div class="conditions" id="condicoesList"></div>
+        </article>
+
+        <article class="section hidden" id="observacaoSection">
+          <h3 class="section-title">Observacao adicional</h3>
+          <p class="field-value" id="observacaoTexto"></p>
+        </article>
+
+        <article class="section">
+          <h3 class="section-title">Proximos passos</h3>
+          <div class="steps">
+            <p>01 - Aprovacao da proposta via WhatsApp.</p>
+            <p>02 - Envio dos materiais e referencias pelo cliente.</p>
+            <p>03 - Inicio da edicao conforme prazo combinado.</p>
+          </div>
+          <div class="cta">Para aprovar, responda APROVADO no WhatsApp.</div>
+        </article>
+
+        <footer class="footer">
+          <span><strong>HAGAV Studio</strong> - proposta comercial (preview)</span>
+          <span id="footerRef"></span>
+        </footer>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    const MODOS = {
+      direta: {
+        label: "Modo 1 - Direta",
+        numero: "PV-TST-001",
+        data: "24/04/2026",
+        cliente: { nome: "Lucas Andrade", whatsapp: "(11) 97777-1111" },
+        resumo: {
+          servico: "VSL ate 15 min",
+          quantidade: "1 video",
+          prazo: "24h",
+          formato: "Arquivo final pronto para publicacao em MP4."
+        },
+        escopo: "Edicao e finalizacao de 1 video VSL ate 15 min conforme briefing aprovado. Inclui organizacao do material, cortes, ritmo, acabamento visual e exportacao final em MP4. O projeto contempla 1 rodada de ajustes inclusa.",
+        valor: "R$ 880,00",
+        condicoes: [
+          "Forma de pagamento: PIX / Transferencia / Conforme combinado",
+          "Proposta valida ate 01/05/2026",
+          "O projeto inicia apos aprovacao e envio dos materiais.",
+          "Inclui 1 rodada de ajustes. Alteracoes adicionais ou mudancas de escopo podem gerar novo orcamento."
+        ],
+        observacao: "",
+      },
+      opcoes: {
+        label: "Modo 2 - Com Opcoes",
+        numero: "PV-TST-002",
+        data: "24/04/2026",
+        cliente: { nome: "Studio Aurora", whatsapp: "(73) 98205-4283" },
+        resumo: {
+          servico: "Planos de conteudo mensal",
+          quantidade: "Comparativo de 3 opcoes",
+          prazo: "Inicio imediato apos aprovacao",
+          formato: "MP4 pronto para publicacao"
+        },
+        escopo: "Proposta comparativa para operacao mensal de conteudo. Cada opcao considera edicao, acabamento e entrega final em MP4, mantendo consistencia visual e ritmo comercial.",
+        valor: "Plano recomendado: R$ 1.800",
+        opcoes: [
+          { nome: "Essencial", preco: "R$ 1.200", desc: "8 videos por mes" },
+          { nome: "Performance", preco: "R$ 1.800", desc: "12 videos por mes", destaque: true },
+          { nome: "Escala", preco: "R$ 2.900", desc: "20 videos por mes" },
+        ],
+        condicoes: [
+          "Forma de pagamento: PIX / Transferencia / Conforme combinado",
+          "Proposta valida ate 01/05/2026",
+          "O projeto inicia apos aprovacao e envio dos materiais.",
+          "Inclui 1 rodada de ajustes por entrega."
+        ],
+        observacao: "",
+      },
+      mensal: {
+        label: "Modo 3 - Mensal",
+        numero: "PV-TST-003",
+        data: "24/04/2026",
+        cliente: { nome: "Marca Horizonte", whatsapp: "(11) 98888-2222" },
+        resumo: {
+          servico: "Plano mensal de conteudo",
+          quantidade: "12 videos mensais",
+          prazo: "Cronograma mensal",
+          formato: "MP4 pronto para publicacao"
+        },
+        escopo: "Operacao mensal de edicao para 12 videos por mes, com padrao visual consistente, ritmo otimizado para redes sociais e entregas conforme cronograma acordado.",
+        valor: "R$ 2.500/mes",
+        mensal: {
+          plano: "Plano Mensal",
+          duracao: "Contrato de 3 meses"
+        },
+        condicoes: [
+          "Forma de pagamento: PIX / Transferencia / Conforme combinado",
+          "Proposta valida ate 01/05/2026",
+          "O projeto inicia apos aprovacao e envio dos materiais.",
+          "Inclui 1 rodada de ajustes por entrega."
+        ],
+        observacao: "",
+      },
+      personalizada: {
+        label: "Modo 4 - Personalizada",
+        numero: "PV-TST-004",
+        data: "24/04/2026",
+        cliente: { nome: "Empresa Vertex", whatsapp: "(21) 97777-9090" },
+        resumo: {
+          servico: "Proposta personalizada",
+          quantidade: "Escopo sob medida",
+          prazo: "Conforme alinhamento",
+          formato: "MP4 + formatos complementares"
+        },
+        escopo: "Estrutura personalizada para atender necessidades especificas da operacao, incluindo planejamento de entregas, organizacao de materiais, edicao em lotes e padronizacao de identidade visual.",
+        valor: "R$ 4.200,00",
+        condicoes: [
+          "Forma de pagamento: PIX / Transferencia / Conforme combinado",
+          "Proposta valida ate 01/05/2026",
+          "O projeto inicia apos aprovacao e envio dos materiais.",
+          "Inclui 1 rodada de ajustes. Escopo adicional pode gerar nova proposta."
+        ],
+        observacao: "Escopo customizado para crescimento de volume e consistencia da marca.",
+      },
+    };
+
+    function byId(id) {
+      return document.getElementById(id);
+    }
+
+    function setText(id, value) {
+      const el = byId(id);
+      if (!el) return;
+      el.textContent = value || "-";
+    }
+
+    function setList(containerId, rows) {
+      const container = byId(containerId);
+      if (!container) return;
+      container.innerHTML = "";
+      (rows || []).forEach((row) => {
+        const p = document.createElement("p");
+        p.textContent = row;
+        container.appendChild(p);
+      });
+    }
+
+    function renderOptions(options) {
+      const wrap = byId("opcoesGrid");
+      wrap.innerHTML = "";
+      (options || []).forEach((opt) => {
+        const card = document.createElement("article");
+        card.className = `option-card${opt.destaque ? " recommended" : ""}`;
+
+        const name = document.createElement("p");
+        name.className = "name";
+        name.textContent = opt.nome;
+
+        const price = document.createElement("p");
+        price.className = "price";
+        price.textContent = opt.preco;
+
+        const desc = document.createElement("p");
+        desc.className = "desc";
+        desc.textContent = opt.desc;
+
+        card.appendChild(name);
+        card.appendChild(price);
+        card.appendChild(desc);
+
+        if (opt.destaque) {
+          const badge = document.createElement("span");
+          badge.className = "recommended-badge";
+          badge.textContent = "Opcao recomendada";
+          card.appendChild(badge);
+        }
+
+        wrap.appendChild(card);
+      });
+    }
+
+    function renderModo(modo) {
+      const data = MODOS[modo] || MODOS.direta;
+      const keys = Object.keys(MODOS);
+
+      document.querySelectorAll(".mode-btn").forEach((btn) => {
+        btn.classList.toggle("active", btn.dataset.mode === modo);
+      });
+
+      setText("stateText", `Modo ativo: ${data.label}`);
+      setText("proposalNumberChip", `Proposta ${data.numero}`);
+      setText("proposalDateChip", `Emitida em ${data.data}`);
+      setText("clienteNome", data.cliente?.nome);
+      setText("clienteWhatsapp", data.cliente?.whatsapp);
+
+      setText("resumoServico", data.resumo?.servico);
+      setText("resumoQuantidade", data.resumo?.quantidade);
+      setText("resumoPrazo", data.resumo?.prazo);
+      setText("resumoFormato", data.resumo?.formato);
+      setText("escopoTexto", data.escopo);
+
+      setText("valorPrincipal", data.valor);
+      setList("condicoesList", data.condicoes);
+      setText("footerRef", `${data.numero} | ${data.data}`);
+
+      const opcoesSection = byId("opcoesSection");
+      opcoesSection.classList.toggle("hidden", !Array.isArray(data.opcoes));
+      if (Array.isArray(data.opcoes)) {
+        renderOptions(data.opcoes);
+      } else {
+        byId("opcoesGrid").innerHTML = "";
+      }
+
+      const mensalSection = byId("mensalSection");
+      mensalSection.classList.toggle("hidden", !data.mensal);
+      setText("mensalPlano", data.mensal?.plano || "");
+      setText("mensalDuracao", data.mensal?.duracao || "");
+
+      const obsSection = byId("observacaoSection");
+      const hasObs = Boolean((data.observacao || "").trim());
+      obsSection.classList.toggle("hidden", !hasObs);
+      setText("observacaoTexto", data.observacao || "");
+
+      const url = new URL(window.location.href);
+      if (keys.includes(modo)) {
+        url.searchParams.set("modo", modo);
+      } else {
+        url.searchParams.delete("modo");
+      }
+      window.history.replaceState({}, "", url.toString());
+    }
+
+    function initPreview() {
+      document.querySelectorAll(".mode-btn").forEach((btn) => {
+        btn.addEventListener("click", () => renderModo(btn.dataset.mode));
+      });
+
+      const queryMode = new URLSearchParams(window.location.search).get("modo");
+      const initial = Object.prototype.hasOwnProperty.call(MODOS, queryMode) ? queryMode : "direta";
+      renderModo(initial);
+    }
+
+    initPreview();
+  </script>
+</body>
+</html>

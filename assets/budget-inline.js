@@ -30,8 +30,6 @@ const DDD_VALIDOS = new Set(['11','12','13','14','15','16','17','18','19','21','
       'Depoimento',
       'Videoaula / Módulo',
       'YouTube',
-      'VSL até 15 min',
-      'VSL longa (15-30 min)',
       'Motion / Vinheta',
       'Outro'
     ];

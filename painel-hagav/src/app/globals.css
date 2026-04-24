@@ -40,6 +40,149 @@
     @apply text-xs text-hagav-gray mt-1;
   }
 
+  .dashboard-shell {
+    @apply space-y-6;
+  }
+
+  .dashboard-hero {
+    @apply flex flex-col gap-4 rounded-[1.75rem] border border-hagav-border bg-hagav-card/70 px-5 py-5 shadow-card;
+    background-image:
+      linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0)),
+      radial-gradient(520px 160px at 12% 0%, rgba(245,166,35,0.08), transparent 72%);
+  }
+
+  .dashboard-hero-copy {
+    @apply min-w-0;
+  }
+
+  .dashboard-chip-row {
+    @apply flex flex-wrap items-center gap-2 mb-3;
+  }
+
+  .dashboard-chip {
+    @apply inline-flex items-center rounded-full border border-hagav-gold/25 bg-hagav-gold/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.22em] text-hagav-gold;
+  }
+
+  .dashboard-chip-muted {
+    @apply border-hagav-border bg-hagav-surface/60 text-hagav-gray;
+  }
+
+  .dashboard-hero-description {
+    @apply mt-2 max-w-3xl text-sm leading-6 text-hagav-light;
+  }
+
+  .dashboard-refresh-btn {
+    @apply self-start;
+  }
+
+  .dashboard-section {
+    @apply space-y-4;
+  }
+
+  .dashboard-section-head {
+    @apply flex flex-col gap-2 md:flex-row md:items-end md:justify-between;
+  }
+
+  .dashboard-section-eyebrow {
+    @apply text-[10px] font-medium uppercase tracking-[0.26em] text-hagav-gray;
+  }
+
+  .dashboard-section-title {
+    @apply mt-1 text-lg font-semibold text-hagav-white;
+  }
+
+  .dashboard-section-description {
+    @apply mt-1 text-sm text-hagav-gray;
+  }
+
+  .dashboard-panel {
+    @apply bg-hagav-card border border-hagav-border rounded-[1.5rem] p-5 shadow-card transition-all duration-200;
+    background-image:
+      linear-gradient(180deg, rgba(255,255,255,0.015), rgba(255,255,255,0)),
+      radial-gradient(420px 110px at 10% 0%, rgba(245,166,35,0.05), transparent 72%);
+  }
+
+  .dashboard-panel:hover {
+    @apply border-hagav-gold/20;
+  }
+
+  .dashboard-panel-title-wrap {
+    @apply mb-4 flex items-start gap-3;
+  }
+
+  .dashboard-panel-icon {
+    @apply flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-hagav-border bg-hagav-muted/30;
+  }
+
+  .dashboard-panel-title {
+    @apply text-sm font-semibold text-hagav-white;
+  }
+
+  .dashboard-panel-description {
+    @apply mt-1 text-[11px] leading-5 text-hagav-gray;
+  }
+
+  .dashboard-chart-card {
+    @apply p-5;
+  }
+
+  .dashboard-chart-shell {
+    @apply rounded-[1.2rem] border border-hagav-border/70 bg-hagav-surface/40 p-3;
+  }
+
+  .dashboard-step-card {
+    @apply rounded-2xl border border-hagav-border bg-hagav-surface/50 px-4 py-3.5 transition-all duration-200;
+  }
+
+  .dashboard-step-card:hover {
+    @apply border-hagav-gold/25;
+    transform: translateY(-1px);
+  }
+
+  .dashboard-step-label {
+    @apply text-[10px] uppercase tracking-[0.24em] text-hagav-gray;
+  }
+
+  .dashboard-step-value {
+    @apply mt-3 text-[2rem] font-bold leading-none text-hagav-white;
+  }
+
+  .dashboard-step-meta {
+    @apply mt-2 text-[11px] text-hagav-gray;
+  }
+
+  .dashboard-alert-card {
+    @apply rounded-2xl border p-4 text-left transition-all duration-200 hover:border-hagav-gold/30 focus:outline-none focus-visible:ring-1 focus-visible:ring-hagav-gold/35;
+  }
+
+  .dashboard-alert-card-red {
+    @apply border-red-500/25 bg-red-500/10 text-red-200;
+  }
+
+  .dashboard-alert-card-yellow {
+    @apply border-yellow-500/25 bg-yellow-500/10 text-yellow-200;
+  }
+
+  .dashboard-alert-card-neutral {
+    @apply border-hagav-border bg-hagav-surface text-hagav-light;
+  }
+
+  .dashboard-alert-head {
+    @apply mb-3 flex items-center justify-between gap-2;
+  }
+
+  .dashboard-alert-label {
+    @apply text-[10px] uppercase tracking-[0.22em];
+  }
+
+  .dashboard-alert-value {
+    @apply text-[2rem] font-bold leading-none;
+  }
+
+  .dashboard-alert-hint {
+    @apply mt-2 text-[11px] opacity-80;
+  }
+
   .gold-line {
     @apply h-px w-full;
     background: linear-gradient(90deg, transparent 0%, #C9A84C55 50%, transparent 100%);
@@ -68,7 +211,7 @@
   }
 
   .metric-card {
-    @apply hcard relative overflow-hidden min-h-[132px];
+    @apply hcard relative overflow-hidden min-h-[168px];
   }
   .metric-card:hover {
     @apply border-hagav-gold/25;
@@ -220,6 +363,22 @@
   }
 
   @media (max-width: 768px) {
+    .dashboard-shell {
+      @apply space-y-5;
+    }
+    .dashboard-hero,
+    .dashboard-panel {
+      @apply rounded-2xl px-4 py-4;
+    }
+    .dashboard-hero-description {
+      @apply text-[13px] leading-6;
+    }
+    .dashboard-section-title {
+      @apply text-base;
+    }
+    .dashboard-chart-shell {
+      @apply p-2.5;
+    }
     .drawer-panel {
       @apply w-[calc(100vw-1rem)] max-h-[calc(100vh-1rem)] rounded-xl;
     }

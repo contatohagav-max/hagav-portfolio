@@ -191,25 +191,42 @@ const CHART_TOOLTIPS = {
   },
 };
 
+function SectionHeader({ eyebrow, title, description, action }) {
+  return (
+    <div className="dashboard-section-head">
+      <div className="min-w-0">
+        {eyebrow && <p className="dashboard-section-eyebrow">{eyebrow}</p>}
+        <h2 className="dashboard-section-title">{title}</h2>
+        {description && <p className="dashboard-section-description">{description}</p>}
+      </div>
+      {action ? <div className="shrink-0">{action}</div> : null}
+    </div>
+  );
+}
+
 function ChartCard({ title, icon: Icon, description, tooltip, children, empty, loading }) {
   return (
-    <div className="hcard">
+    <div className="dashboard-panel dashboard-chart-card">
       <EduTooltip enabled={Boolean(tooltip)} className="w-fit" {...tooltip}>
-        <div className="inline-flex items-center gap-2 mb-1.5">
-          <div className="w-8 h-8 rounded-lg bg-hagav-muted/40 border border-hagav-border flex items-center justify-center">
+        <div className="dashboard-panel-title-wrap">
+          <div className="dashboard-panel-icon">
             <Icon size={14} className="text-hagav-gold" />
           </div>
-          <h3 className="text-sm font-semibold text-hagav-white">{title}</h3>
+          <div>
+            <h3 className="dashboard-panel-title">{title}</h3>
+            {description && (
+              <p className="dashboard-panel-description">{description}</p>
+            )}
+          </div>
         </div>
       </EduTooltip>
-      {description && (
-        <p className="text-[11px] text-hagav-gray mb-4">{description}</p>
-      )}
       {empty ? (
         <div className="h-[220px] flex items-center justify-center text-sm text-hagav-gray">
           {loading ? 'Carregando...' : 'Sem dados suficientes ainda.'}
         </div>
-      ) : children}
+      ) : (
+        <div className="dashboard-chart-shell">{children}</div>
+      )}
     </div>
   );
 }
@@ -244,6 +261,9 @@ export default function DashboardPage() {
   const m = insights.metrics;
   const charts = insights.charts;
   const lists = insights.lists;
+  const lastRefreshLabel = lastRefresh
+    ? lastRefresh.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+    : null;
 
   const metricCards = [
     { id: 'leads_mes', label: 'Leads no mes', value: m.leadsMes, icon: Users, onClick: () => router.push('/leads'), title: 'Abrir tela de leads' },
@@ -307,16 +327,22 @@ export default function DashboardPage() {
   ];
 
   return (
-    <div className="space-y-6 animate-fade-in">
-      <div className="flex items-center justify-between">
-        <div>
+    <div className="dashboard-shell animate-fade-in">
+      <div className="dashboard-hero">
+        <div className="dashboard-hero-copy">
+          <div className="dashboard-chip-row">
+            <span className="dashboard-chip">Painel comercial</span>
+            <span className="dashboard-chip dashboard-chip-muted">
+              {lastRefreshLabel ? `Atualizado às ${lastRefreshLabel}` : 'Carregando dados'}
+            </span>
+          </div>
           <h1 className="page-title">Dashboard comercial</h1>
-          <p className="page-subtitle">
-            {lastRefresh ? `Atualizado as ${lastRefresh.toLocaleTimeString('pt-BR')}` : 'Carregando...'}
+          <p className="dashboard-hero-description">
+            Visão geral do funil, da receita e das prioridades operacionais para o time agir com mais clareza.
           </p>
         </div>
         <EduTooltip {...UPDATE_TOOLTIP} className="w-auto" panelClassName="left-auto right-0 translate-x-0">
-          <button onClick={load} disabled={loading} className="btn-ghost btn-sm">
+          <button onClick={load} disabled={loading} className="btn-ghost btn-sm dashboard-refresh-btn">
             <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
             Atualizar
           </button>
@@ -324,19 +350,18 @@ export default function DashboardPage() {
       </div>
 
       {loadError && (
-        <p className="text-xs text-red-300 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
+        <p className="text-xs text-red-300 bg-red-500/10 border border-red-500/20 rounded-xl px-3.5 py-2.5">
           {loadError}
         </p>
       )}
 
-      <section className="space-y-3">
-        <div className="flex items-end justify-between">
-          <div>
-            <p className="text-[10px] text-hagav-gray uppercase tracking-wider">Linha 1</p>
-            <h2 className="text-base font-semibold text-hagav-white">KPIs principais</h2>
-          </div>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+      <section className="dashboard-section">
+        <SectionHeader
+          eyebrow="Camada estratégica"
+          title="KPIs principais"
+          description="Os números mais relevantes para leitura rápida de volume, receita e eficiência comercial."
+        />
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {kpisPrincipais.map((card) => (
             <EduTooltip key={card.id} {...KPI_TOOLTIPS[card.id]}>
               <MetricCard {...card} />
@@ -345,14 +370,13 @@ export default function DashboardPage() {
         </div>
       </section>
 
-      <section className="space-y-3">
-        <div className="flex items-end justify-between">
-          <div>
-            <p className="text-[10px] text-hagav-gray uppercase tracking-wider">Linha 2</p>
-            <h2 className="text-base font-semibold text-hagav-white">KPIs operacionais</h2>
-          </div>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+      <section className="dashboard-section">
+        <SectionHeader
+          eyebrow="Ritmo do time"
+          title="KPIs operacionais"
+          description="Indicadores de urgência, resposta e follow-up para orientar a operação do dia."
+        />
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {kpisOperacionais.map((card) => (
             <EduTooltip key={card.id} {...KPI_TOOLTIPS[card.id]}>
               <MetricCard {...card} />
@@ -361,42 +385,47 @@ export default function DashboardPage() {
         </div>
       </section>
 
-      <section className="grid grid-cols-1 2xl:grid-cols-[minmax(0,2.2fr)_minmax(320px,1fr)] gap-4">
-        <div className="hcard">
-          <div className="flex items-center gap-2 mb-1.5">
-            <div className="w-8 h-8 rounded-lg bg-hagav-muted/40 border border-hagav-border flex items-center justify-center">
+      <section className="grid grid-cols-1 gap-4 2xl:grid-cols-[minmax(0,2.2fr)_minmax(320px,1fr)]">
+        <div className="dashboard-panel">
+          <div className="dashboard-panel-title-wrap">
+            <div className="dashboard-panel-icon">
               <Workflow size={14} className="text-hagav-gold" />
             </div>
-            <h3 className="text-sm font-semibold text-hagav-white">Funil real</h3>
+            <div>
+              <h3 className="dashboard-panel-title">Funil real</h3>
+              <p className="dashboard-panel-description">Distribuição atual dos leads por etapa comercial</p>
+            </div>
           </div>
-          <p className="text-[11px] text-hagav-gray mb-4">Distribuicao atual dos leads por etapa comercial</p>
-          <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-2">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
             {pipelineSteps.map((step) => (
               <EduTooltip key={step.status} {...PIPELINE_TOOLTIPS[step.status]}>
-                <div className="bg-hagav-surface border border-hagav-border rounded-lg p-3">
-                  <p className="text-[10px] uppercase tracking-wider text-hagav-gray">{step.label}</p>
-                  <p className="text-2xl font-bold text-hagav-white mt-1">{step.total}</p>
+                <div className="dashboard-step-card">
+                  <p className="dashboard-step-label">{step.label}</p>
+                  <p className="dashboard-step-value">{step.total}</p>
+                  <p className="dashboard-step-meta">Leads nesta etapa</p>
                 </div>
               </EduTooltip>
             ))}
           </div>
         </div>
 
-        <div className="hcard">
-          <div className="flex items-center gap-2 mb-1.5">
-            <div className="w-8 h-8 rounded-lg bg-hagav-muted/40 border border-hagav-border flex items-center justify-center">
+        <div className="dashboard-panel">
+          <div className="dashboard-panel-title-wrap">
+            <div className="dashboard-panel-icon">
               <AlertTriangle size={14} className="text-hagav-gold" />
             </div>
-            <h3 className="text-sm font-semibold text-hagav-white">Alertas operacionais</h3>
+            <div>
+              <h3 className="dashboard-panel-title">Alertas operacionais</h3>
+              <p className="dashboard-panel-description">Pontos que exigem ação imediata do time</p>
+            </div>
           </div>
-          <p className="text-[11px] text-hagav-gray mb-4">Pontos que exigem acao imediata do time</p>
-          <div className="grid grid-cols-1 sm:grid-cols-3 2xl:grid-cols-1 gap-2.5">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 2xl:grid-cols-1">
             {alertCards.map((item) => {
               const toneClass = item.tone === 'red'
-                ? 'border-red-500/25 bg-red-500/10 text-red-200'
+                ? 'dashboard-alert-card-red'
                 : item.tone === 'yellow'
-                  ? 'border-yellow-500/25 bg-yellow-500/10 text-yellow-200'
-                  : 'border-hagav-border bg-hagav-surface text-hagav-light';
+                  ? 'dashboard-alert-card-yellow'
+                  : 'dashboard-alert-card-neutral';
               const Icon = item.icon;
 
               return (
@@ -404,14 +433,14 @@ export default function DashboardPage() {
                   key={item.label}
                   type="button"
                   onClick={item.onClick}
-                  className={`text-left rounded-lg border p-3 transition-colors hover:border-hagav-gold/30 focus:outline-none focus-visible:ring-1 focus-visible:ring-hagav-gold/35 ${toneClass}`}
+                  className={`dashboard-alert-card ${toneClass}`}
                 >
-                  <div className="flex items-center justify-between gap-2 mb-1">
-                    <p className="text-[11px] uppercase tracking-wider">{item.label}</p>
+                  <div className="dashboard-alert-head">
+                    <p className="dashboard-alert-label">{item.label}</p>
                     <Icon size={13} className="opacity-80" />
                   </div>
-                  <p className="text-2xl font-bold leading-none">{item.value}</p>
-                  <p className="text-[11px] mt-1.5 opacity-80">{item.hint}</p>
+                  <p className="dashboard-alert-value">{item.value}</p>
+                  <p className="dashboard-alert-hint">{item.hint}</p>
                 </button>
               );
             })}
@@ -421,115 +450,116 @@ export default function DashboardPage() {
 
       <RecentLeads entries={lists.ultimasEntradas || []} />
 
-      <section className="space-y-4">
-        <div>
-          <h2 className="text-base font-semibold text-hagav-white">Blocos graficos</h2>
-          <p className="text-[11px] text-hagav-gray mt-0.5">Leitura visual de origem, urgencia, demanda e receita</p>
+      <section className="dashboard-section">
+        <SectionHeader
+          eyebrow="Leitura visual"
+          title="Blocos gráficos"
+          description="Origem, urgência, demanda e receita organizadas de forma mais fácil para leitura rápida."
+        />
+
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+          <ChartCard
+            title="Origem x conversao"
+            icon={TrendingUp}
+            tooltip={CHART_TOOLTIPS.origem_conversao}
+            description="Volume por origem e taxa media de fechamento"
+            empty={charts.origemConversao.length === 0}
+            loading={loading}
+          >
+            <ResponsiveContainer width="100%" height={220}>
+              <ComposedChart data={charts.origemConversao} margin={{ top: 6, right: 8, left: -18, bottom: 0 }}>
+                <CartesianGrid stroke="#202020" strokeDasharray="3 3" vertical={false} />
+                <XAxis dataKey="origem" tick={{ fill: '#909090', fontSize: 11 }} axisLine={false} tickLine={false} />
+                <YAxis yAxisId="left" tick={{ fill: '#909090', fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
+                <YAxis yAxisId="right" orientation="right" tick={{ fill: '#909090', fontSize: 11 }} axisLine={false} tickLine={false} />
+                <Tooltip
+                  contentStyle={{ background: '#161616', border: '1px solid #2A2A2A', borderRadius: 10, fontSize: 12 }}
+                  formatter={(value, name) => {
+                    if (name === 'conversao') return [`${Number(value).toFixed(1)}%`, 'Conversao'];
+                    return [value, 'Leads'];
+                  }}
+                />
+                <Bar yAxisId="left" dataKey="leads" fill="#C9A84C" radius={[5, 5, 0, 0]} maxBarSize={34} />
+                <Line yAxisId="right" type="monotone" dataKey="conversao" stroke="#3B82F6" strokeWidth={2} dot={{ r: 3 }} />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </ChartCard>
+
+          <ChartCard
+            title="Leads por urgencia"
+            icon={Siren}
+            tooltip={CHART_TOOLTIPS.leads_urgencia}
+            description="Distribuicao dos leads por prioridade de atendimento"
+            empty={charts.leadsPorUrgencia.length === 0}
+            loading={loading}
+          >
+            <ResponsiveContainer width="100%" height={220}>
+              <PieChart>
+                <Pie
+                  data={charts.leadsPorUrgencia}
+                  dataKey="total"
+                  nameKey="urgencia"
+                  cx="50%"
+                  cy="50%"
+                  outerRadius={76}
+                  innerRadius={40}
+                  paddingAngle={4}
+                >
+                  {charts.leadsPorUrgencia.map((_, idx) => (
+                    <Cell key={idx} fill={COLORS_PIE[idx % COLORS_PIE.length]} />
+                  ))}
+                </Pie>
+                <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11, color: '#999' }} />
+                <Tooltip
+                  contentStyle={{ background: '#161616', border: '1px solid #2A2A2A', borderRadius: 10, fontSize: 12 }}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+          </ChartCard>
         </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-        <ChartCard
-          title="Origem x conversao"
-          icon={TrendingUp}
-          tooltip={CHART_TOOLTIPS.origem_conversao}
-          description="Volume por origem e taxa media de fechamento"
-          empty={charts.origemConversao.length === 0}
-          loading={loading}
-        >
-          <ResponsiveContainer width="100%" height={220}>
-            <ComposedChart data={charts.origemConversao} margin={{ top: 6, right: 8, left: -18, bottom: 0 }}>
-              <CartesianGrid stroke="#202020" strokeDasharray="3 3" vertical={false} />
-              <XAxis dataKey="origem" tick={{ fill: '#909090', fontSize: 11 }} axisLine={false} tickLine={false} />
-              <YAxis yAxisId="left" tick={{ fill: '#909090', fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
-              <YAxis yAxisId="right" orientation="right" tick={{ fill: '#909090', fontSize: 11 }} axisLine={false} tickLine={false} />
-              <Tooltip
-                contentStyle={{ background: '#161616', border: '1px solid #2A2A2A', borderRadius: 10, fontSize: 12 }}
-                formatter={(value, name) => {
-                  if (name === 'conversao') return [`${Number(value).toFixed(1)}%`, 'Conversao'];
-                  return [value, 'Leads'];
-                }}
-              />
-              <Bar yAxisId="left" dataKey="leads" fill="#C9A84C" radius={[5, 5, 0, 0]} maxBarSize={34} />
-              <Line yAxisId="right" type="monotone" dataKey="conversao" stroke="#3B82F6" strokeWidth={2} dot={{ r: 3 }} />
-            </ComposedChart>
-          </ResponsiveContainer>
-        </ChartCard>
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+          <ChartCard
+            title="Servicos mais pedidos"
+            icon={Filter}
+            tooltip={CHART_TOOLTIPS.servicos_pedidos}
+            description="Servicos com maior volume de demanda no periodo"
+            empty={charts.servicosMaisPedidos.length === 0}
+            loading={loading}
+          >
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={charts.servicosMaisPedidos} margin={{ top: 8, right: 8, left: -24, bottom: 0 }}>
+                <CartesianGrid stroke="#202020" strokeDasharray="3 3" vertical={false} />
+                <XAxis dataKey="servico" tick={{ fill: '#909090', fontSize: 10 }} axisLine={false} tickLine={false} />
+                <YAxis allowDecimals={false} tick={{ fill: '#909090', fontSize: 11 }} axisLine={false} tickLine={false} />
+                <Tooltip contentStyle={{ background: '#161616', border: '1px solid #2A2A2A', borderRadius: 10, fontSize: 12 }} />
+                <Bar dataKey="total" fill="#F59E0B" radius={[5, 5, 0, 0]} maxBarSize={34} />
+              </BarChart>
+            </ResponsiveContainer>
+          </ChartCard>
 
-        <ChartCard
-          title="Leads por urgencia"
-          icon={Siren}
-          tooltip={CHART_TOOLTIPS.leads_urgencia}
-          description="Distribuicao dos leads por prioridade de atendimento"
-          empty={charts.leadsPorUrgencia.length === 0}
-          loading={loading}
-        >
-          <ResponsiveContainer width="100%" height={220}>
-            <PieChart>
-              <Pie
-                data={charts.leadsPorUrgencia}
-                dataKey="total"
-                nameKey="urgencia"
-                cx="50%"
-                cy="50%"
-                outerRadius={76}
-                innerRadius={40}
-                paddingAngle={4}
-              >
-                {charts.leadsPorUrgencia.map((_, idx) => (
-                  <Cell key={idx} fill={COLORS_PIE[idx % COLORS_PIE.length]} />
-                ))}
-              </Pie>
-              <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11, color: '#999' }} />
-              <Tooltip
-                contentStyle={{ background: '#161616', border: '1px solid #2A2A2A', borderRadius: 10, fontSize: 12 }}
-              />
-            </PieChart>
-          </ResponsiveContainer>
-        </ChartCard>
-      </div>
-
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-        <ChartCard
-          title="Servicos mais pedidos"
-          icon={Filter}
-          tooltip={CHART_TOOLTIPS.servicos_pedidos}
-          description="Servicos com maior volume de demanda no periodo"
-          empty={charts.servicosMaisPedidos.length === 0}
-          loading={loading}
-        >
-          <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={charts.servicosMaisPedidos} margin={{ top: 8, right: 8, left: -24, bottom: 0 }}>
-              <CartesianGrid stroke="#202020" strokeDasharray="3 3" vertical={false} />
-              <XAxis dataKey="servico" tick={{ fill: '#909090', fontSize: 10 }} axisLine={false} tickLine={false} />
-              <YAxis allowDecimals={false} tick={{ fill: '#909090', fontSize: 11 }} axisLine={false} tickLine={false} />
-              <Tooltip contentStyle={{ background: '#161616', border: '1px solid #2A2A2A', borderRadius: 10, fontSize: 12 }} />
-              <Bar dataKey="total" fill="#F59E0B" radius={[5, 5, 0, 0]} maxBarSize={34} />
-            </BarChart>
-          </ResponsiveContainer>
-        </ChartCard>
-
-        <ChartCard
-          title="Receita por servico"
-          icon={CircleDollarSign}
-          tooltip={CHART_TOOLTIPS.receita_servico}
-          description="Participacao de receita estimada por servico"
-          empty={charts.receitaPorServico.length === 0}
-          loading={loading}
-        >
-          <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={charts.receitaPorServico} margin={{ top: 8, right: 8, left: -24, bottom: 0 }}>
-              <CartesianGrid stroke="#202020" strokeDasharray="3 3" vertical={false} />
-              <XAxis dataKey="servico" tick={{ fill: '#909090', fontSize: 10 }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fill: '#909090', fontSize: 11 }} axisLine={false} tickLine={false} />
-              <Tooltip
-                contentStyle={{ background: '#161616', border: '1px solid #2A2A2A', borderRadius: 10, fontSize: 12 }}
-                formatter={(value) => [fmtBRL(value), 'Receita']}
-              />
-              <Bar dataKey="valor" fill="#22C55E" radius={[5, 5, 0, 0]} maxBarSize={34} />
-            </BarChart>
-          </ResponsiveContainer>
-        </ChartCard>
-      </div>
+          <ChartCard
+            title="Receita por servico"
+            icon={CircleDollarSign}
+            tooltip={CHART_TOOLTIPS.receita_servico}
+            description="Participacao de receita estimada por servico"
+            empty={charts.receitaPorServico.length === 0}
+            loading={loading}
+          >
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={charts.receitaPorServico} margin={{ top: 8, right: 8, left: -24, bottom: 0 }}>
+                <CartesianGrid stroke="#202020" strokeDasharray="3 3" vertical={false} />
+                <XAxis dataKey="servico" tick={{ fill: '#909090', fontSize: 10 }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fill: '#909090', fontSize: 11 }} axisLine={false} tickLine={false} />
+                <Tooltip
+                  contentStyle={{ background: '#161616', border: '1px solid #2A2A2A', borderRadius: 10, fontSize: 12 }}
+                  formatter={(value) => [fmtBRL(value), 'Receita']}
+                />
+                <Bar dataKey="valor" fill="#22C55E" radius={[5, 5, 0, 0]} maxBarSize={34} />
+              </BarChart>
+            </ResponsiveContainer>
+          </ChartCard>
+        </div>
       </section>
     </div>
   );

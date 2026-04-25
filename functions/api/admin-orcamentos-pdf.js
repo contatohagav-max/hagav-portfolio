@@ -1047,15 +1047,15 @@ function formatComparativeOptions(qtyBase, totalBase) {
     opcao2_qtd: `${qty2} videos`,
     opcao2_preco: formatMoney(total2),
     opcao2_unitario: `${formatMoney(unit2)} por video`,
-    opcao2_desc: discount2 > 0 ? `${discount2}% de desconto por volume` : "Sem desconto aplicado",
+    opcao2_desc: discount2 > 0 ? `Desconto aplicado: ${discount2}%` : "Sem desconto aplicado",
     opcao2_desconto: discount2 > 0 ? `-${discount2}%` : "",
     opcao3_titulo: "Melhor custo-beneficio",
     opcao3_qtd: `${qty3} videos`,
     opcao3_preco: formatMoney(total3),
     opcao3_unitario: `${formatMoney(unit3)} por video`,
-    opcao3_desc: discount3 > 0 ? `${discount3}% de desconto por volume` : "Sem desconto aplicado",
+    opcao3_desc: discount3 > 0 ? `Desconto aplicado: ${discount3}%` : "Sem desconto aplicado",
     opcao3_desconto: discount3 > 0 ? `-${discount3}%` : "",
-    texto_comparativo: "Quanto maior o volume, menor o custo por video. As opcoes acima usam descontos progressivos conforme quantidade.",
+    texto_comparativo: "",
   };
 }
 
@@ -1509,7 +1509,7 @@ function buildTemplateValues(row, env, options = {}) {
     revisoes_inclusas_texto: revisoesTexto,
     inicio_producao_texto: "O projeto inicia apos aprovacao e envio dos materiais.",
     ajustes_texto: "Inclui 1 rodada de ajustes. Alteracoes adicionais ou mudancas de escopo podem gerar novo orcamento.",
-    cta_aprovacao: "Para aprovar, responda APROVADO no WhatsApp.",
+    cta_aprovacao: "Aprovar proposta no WhatsApp",
     observacao_adicional: observacaoManual.text,
     observacoes_bloco_style: observacaoManual.show ? "display:block;" : "display:none;",
     referencia_texto: referenciaCliente.text,
@@ -1547,6 +1547,7 @@ function buildTemplateValues(row, env, options = {}) {
     opcao3_desconto: opcao3Desconto,
     opcao3_desconto_style: opcao3Desconto ? "display:flex;" : "display:none;",
     texto_comparativo: textoComparativo,
+    texto_comparativo_style: textoComparativo ? "display:block;" : "display:none;",
   };
 
   Object.assign(base, templateOverrides);

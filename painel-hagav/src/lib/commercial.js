@@ -1189,6 +1189,170 @@ function computePricingSnapshot(record) {
   };
 }
 
+function sumServiceItemQuantities(items = []) {
+  const safeItems = Array.isArray(items) ? items : [];
+  const total = safeItems.reduce((sum, item) => {
+    const quantidade = Math.max(1, Math.round(parsePositiveNumber(item?.quantidade || '1') || 1));
+    return sum + quantidade;
+  }, 0);
+  return Math.max(1, total);
+}
+
+function scaleServiceItemsToTargetQuantity(items = [], targetTotal = 1) {
+  const safeItems = Array.isArray(items) ? items.filter(Boolean) : [];
+  const safeTarget = Math.max(1, Math.round(Number(targetTotal || 0) || 1));
+  if (safeItems.length === 0) return [];
+  if (safeItems.length === 1) {
+    return [
+      {
+        ...safeItems[0],
+        quantidade: safeTarget,
+      },
+    ];
+  }
+
+  const currentTotal = sumServiceItemQuantities(safeItems);
+  const ratio = safeTarget / currentTotal;
+  const scaled = safeItems.map((item) => {
+    const originalQty = Math.max(1, Math.round(parsePositiveNumber(item?.quantidade || '1') || 1));
+    const rawScaled = originalQty * ratio;
+    return {
+      item,
+      originalQty,
+      scaledQty: Math.max(1, Math.round(rawScaled)),
+      remainder: rawScaled - Math.floor(rawScaled),
+    };
+  });
+
+  let diff = safeTarget - scaled.reduce((sum, entry) => sum + entry.scaledQty, 0);
+  while (diff > 0) {
+    const candidates = [...scaled].sort((a, b) => (
+      b.remainder - a.remainder
+      || b.originalQty - a.originalQty
+    ));
+    candidates[0].scaledQty += 1;
+    diff -= 1;
+  }
+
+  while (diff < 0) {
+    const removable = [...scaled]
+      .filter((entry) => entry.scaledQty > 1)
+      .sort((a, b) => (
+        b.scaledQty - a.scaledQty
+        || a.remainder - b.remainder
+      ));
+    if (removable.length === 0) break;
+    removable[0].scaledQty -= 1;
+    diff += 1;
+  }
+
+  return scaled.map((entry) => ({
+    ...entry.item,
+    quantidade: entry.scaledQty,
+  }));
+}
+
+function buildPricingVariantRecord(record, targetTotal = 1) {
+  const safeRecord = record && typeof record === 'object' ? record : {};
+  const currentItems = extractServiceItems(safeRecord);
+  const safeTarget = Math.max(1, Math.round(Number(targetTotal || 0) || 1));
+
+  if (currentItems.length === 0) {
+    return {
+      ...safeRecord,
+      quantidade: safeTarget,
+    };
+  }
+
+  const variantItems = scaleServiceItemsToTargetQuantity(currentItems, safeTarget);
+  const quantitySummary = variantItems.length <= 1
+    ? String(safeTarget)
+    : variantItems.map((item) => `${item?.servico || 'Servico'}: ${item?.quantidade || 1}`).join(' | ');
+
+  return {
+    ...safeRecord,
+    itens_servico: variantItems,
+    quantidade: quantitySummary,
+    quantidade_total: safeTarget,
+  };
+}
+
+export function buildComparativeProposalPricing(record, { baseQuantity, baseTotal } = {}) {
+  const safeRecord = record && typeof record === 'object' ? record : {};
+  const items = extractServiceItems(safeRecord);
+  const inferredBaseQty = Math.max(
+    1,
+    Math.round(
+      Number(baseQuantity || 0)
+      || sumServiceItemQuantities(items)
+      || parsePositiveNumber(safeRecord?.quantidade || '1')
+      || 1
+    )
+  );
+  const qty2 = Math.max(inferredBaseQty + 1, Math.round(inferredBaseQty * 1.5));
+  const qty3 = Math.max(qty2 + 1, Math.max(30, Math.round(inferredBaseQty * 3)));
+
+  const baseRecord = buildPricingVariantRecord(safeRecord, inferredBaseQty);
+  const baseSnapshot = computePricingSnapshot(baseRecord);
+  const baseDisplayTotal = roundCurrency(
+    toNumber(baseTotal, 0)
+    || toNumber(safeRecord?.preco_final, 0)
+    || toNumber(safeRecord?.valor_sugerido, 0)
+    || toNumber(safeRecord?.valor_estimado, 0)
+    || baseSnapshot.valorSugerido
+    || 0
+  );
+  const baseUnitPrice = inferredBaseQty > 0
+    ? roundCurrency(baseDisplayTotal / inferredBaseQty)
+    : 0;
+
+  const scenarios = [
+    {
+      key: 'pedido_atual',
+      title: 'Pedido atual',
+      quantity: inferredBaseQty,
+      total: baseDisplayTotal,
+      unitPrice: baseUnitPrice,
+      discountPercent: 0,
+      snapshot: baseSnapshot,
+    },
+    {
+      key: 'mais_volume',
+      title: 'Mais volume',
+      quantity: qty2,
+      snapshot: computePricingSnapshot(buildPricingVariantRecord(safeRecord, qty2)),
+    },
+    {
+      key: 'melhor_custo_beneficio',
+      title: 'Melhor custo-beneficio',
+      quantity: qty3,
+      snapshot: computePricingSnapshot(buildPricingVariantRecord(safeRecord, qty3)),
+    },
+  ].map((scenario, index, list) => {
+    if (index === 0) return scenario;
+    const total = roundCurrency(Number(scenario?.snapshot?.valorSugerido || 0));
+    const unitPrice = scenario.quantity > 0
+      ? roundCurrency(total / scenario.quantity)
+      : 0;
+    const discountPercent = baseUnitPrice > 0
+      ? Math.max(0, Math.round((1 - (unitPrice / baseUnitPrice)) * 100))
+      : 0;
+    return {
+      ...scenario,
+      total,
+      unitPrice,
+      discountPercent,
+      previousQuantity: list[index - 1]?.quantity || inferredBaseQty,
+    };
+  });
+
+  return {
+    baseQuantity: inferredBaseQty,
+    baseTotal: baseDisplayTotal,
+    scenarios,
+  };
+}
+
 export function deriveFinancialMetricsFromFinalPrice(record, precoFinalInput) {
   const custoBase = roundCurrency(toNumber(record?.preco_base ?? record?.custo_base, 0));
   const precoFinal = roundCurrency(toNumber(precoFinalInput ?? record?.preco_final, 0));

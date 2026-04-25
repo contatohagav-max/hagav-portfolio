@@ -486,8 +486,8 @@
 <body>
   <div class="preview-shell">
     <section class="top">
-      <h1>Preview PDF Comercial (Ambiente de Teste)</h1>
-      <p>Prototipo visual da proposta HAGAV com dados mockados. Nao substitui producao e nao altera o sistema atual.</p>
+      <h1>Preview PDF Comercial</h1>
+      <p>Quando aberto pelo painel, este preview usa os dados reais do drawer em tempo de edi&ccedil;&atilde;o.</p>
       <div class="mode-grid">
         <button class="mode-btn" data-mode="direta">Modo 1 - Direta<small>VSL ate 15 min</small></button>
         <button class="mode-btn" data-mode="opcoes">Modo 2 - Com Opcoes<small>Pedido atual + 2 sugestoes por volume</small></button>
@@ -596,7 +596,7 @@
             <p>02 - Envio dos materiais e referencias pelo cliente.</p>
             <p>03 - Inicio da edicao conforme prazo combinado.</p>
           </div>
-          <div class="cta">APROVAR PROPOSTA NO WHATSAPP</div>
+          <div class="cta" id="ctaText">APROVAR PROPOSTA NO WHATSAPP</div>
         </article>
 
         <footer class="footer">
@@ -771,10 +771,61 @@
         return {
           mode: cleanDraftValue(parsed.mode),
           draft: parsed.draft,
+          preview: parsed.preview,
         };
       } catch {
         return null;
       }
+    }
+
+    function buildDataFromPreviewPayload(mode, payload) {
+      const preview = payload?.preview;
+      if (!preview || typeof preview !== "object") return null;
+
+      const previewMode = cleanDraftValue(preview.mode) || mode || "direta";
+      const hasOptions = Boolean(preview.options?.visible) && Array.isArray(preview.options?.items);
+      const hasMensal = Boolean(preview.monthly?.visible);
+
+      return {
+        label: previewMode,
+        numero: cleanDraftValue(preview.proposalNumber),
+        data: cleanDraftValue(preview.emissionDate),
+        cliente: {
+          nome: cleanDraftValue(preview.client?.name),
+          whatsapp: cleanDraftValue(preview.client?.whatsapp),
+        },
+        resumo: {
+          servico: cleanDraftValue(preview.summary?.service),
+          quantidade: cleanDraftValue(preview.summary?.quantity),
+          prazo: cleanDraftValue(preview.summary?.deadline),
+        },
+        escopo: cleanDraftValue(preview.scope),
+        showInvestment: Boolean(preview.investment?.visible),
+        investimentoTag: cleanDraftValue(preview.investment?.label) || "Valor total",
+        valor: cleanDraftValue(preview.investment?.value),
+        opcoes: hasOptions
+          ? preview.options.items.map((item) => ({
+            nome: cleanDraftValue(item.title),
+            preco: cleanDraftValue(item.total),
+            quantidade: cleanDraftValue(item.quantity),
+            unitario: cleanDraftValue(item.unitPrice),
+            desc: cleanDraftValue(item.description),
+            desconto: cleanDraftValue(item.discount),
+          }))
+          : null,
+        opcoesTextoApoio: cleanDraftValue(preview.options?.footnote),
+        mensal: hasMensal
+          ? {
+            plano: cleanDraftValue(preview.monthly?.quantity),
+            duracao: cleanDraftValue(preview.monthly?.duration)
+              ? `Contrato de ${cleanDraftValue(preview.monthly?.duration)} meses`
+              : "",
+          }
+          : null,
+        condicoes: Array.isArray(preview.conditions) ? preview.conditions.filter(Boolean) : [],
+        observacao: cleanDraftValue(preview.observation),
+        cta: cleanDraftValue(preview.cta) || "Aprovar proposta no WhatsApp",
+      };
     }
 
     function applyDrawerDraft(baseData, mode, payload) {
@@ -925,7 +976,7 @@
       wrap.innerHTML = "";
       (options || []).forEach((opt) => {
         const card = document.createElement("article");
-        card.className = `option-card${opt.destaque ? " recommended" : ""}`;
+        card.className = "option-card";
 
         const name = document.createElement("p");
         name.className = "name";
@@ -971,8 +1022,9 @@
     }
 
     function renderModo(modo) {
-      const baseData = MODOS[modo] || MODOS.direta;
-      const data = applyDrawerDraft(baseData, modo, DRAWER_PREVIEW_PAYLOAD);
+      const payloadPreviewData = buildDataFromPreviewPayload(modo, DRAWER_PREVIEW_PAYLOAD);
+      const baseData = payloadPreviewData || MODOS[modo] || MODOS.direta;
+      const data = payloadPreviewData || applyDrawerDraft(baseData, modo, DRAWER_PREVIEW_PAYLOAD);
       const keys = Object.keys(MODOS);
       CURRENT_MODE = Object.prototype.hasOwnProperty.call(MODOS, modo) ? modo : "direta";
 
@@ -998,6 +1050,7 @@
       setList("condicoesList", data.condicoes);
       setHidden("condicoesSection", !Array.isArray(data.condicoes) || data.condicoes.length === 0);
       setText("footerRef", `${data.numero} | ${data.data}`);
+      setText("ctaText", data.cta || "Aprovar proposta no WhatsApp", "");
 
       const opcoesSection = byId("opcoesSection");
       opcoesSection.classList.toggle("hidden", !Array.isArray(data.opcoes));

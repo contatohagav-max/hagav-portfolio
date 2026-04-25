@@ -4,8 +4,10 @@ import { useEffect, useMemo, useState } from 'react';
 import { X, Save, Loader2, MessageCircle, ExternalLink, AlertTriangle, CheckCircle2, Send, Ban, RotateCw, Eye, Download } from 'lucide-react';
 import { OrcStatusBadge, PrioridadeBadge, UrgenciaBadge, TemperaturaBadge } from '@/components/ui/StatusBadge';
 import EduTooltip from '@/components/ui/EduTooltip';
+import ProposalPreview from '@/components/orcamentos/ProposalPreview';
 import { generateDealPdf, updateOrcamento } from '@/lib/supabase';
 import { deriveFinancialMetricsFromFinalPrice } from '@/lib/commercial';
+import { buildAutoOptionDraft, buildCommercialScopeText, buildProposalPreviewModel } from '@/lib/proposal';
 import { fmtDateTime, fmtBRL, whatsappLink, ORC_STATUS_LABELS } from '@/lib/utils';
 
 const ORC_STATUSES = ['orcamento', 'proposta_enviada', 'ajustando', 'aprovado', 'perdido'];
@@ -22,10 +24,10 @@ const SEND_PROPOSTA_TOOLTIP = {
   observe: 'Gere a proposta PDF antes de enviar no WhatsApp.',
 };
 const PROPOSAL_MODE_OPTIONS = [
-  { value: 'direta', label: 'Direta' },
-  { value: 'opcoes', label: 'Com opcoes' },
-  { value: 'mensal', label: 'Mensal' },
-  { value: 'personalizada', label: 'Personalizada' },
+  { value: 'direta', label: 'Modo 1 - Direta' },
+  { value: 'opcoes', label: 'Modo 2 - Com opcoes' },
+  { value: 'mensal', label: 'Modo 3 - Mensal' },
+  { value: 'personalizada', label: 'Modo 4 - Personalizada' },
 ];
 
 const DEFAULT_CONDICOES_COMERCIAIS = [
@@ -258,50 +260,31 @@ function parseCurrencyNumber(value, fallback = 0) {
   return parsed;
 }
 
-function getPreviewVolumeDiscountPercent(quantity) {
-  const safeQty = Math.max(1, Math.round(Number(quantity || 0) || 1));
-  if (safeQty >= 30) return 15;
-  if (safeQty >= 15) return 5;
-  return 0;
+function isLikelyInternalObservation(value) {
+  const key = normalizeText(value)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+  return (
+    key.includes('du |')
+    || key.includes('dr |')
+    || key.includes('material gravado')
+    || key.includes('tempo bruto')
+    || key.includes('respostascompletas')
+  );
 }
 
-function buildDefaultOptionCards(baseQuantity = 10, baseTotalValue = 0) {
-  const pedidoAtualQty = Math.max(1, Number(baseQuantity || 10));
-  const maisVolumeQty = Math.max(pedidoAtualQty + 1, Math.round(pedidoAtualQty * 1.5));
-  const melhorCustoQty = Math.max(30, Math.round(pedidoAtualQty * 3));
-  const safeBaseTotal = Number(baseTotalValue || 0);
-  const baseUnit = safeBaseTotal > 0
-    ? safeBaseTotal / pedidoAtualQty
-    : 170;
-  const option1Total = pedidoAtualQty * baseUnit;
-  const option2Discount = getPreviewVolumeDiscountPercent(maisVolumeQty);
-  const option3Discount = getPreviewVolumeDiscountPercent(melhorCustoQty);
-  const option2Unit = baseUnit * (1 - (option2Discount / 100));
-  const option3Unit = baseUnit * (1 - (option3Discount / 100));
-  const option2Total = maisVolumeQty * option2Unit;
-  const option3Total = melhorCustoQty * option3Unit;
-
-  return {
-    opcao1_titulo: 'Pedido atual',
-    opcao1_qtd: `${pedidoAtualQty} videos`,
-    opcao1_preco: fmtBRL(option1Total),
-    opcao1_unitario: `${fmtBRL(baseUnit)} por video`,
-    opcao1_desc: 'Sem desconto aplicado',
-    opcao1_desconto: '',
-    opcao2_titulo: 'Mais volume',
-    opcao2_qtd: `${maisVolumeQty} videos`,
-    opcao2_preco: fmtBRL(option2Total),
-    opcao2_unitario: `${fmtBRL(option2Unit)} por video`,
-    opcao2_desc: option2Discount > 0 ? `${option2Discount}% de desconto por volume` : 'Sem desconto aplicado',
-    opcao2_desconto: option2Discount > 0 ? `-${option2Discount}%` : '',
-    opcao3_titulo: 'Melhor custo-beneficio',
-    opcao3_qtd: `${melhorCustoQty} videos`,
-    opcao3_preco: fmtBRL(option3Total),
-    opcao3_unitario: `${fmtBRL(option3Unit)} por video`,
-    opcao3_desc: option3Discount > 0 ? `${option3Discount}% de desconto por volume` : 'Sem desconto aplicado',
-    opcao3_desconto: option3Discount > 0 ? `-${option3Discount}%` : '',
-    texto_comparativo: 'Quanto maior o volume, menor o custo por video. As opcoes acima usam descontos progressivos conforme quantidade.',
-  };
+function pickClientObservationText(...values) {
+  for (const value of values) {
+    const normalized = normalizeText(value);
+    if (!normalized) continue;
+    if (normalized.length < 8 || normalized.length > 260) continue;
+    if (isLikelyInternalObservation(normalized)) continue;
+    const separators = (normalized.match(/\|/g) || []).length;
+    if (separators >= 2) continue;
+    return normalized;
+  }
+  return '';
 }
 
 function buildProposalDraftFromRecord(record, forcedMode) {
@@ -325,6 +308,11 @@ function buildProposalDraftFromRecord(record, forcedMode) {
     || record?.preco_base
     || 0
   );
+  const quantidadePadrao = firstFilledText(
+    comercial?.quantidade,
+    record?.quantidade,
+    modePreset.quantidade
+  );
   const quantityNumber = parseQuantityNumber(
     comercial?.quantidade
       || comercial?.opcao1_qtd
@@ -332,8 +320,16 @@ function buildProposalDraftFromRecord(record, forcedMode) {
       || modePreset.quantidade,
     10
   );
-  const optionDefaults = buildDefaultOptionCards(quantityNumber, valorBase);
   const defaultValor = fmtBRL(valorBase || quantityNumber * 170);
+  const optionDefaults = buildAutoOptionDraft({
+    orc: record,
+    quantityText: quantidadePadrao,
+    totalText: defaultValor,
+  });
+  const escopoDefault = buildCommercialScopeText(
+    record,
+    firstFilledText(comercial?.revisoes_inclusas, detalhes?.revisoes_inclusas, '1 rodada')
+  );
   const referencia = firstFilledText(
     comercial?.referencia_texto,
     detalhes?.referencia,
@@ -366,9 +362,12 @@ function buildProposalDraftFromRecord(record, forcedMode) {
   );
   const observacaoAdicional = firstFilledText(
     comercial?.observacao_adicional,
-    detalhes?.observacao_adicional,
-    respostas?.extras,
-    ''
+    pickClientObservationText(
+      detalhes?.observacao_adicional,
+      respostas?.extras,
+      record?.observacoes,
+      ''
+    )
   );
   const prazo = firstFilledText(
     comercial?.prazo,
@@ -380,11 +379,6 @@ function buildProposalDraftFromRecord(record, forcedMode) {
     modePreset.prazo
   );
   const condicoesComerciaisDefault = DEFAULT_CONDICOES_COMERCIAIS.replace('[data]', dataValidade || '[data]');
-  const quantidadePadrao = firstFilledText(
-    comercial?.quantidade,
-    record?.quantidade,
-    modePreset.quantidade
-  );
   const valorMensalPadrao = firstFilledText(
     comercial?.valor_mensal_moeda,
     proposalMode === 'mensal' ? defaultValor : ''
@@ -408,10 +402,15 @@ function buildProposalDraftFromRecord(record, forcedMode) {
       modePreset.quantidade_mensal
     )),
     prazo: normalizeText(prazo),
-    escopo_comercial: normalizeText(comercial?.escopo_comercial || comercial?.descricao_escopo || modePreset.escopo_comercial || ''),
+    escopo_comercial: normalizeText(firstFilledText(
+      comercial?.escopo_comercial,
+      comercial?.descricao_escopo,
+      escopoDefault,
+      modePreset.escopo_comercial
+    )),
     escopo_mensal: normalizeText(firstFilledText(
       comercial?.escopo_mensal,
-      proposalMode === 'mensal' ? (comercial?.escopo_comercial || modePreset.escopo_comercial) : ''
+      proposalMode === 'mensal' ? (comercial?.escopo_comercial || escopoDefault || modePreset.escopo_comercial) : ''
     )),
     condicoes_comerciais: normalizeText(firstFilledText(comercial?.condicoes_comerciais, condicoesComerciaisDefault)),
     referencia_texto: normalizeText(referencia),
@@ -427,7 +426,7 @@ function buildProposalDraftFromRecord(record, forcedMode) {
     )),
     numero_proposta: normalizeText(comercial?.numero_proposta || `PROP-${record?.id || ''}`),
     data_emissao: normalizeText(comercial?.data_emissao || ''),
-    cta_aprovacao: normalizeText(comercial?.cta_aprovacao || 'Para aprovar, responda APROVADO no WhatsApp.'),
+    cta_aprovacao: normalizeText(comercial?.cta_aprovacao || 'Aprovar proposta no WhatsApp'),
     opcao1_titulo: normalizeText(comercial?.opcao1_titulo || optionDefaults.opcao1_titulo),
     opcao1_qtd: normalizeText(comercial?.opcao1_qtd || optionDefaults.opcao1_qtd),
     opcao1_preco: normalizeText(comercial?.opcao1_preco || optionDefaults.opcao1_preco),
@@ -446,7 +445,7 @@ function buildProposalDraftFromRecord(record, forcedMode) {
     opcao3_unitario: normalizeText(comercial?.opcao3_unitario || optionDefaults.opcao3_unitario),
     opcao3_desc: normalizeText(comercial?.opcao3_desc || optionDefaults.opcao3_desc),
     opcao3_desconto: normalizeText(comercial?.opcao3_desconto || optionDefaults.opcao3_desconto),
-    texto_comparativo: normalizeText(comercial?.texto_comparativo || optionDefaults.texto_comparativo),
+    texto_comparativo: normalizeText(comercial?.texto_comparativo || optionDefaults.texto_comparativo || ''),
   };
 }
 
@@ -646,46 +645,39 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
     () => deriveFinancialMetricsFromFinalPrice(orc, precoFinal),
     [orc, precoFinal]
   );
+  const proposalPreview = useMemo(
+    () => buildProposalPreviewModel({
+      orc,
+      proposalMode,
+      proposalDraft,
+    }),
+    [orc, proposalMode, proposalDraft]
+  );
 
-  function buildProposalDraftForMode(mode) {
+  function buildProposalDraftForMode(mode, currentDraft = proposalDraft) {
     const normalizedMode = normalizeProposalMode(mode) || inferProposalModeFromFlow(orc, 'direta');
     const preset = PROPOSAL_MODE_PRESETS[normalizedMode] || PROPOSAL_MODE_PRESETS.direta;
     const next = {
       ...buildProposalDraftFromRecord(orc, normalizedMode),
+      ...(currentDraft && typeof currentDraft === 'object' ? currentDraft : {}),
     };
-    const qtyReference = parseQuantityNumber(next.quantidade, 10);
     const valueReference = parseCurrencyNumber(
       next.valor_total_moeda,
       Number(financialMetrics.preco_final || orc?.valor_sugerido || orc?.preco_final || orc?.preco_base || 0)
     );
 
     if (normalizedMode === 'opcoes') {
-      const defaults = buildDefaultOptionCards(qtyReference, valueReference);
-      next.opcao1_titulo = defaults.opcao1_titulo;
-      next.opcao1_qtd = defaults.opcao1_qtd;
-      next.opcao1_preco = defaults.opcao1_preco;
-      next.opcao1_unitario = defaults.opcao1_unitario;
-      next.opcao1_desc = defaults.opcao1_desc;
-      next.opcao1_desconto = defaults.opcao1_desconto;
-      next.opcao2_titulo = defaults.opcao2_titulo;
-      next.opcao2_qtd = defaults.opcao2_qtd;
-      next.opcao2_preco = defaults.opcao2_preco;
-      next.opcao2_unitario = defaults.opcao2_unitario;
-      next.opcao2_desc = defaults.opcao2_desc;
-      next.opcao2_desconto = defaults.opcao2_desconto;
-      next.opcao3_titulo = defaults.opcao3_titulo;
-      next.opcao3_qtd = defaults.opcao3_qtd;
-      next.opcao3_preco = defaults.opcao3_preco;
-      next.opcao3_unitario = defaults.opcao3_unitario;
-      next.opcao3_desc = defaults.opcao3_desc;
-      next.opcao3_desconto = defaults.opcao3_desconto;
-      next.texto_comparativo = next.texto_comparativo || defaults.texto_comparativo;
+      Object.assign(next, buildAutoOptionDraft({
+        orc,
+        quantityText: next.quantidade,
+        totalText: next.valor_total_moeda,
+      }));
     }
 
     if (normalizedMode === 'mensal') {
       next.quantidade_mensal = next.quantidade_mensal || next.quantidade || preset.quantidade_mensal;
       next.duracao_contrato_meses = next.duracao_contrato_meses || preset.duracao_contrato_meses || '3';
-      next.escopo_mensal = next.escopo_mensal || next.escopo_comercial || preset.escopo_comercial;
+      next.escopo_mensal = next.escopo_mensal || next.escopo_comercial || buildCommercialScopeText(orc);
       next.valor_mensal_moeda = next.valor_mensal_moeda || next.valor_total_moeda || fmtBRL(valueReference || 0);
     }
 
@@ -741,7 +733,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
     return buildTemplateOverridesFromDraft(nextDraft);
   }
 
-  function syncPreviewDraft(modeValue, draftValue) {
+  function syncPreviewDraft(modeValue, draftValue, previewValue) {
     if (typeof window === 'undefined') return;
     const safeMode = normalizeProposalMode(modeValue) || inferProposalModeFromFlow(orc, 'direta');
     const payload = {
@@ -749,6 +741,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
       source: 'orcamento_drawer',
       deal_id: orc?.id,
       draft: draftValue,
+      preview: previewValue,
       updated_at: new Date().toISOString(),
     };
     const serialized = JSON.stringify(payload);
@@ -767,10 +760,8 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
 
   function applyProposalMode(mode) {
     const normalizedMode = normalizeProposalMode(mode) || inferProposalModeFromFlow(orc, 'direta');
-    const nextDraft = buildProposalDraftForMode(normalizedMode);
     setProposalMode(normalizedMode);
-    setProposalDraft(nextDraft);
-    syncPreviewDraft(normalizedMode, nextDraft);
+    setProposalDraft((prev) => buildProposalDraftForMode(normalizedMode, prev));
   }
 
   function updateProposalDraftField(field, value) {
@@ -779,17 +770,22 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
         ...prev,
         [field]: value,
       };
-      syncPreviewDraft(proposalMode, nextDraft);
+      if (proposalMode === 'opcoes' && ['quantidade', 'valor_total_moeda'].includes(field)) {
+        Object.assign(nextDraft, buildAutoOptionDraft({
+          orc,
+          quantityText: field === 'quantidade' ? value : nextDraft.quantidade,
+          totalText: field === 'valor_total_moeda' ? value : nextDraft.valor_total_moeda,
+        }));
+      }
       return nextDraft;
     });
   }
 
   function hydrateProposalDraft() {
     setError('');
-    const nextDraft = buildProposalDraftFromRecord(orc, proposalMode);
+    const nextDraft = buildProposalDraftForMode(proposalMode, {});
     setProposalDraft(nextDraft);
-    syncPreviewDraft(proposalMode, nextDraft);
-    setInfo('Campos do PDF preenchidos automaticamente com os dados do orcamento.');
+    setInfo('Campos da proposta preenchidos automaticamente com os dados do orçamento.');
   }
 
   function buildFinancialPersistencePatch() {
@@ -836,10 +832,9 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
     const comercial = parseDetalhes(detalhes?.comercial);
     const nextMode = normalizeProposalMode(comercial?.proposta_modo || comercial?.proposal_mode || '')
       || inferProposalModeFromFlow(orc, 'direta');
-    const nextDraft = buildProposalDraftFromRecord(orc, nextMode);
+    const nextDraft = buildProposalDraftForMode(nextMode, {});
     setProposalMode(nextMode);
     setProposalDraft(nextDraft);
-    syncPreviewDraft(nextMode, nextDraft);
   }, [
     orc?.id,
     orc?.status_orcamento,
@@ -854,6 +849,34 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
     orc?.proposta_gerada_em,
     orc?.detalhes,
   ]);
+
+  useEffect(() => {
+    syncPreviewDraft(proposalMode, proposalDraft, proposalPreview);
+  }, [orc?.id, proposalMode, proposalDraft, proposalPreview]);
+
+  useEffect(() => {
+    if (proposalMode === 'personalizada' || proposalMode === 'mensal') return;
+    const nextTotal = fmtBRL(Number(financialMetrics.preco_final || 0));
+    if (!nextTotal || nextTotal === '—') return;
+
+    setProposalDraft((prev) => {
+      if (!prev || normalizeText(prev.valor_total_moeda) === nextTotal) return prev;
+      const nextDraft = {
+        ...prev,
+        valor_total_moeda: nextTotal,
+      };
+
+      if (proposalMode === 'opcoes') {
+        Object.assign(nextDraft, buildAutoOptionDraft({
+          orc,
+          quantityText: nextDraft.quantidade,
+          totalText: nextDraft.valor_total_moeda,
+        }));
+      }
+
+      return nextDraft;
+    });
+  }, [financialMetrics.preco_final, proposalMode, orc]);
 
   async function handleSaveProposalDraft() {
     setDraftSaving(true);
@@ -872,9 +895,9 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
         },
       });
       onUpdated?.(updated);
-      setInfo('Rascunho do PDF salvo no orcamento.');
+      setInfo('Rascunho da proposta salvo no orçamento.');
     } catch (err) {
-      setError(err.message ?? 'Erro ao salvar rascunho do PDF.');
+      setError(err.message ?? 'Erro ao salvar rascunho da proposta.');
     } finally {
       setDraftSaving(false);
     }
@@ -1066,7 +1089,6 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
 
   function handleOpenProposalPreview() {
     if (typeof window === 'undefined') return;
-    syncPreviewDraft(proposalMode, proposalDraft);
     const url = new URL('/templates/proposta-hagav-preview-modos', window.location.origin);
     url.searchParams.set('modo', proposalMode);
     window.open(url.toString(), '_blank', 'noopener,noreferrer');
@@ -1176,7 +1198,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
   return (
     <>
       <div className="drawer-overlay" onClick={onClose} />
-      <aside className="drawer-panel flex flex-col">
+      <aside className="drawer-panel orcamento-drawer-panel flex flex-col">
         <div className="drawer-head">
           <div>
             <p className="text-xs text-hagav-gray uppercase tracking-wider mb-1">Orcamento #{orc.id}</p>
@@ -1326,8 +1348,8 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
 
           <div className="bg-hagav-surface border border-hagav-gold/25 rounded-lg p-3 space-y-3">
             <div className="flex items-center justify-between gap-2">
-              <p className="text-xs text-hagav-gold uppercase tracking-wider">PDF comercial (drawer)</p>
-              <span className="text-[11px] text-hagav-gray">Ajuste os parametros da proposta sem alterar o funil.</span>
+              <p className="text-xs text-hagav-gold uppercase tracking-wider">Proposta comercial</p>
+              <span className="text-[11px] text-hagav-gray">Revise e complete os dados antes de gerar o PDF.</span>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
               {PROPOSAL_MODE_OPTIONS.map((mode) => (
@@ -1341,7 +1363,9 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
                 </button>
               ))}
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-2">
+            <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.08fr)_minmax(340px,0.92fr)] gap-4 items-start">
+              <div className="space-y-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-2">
               <div>
                 <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Nome do cliente</label>
                 <input
@@ -1392,11 +1416,11 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
                   placeholder="{{email_cliente}}"
                 />
               </div>
-            </div>
+                </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-2">
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-2">
               <div>
-                <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Numero da proposta</label>
+                <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Número da proposta</label>
                 <input
                   type="text"
                   value={proposalDraft.numero_proposta || ''}
@@ -1406,7 +1430,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
                 />
               </div>
               <div>
-                <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Data de emissao</label>
+                <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Data de emissão</label>
                 <input
                   type="text"
                   value={proposalDraft.data_emissao || ''}
@@ -1416,7 +1440,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
                 />
               </div>
               <div>
-                <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Data de validade</label>
+                <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Validade da proposta</label>
                 <input
                   type="text"
                   value={proposalDraft.data_validade || ''}
@@ -1436,7 +1460,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
                 />
               </div>
               <div>
-                <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Duracao (meses)</label>
+                <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Duração do contrato</label>
                 <input
                   type="text"
                   value={proposalDraft.duracao_contrato_meses || ''}
@@ -1445,11 +1469,11 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
                   placeholder="{{duracao_contrato_meses}}"
                 />
               </div>
-            </div>
+                </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-2">
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-2">
               <div>
-                <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Servico principal</label>
+                <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Serviço</label>
                 <input
                   type="text"
                   value={proposalDraft.servico_principal || ''}
@@ -1469,7 +1493,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
                 />
               </div>
               <div>
-                <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Prazo de entrega</label>
+                <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Prazo</label>
                 <input
                   type="text"
                   value={proposalDraft.prazo || ''}
@@ -1479,7 +1503,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
                 />
               </div>
               <div>
-                <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Valor total (moeda)</label>
+                <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Valor total</label>
                 <input
                   type="text"
                   value={proposalDraft.valor_total_moeda || ''}
@@ -1488,176 +1512,186 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
                   placeholder="{{valor_total_moeda}}"
                 />
               </div>
-            </div>
-
-            {proposalMode === 'mensal' && (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                <div>
-                  <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Quantidade mensal</label>
-                  <input
-                    type="text"
-                    value={proposalDraft.quantidade_mensal || ''}
-                    onChange={(e) => updateProposalDraftField('quantidade_mensal', e.target.value)}
-                    className="hinput w-full"
-                    placeholder="{{quantidade_mensal}}"
-                  />
                 </div>
-                <div>
-                  <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Valor mensal</label>
-                  <input
-                    type="text"
-                    value={proposalDraft.valor_mensal_moeda || ''}
-                    onChange={(e) => updateProposalDraftField('valor_mensal_moeda', e.target.value)}
-                    className="hinput w-full"
-                    placeholder="{{valor_mensal_moeda}}"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Escopo mensal</label>
-                  <input
-                    type="text"
-                    value={proposalDraft.escopo_mensal || ''}
-                    onChange={(e) => updateProposalDraftField('escopo_mensal', e.target.value)}
-                    className="hinput w-full"
-                    placeholder="{{escopo_mensal}}"
-                  />
-                </div>
-              </div>
-            )}
 
-            {proposalMode === 'personalizada' && (
-              <div>
-                <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Valor personalizado</label>
-                <input
-                  type="text"
-                  value={proposalDraft.valor_personalizado_moeda || ''}
-                  onChange={(e) => updateProposalDraftField('valor_personalizado_moeda', e.target.value)}
-                  className="hinput w-full"
-                  placeholder="{{valor_personalizado_moeda}}"
-                />
-              </div>
-            )}
-
-            <div>
-              <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Escopo comercial</label>
-              <textarea
-                value={proposalDraft.escopo_comercial || ''}
-                onChange={(e) => updateProposalDraftField('escopo_comercial', e.target.value)}
-                rows={3}
-                className="hinput w-full resize-none"
-                placeholder="{{escopo_comercial}}"
-              />
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-              <div>
-                <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Condições comerciais</label>
-                <textarea
-                  value={proposalDraft.condicoes_comerciais || ''}
-                  onChange={(e) => updateProposalDraftField('condicoes_comerciais', e.target.value)}
-                  rows={4}
-                  className="hinput w-full resize-none"
-                  placeholder="{{condicoes_comerciais}}"
-                />
-              </div>
-              <div>
-                <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Referencia</label>
-                <textarea
-                  value={proposalDraft.referencia_texto || ''}
-                  onChange={(e) => updateProposalDraftField('referencia_texto', e.target.value)}
-                  rows={4}
-                  className="hinput w-full resize-none"
-                  placeholder="{{referencia_texto}}"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-              <div>
-                <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Observacao adicional</label>
-                <textarea
-                  value={proposalDraft.observacao_adicional || ''}
-                  onChange={(e) => updateProposalDraftField('observacao_adicional', e.target.value)}
-                  rows={2}
-                  className="hinput w-full resize-none"
-                  placeholder="{{observacao_adicional}}"
-                />
-              </div>
-              <div>
-                <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">CTA final</label>
-                <textarea
-                  value={proposalDraft.cta_aprovacao || ''}
-                  onChange={(e) => updateProposalDraftField('cta_aprovacao', e.target.value)}
-                  rows={2}
-                  className="hinput w-full resize-none"
-                  placeholder="{{cta_aprovacao}}"
-                />
-              </div>
-            </div>
-
-            {proposalMode === 'opcoes' && (
-              <div className="space-y-2 border border-hagav-border rounded-lg p-2.5 bg-hagav-dark/35">
-                <p className="text-[11px] text-hagav-gold uppercase tracking-wider">Opcoes de investimento</p>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                  {[1, 2, 3].map((index) => (
-                    <div key={index} className="space-y-1.5 border border-hagav-border rounded-lg p-2">
+                {proposalMode === 'mensal' && (
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                    <div>
+                      <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Quantidade mensal</label>
                       <input
                         type="text"
-                        value={proposalDraft[`opcao${index}_titulo`] || ''}
-                        onChange={(e) => updateProposalDraftField(`opcao${index}_titulo`, e.target.value)}
+                        value={proposalDraft.quantidade_mensal || ''}
+                        onChange={(e) => updateProposalDraftField('quantidade_mensal', e.target.value)}
                         className="hinput w-full"
-                        placeholder={`{{opcao${index}_titulo}}`}
-                      />
-                      <input
-                        type="text"
-                        value={proposalDraft[`opcao${index}_qtd`] || ''}
-                        onChange={(e) => updateProposalDraftField(`opcao${index}_qtd`, e.target.value)}
-                        className="hinput w-full"
-                        placeholder={`{{opcao${index}_qtd}}`}
-                      />
-                      <input
-                        type="text"
-                        value={proposalDraft[`opcao${index}_preco`] || ''}
-                        onChange={(e) => updateProposalDraftField(`opcao${index}_preco`, e.target.value)}
-                        className="hinput w-full"
-                        placeholder={`{{opcao${index}_preco}}`}
-                      />
-                      <input
-                        type="text"
-                        value={proposalDraft[`opcao${index}_unitario`] || ''}
-                        onChange={(e) => updateProposalDraftField(`opcao${index}_unitario`, e.target.value)}
-                        className="hinput w-full"
-                        placeholder={`{{opcao${index}_unitario}}`}
-                      />
-                      <input
-                        type="text"
-                        value={proposalDraft[`opcao${index}_desc`] || ''}
-                        onChange={(e) => updateProposalDraftField(`opcao${index}_desc`, e.target.value)}
-                        className="hinput w-full"
-                        placeholder={`{{opcao${index}_desc}}`}
-                      />
-                      <input
-                        type="text"
-                        value={proposalDraft[`opcao${index}_desconto`] || ''}
-                        onChange={(e) => updateProposalDraftField(`opcao${index}_desconto`, e.target.value)}
-                        className="hinput w-full"
-                        placeholder={`{{opcao${index}_desconto}}`}
+                        placeholder="{{quantidade_mensal}}"
                       />
                     </div>
-                  ))}
-                </div>
+                    <div>
+                      <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Valor mensal</label>
+                      <input
+                        type="text"
+                        value={proposalDraft.valor_mensal_moeda || ''}
+                        onChange={(e) => updateProposalDraftField('valor_mensal_moeda', e.target.value)}
+                        className="hinput w-full"
+                        placeholder="{{valor_mensal_moeda}}"
+                      />
+                    </div>
+                    <div>
+                  <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Escopo mensal</label>
+                      <input
+                        type="text"
+                        value={proposalDraft.escopo_mensal || ''}
+                        onChange={(e) => updateProposalDraftField('escopo_mensal', e.target.value)}
+                        className="hinput w-full"
+                        placeholder="{{escopo_mensal}}"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {proposalMode === 'personalizada' && (
+                  <div>
+                    <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Valor personalizado</label>
+                    <input
+                      type="text"
+                      value={proposalDraft.valor_personalizado_moeda || ''}
+                      onChange={(e) => updateProposalDraftField('valor_personalizado_moeda', e.target.value)}
+                      className="hinput w-full"
+                      placeholder="{{valor_personalizado_moeda}}"
+                    />
+                  </div>
+                )}
+
                 <div>
-                  <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Texto comparativo</label>
+                  <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Escopo / descricao da proposta</label>
                   <textarea
-                    value={proposalDraft.texto_comparativo || ''}
-                    onChange={(e) => updateProposalDraftField('texto_comparativo', e.target.value)}
-                    rows={2}
+                    value={proposalDraft.escopo_comercial || ''}
+                    onChange={(e) => updateProposalDraftField('escopo_comercial', e.target.value)}
+                    rows={3}
                     className="hinput w-full resize-none"
-                    placeholder="{{texto_comparativo}}"
+                    placeholder="{{escopo_comercial}}"
                   />
                 </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Condições comerciais</label>
+                    <textarea
+                      value={proposalDraft.condicoes_comerciais || ''}
+                      onChange={(e) => updateProposalDraftField('condicoes_comerciais', e.target.value)}
+                      rows={4}
+                      className="hinput w-full resize-none"
+                      placeholder="{{condicoes_comerciais}}"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Referência</label>
+                    <textarea
+                      value={proposalDraft.referencia_texto || ''}
+                      onChange={(e) => updateProposalDraftField('referencia_texto', e.target.value)}
+                      rows={4}
+                      className="hinput w-full resize-none"
+                      placeholder="{{referencia_texto}}"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Observação adicional</label>
+                    <textarea
+                      value={proposalDraft.observacao_adicional || ''}
+                      onChange={(e) => updateProposalDraftField('observacao_adicional', e.target.value)}
+                      rows={2}
+                      className="hinput w-full resize-none"
+                      placeholder="{{observacao_adicional}}"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">CTA final do WhatsApp</label>
+                    <textarea
+                      value={proposalDraft.cta_aprovacao || ''}
+                      onChange={(e) => updateProposalDraftField('cta_aprovacao', e.target.value)}
+                      rows={2}
+                      className="hinput w-full resize-none"
+                      placeholder="{{cta_aprovacao}}"
+                    />
+                  </div>
+                </div>
+
+                {proposalMode === 'opcoes' && (
+                  <div className="space-y-2 border border-hagav-border rounded-lg p-2.5 bg-hagav-dark/35">
+                    <p className="text-[11px] text-hagav-gold uppercase tracking-wider">Opções de investimento</p>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                      {[1, 2, 3].map((index) => (
+                        <div key={index} className="space-y-1.5 border border-hagav-border rounded-lg p-2">
+                          <input
+                            type="text"
+                            value={proposalDraft[`opcao${index}_titulo`] || ''}
+                            onChange={(e) => updateProposalDraftField(`opcao${index}_titulo`, e.target.value)}
+                            className="hinput w-full"
+                            placeholder={`{{opcao${index}_titulo}}`}
+                          />
+                          <input
+                            type="text"
+                            value={proposalDraft[`opcao${index}_qtd`] || ''}
+                            onChange={(e) => updateProposalDraftField(`opcao${index}_qtd`, e.target.value)}
+                            className="hinput w-full"
+                            placeholder={`{{opcao${index}_qtd}}`}
+                          />
+                          <input
+                            type="text"
+                            value={proposalDraft[`opcao${index}_preco`] || ''}
+                            onChange={(e) => updateProposalDraftField(`opcao${index}_preco`, e.target.value)}
+                            className="hinput w-full"
+                            placeholder={`{{opcao${index}_preco}}`}
+                          />
+                          <input
+                            type="text"
+                            value={proposalDraft[`opcao${index}_unitario`] || ''}
+                            onChange={(e) => updateProposalDraftField(`opcao${index}_unitario`, e.target.value)}
+                            className="hinput w-full"
+                            placeholder={`{{opcao${index}_unitario}}`}
+                          />
+                          <input
+                            type="text"
+                            value={proposalDraft[`opcao${index}_desc`] || ''}
+                            onChange={(e) => updateProposalDraftField(`opcao${index}_desc`, e.target.value)}
+                            className="hinput w-full"
+                            placeholder={`{{opcao${index}_desc}}`}
+                          />
+                          <input
+                            type="text"
+                            value={proposalDraft[`opcao${index}_desconto`] || ''}
+                            onChange={(e) => updateProposalDraftField(`opcao${index}_desconto`, e.target.value)}
+                            className="hinput w-full"
+                            placeholder={`{{opcao${index}_desconto}}`}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                    <div>
+                      <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Texto comparativo (opcional)</label>
+                      <textarea
+                        value={proposalDraft.texto_comparativo || ''}
+                        onChange={(e) => updateProposalDraftField('texto_comparativo', e.target.value)}
+                        rows={2}
+                        className="hinput w-full resize-none"
+                        placeholder="{{texto_comparativo}}"
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
-            )}
+
+              <div className="space-y-2 xl:sticky xl:top-2">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs text-hagav-gray uppercase tracking-wider">Preview da proposta</p>
+                  <span className="text-[11px] text-hagav-gray">Atualiza conforme você edita.</span>
+                </div>
+                <ProposalPreview preview={proposalPreview} />
+              </div>
+            </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-2">
               <button
@@ -1667,7 +1701,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
                 className="btn-ghost btn-sm"
               >
                 <RotateCw size={13} />
-                Preencher automatico
+                Preencher automático
               </button>
               <button
                 type="button"
@@ -1685,7 +1719,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
                 className="btn-ghost btn-sm"
               >
                 <Eye size={13} />
-                Preview HTML
+                Abrir preview
               </button>
               <button
                 type="button"

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Save, RefreshCw, SlidersHorizontal, BarChart3, ShieldCheck, Settings2 } from 'lucide-react';
 import { fetchCommercialSettings, saveCommercialSettings } from '@/lib/supabase';
-import { COMMERCIAL_DEFAULTS } from '@/lib/commercial';
+import { COMMERCIAL_DEFAULTS, normalizePricingRules } from '@/lib/commercial';
 
 function Section({ icon: Icon, title, description, children }) {
   return (
@@ -42,6 +42,19 @@ function NumberField({ label, value, onChange, step = 1, min = 0, max }) {
   );
 }
 
+function SelectField({ label, value, onChange, options = [] }) {
+  return (
+    <label className="space-y-1">
+      <span className="text-xs text-hagav-gray uppercase tracking-wider">{label}</span>
+      <select className="hselect w-full" value={value} onChange={(event) => onChange(event.target.value)}>
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>{option.label}</option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
 function deepMerge(base, override) {
   if (!override || typeof override !== 'object') return base;
   if (!base || typeof base !== 'object') return override;
@@ -76,6 +89,20 @@ const SERVICE_KEYS = [
   ['default_dr', 'Fallback DR'],
 ];
 
+const SERVICE_HOUR_KEYS = [
+  ['reels_shorts_tiktok', 'Reels / Shorts / TikTok'],
+  ['criativo_trafego_pago', 'Criativo trafego pago'],
+  ['corte_podcast', 'Corte podcast'],
+  ['video_medio', 'Video medio'],
+  ['depoimento', 'Depoimento'],
+  ['videoaula_modulo', 'Videoaula / modulo'],
+  ['youtube', 'YouTube'],
+  ['vsl_15', 'VSL ate 15min'],
+  ['vsl_longa', 'VSL longa'],
+  ['motion', 'Motion'],
+  ['default', 'Fallback geral'],
+];
+
 export default function ConfiguracoesPage() {
   const defaults = useMemo(() => ({
     scoreWeights: COMMERCIAL_DEFAULTS.scoreWeights,
@@ -98,7 +125,7 @@ export default function ConfiguracoesPage() {
     try {
       const settings = await fetchCommercialSettings();
       setScoreWeights(deepMerge(defaults.scoreWeights, settings?.scoreWeights || {}));
-      setPricing(deepMerge(defaults.pricing, settings?.pricing || {}));
+      setPricing(normalizePricingRules(deepMerge(defaults.pricing, settings?.pricing || {})));
       setPipelineStatusText((settings?.pipelineStatus || defaults.pipelineStatus).join(', '));
     } catch (err) {
       console.error('[Configuracoes]', err);
@@ -155,7 +182,7 @@ export default function ConfiguracoesPage() {
     try {
       await saveCommercialSettings({
         scoreWeights,
-        pricing,
+        pricing: normalizePricingRules(pricing),
         pipelineStatus,
       });
       setSaved(true);
@@ -201,19 +228,52 @@ export default function ConfiguracoesPage() {
       <Section
         icon={SlidersHorizontal}
         title="Pricing base"
-        description="Precos de referencia por tipo de servico."
+        description="Base de mercado por servico, modo de piso e presets operacionais por hora."
       >
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          {SERVICE_KEYS.map(([key, label]) => (
-            <NumberField
-              key={key}
-              label={label}
-              value={Number(pricing?.serviceBase?.[key] || 0)}
-              onChange={(v) => setPricingPath(['serviceBase', key], v)}
-              step={1}
-              min={0}
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <SelectField
+              label="Preco base"
+              value={String(pricing?.basePriceMode || 'reference')}
+              onChange={(value) => setPricingPath(['basePriceMode'], value)}
+              options={[
+                { value: 'reference', label: 'Referencia de mercado' },
+                { value: 'floor', label: 'Piso minimo' },
+              ]}
             />
-          ))}
+          </div>
+
+          <div>
+            <p className="text-xs text-hagav-gray uppercase tracking-wider mb-2">Preco base por servico</p>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              {SERVICE_KEYS.map(([key, label]) => (
+                <NumberField
+                  key={key}
+                  label={label}
+                  value={Number(pricing?.serviceBase?.[key] || 0)}
+                  onChange={(v) => setPricingPath(['serviceBase', key], v)}
+                  step={1}
+                  min={0}
+                />
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <p className="text-xs text-hagav-gray uppercase tracking-wider mb-2">Horas base por servico</p>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              {SERVICE_HOUR_KEYS.map(([key, label]) => (
+                <NumberField
+                  key={key}
+                  label={label}
+                  value={Number(pricing?.serviceHours?.[key] || 0)}
+                  onChange={(v) => setPricingPath(['serviceHours', key], v)}
+                  step={0.25}
+                  min={0}
+                />
+              ))}
+            </div>
+          </div>
         </div>
       </Section>
 
@@ -266,7 +326,7 @@ export default function ConfiguracoesPage() {
         description="Controles de risco comercial e status validos no funil."
       >
         <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
-          <NumberField label="CHO hora" value={Number(pricing?.margem?.choHora || 0)} onChange={(v) => setPricingPath(['margem', 'choHora'], v)} step={0.01} min={0} />
+          <NumberField label="C/HORA" value={Number(pricing?.margem?.choHora || 0)} onChange={(v) => setPricingPath(['margem', 'choHora'], v)} step={0.01} min={0} />
           <NumberField label="Margem minima segura" value={Number(pricing?.margem?.minimaSegura || 0)} onChange={(v) => setPricingPath(['margem', 'minimaSegura'], v)} min={0} max={100} />
           <NumberField label="Margem saudavel min" value={Number(pricing?.margem?.saudavelMin || 0)} onChange={(v) => setPricingPath(['margem', 'saudavelMin'], v)} min={0} max={100} />
           <NumberField label="Margem saudavel max" value={Number(pricing?.margem?.saudavelMax || 0)} onChange={(v) => setPricingPath(['margem', 'saudavelMax'], v)} min={0} max={100} />

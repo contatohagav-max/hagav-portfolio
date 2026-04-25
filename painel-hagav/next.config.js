@@ -15,6 +15,9 @@ const publicSupabaseAnonKey = String(
 
 const nextConfig = {
   reactStrictMode: true,
+  experimental: {
+    externalDir: true,
+  },
 
   // Static export para hospedar em /admin no mesmo domínio
   output: 'export',

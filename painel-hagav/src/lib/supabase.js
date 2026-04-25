@@ -17,6 +17,7 @@ import {
   mapLegacyOrcamentoStatusToDeal,
   mapDealStatusToLegacyLead,
   mapDealStatusToLegacyOrcamento,
+  normalizePricingRules,
 } from '@/lib/commercial';
 
 const supabaseUrl = String(process.env.NEXT_PUBLIC_SUPABASE_URL || '')
@@ -640,6 +641,8 @@ export async function fetchOrcamentos({
 } = {}) {
   const client = getSupabase();
   if (!client) return [];
+  const settings = await fetchCommercialSettings();
+  const pricingRules = normalizePricingRules(settings?.pricing || COMMERCIAL_DEFAULTS.pricing);
 
   let query = client
     .from('deals')
@@ -660,7 +663,9 @@ export async function fetchOrcamentos({
   const { data, error } = await query;
   if (error) throw error;
 
-  let orcamentos = (data ?? []).map(mapDealToOrcamentoRecord).map(enrichOrcamentoRecord);
+  let orcamentos = (data ?? [])
+    .map(mapDealToOrcamentoRecord)
+    .map((record) => enrichOrcamentoRecord(record, pricingRules));
 
   if (urgencia) orcamentos = orcamentos.filter((orc) => orc.urgencia === urgencia);
   if (prioridade) orcamentos = orcamentos.filter((orc) => orc.prioridade === prioridade);
@@ -672,6 +677,8 @@ export async function fetchOrcamentos({
 export async function updateOrcamento(id, patch) {
   const client = getSupabase();
   if (!client) throw new Error('Supabase nao configurado');
+  const settings = await fetchCommercialSettings();
+  const pricingRules = normalizePricingRules(settings?.pricing || COMMERCIAL_DEFAULTS.pricing);
 
   const payload = normalizeOrcamentoPatchToDeals(patch);
   const hasPrecoFinalPatch = Object.prototype.hasOwnProperty.call(payload, 'preco_final');
@@ -689,7 +696,7 @@ export async function updateOrcamento(id, patch) {
 
   if (error) throw error;
 
-  let nextRecord = enrichOrcamentoRecord(mapDealToOrcamentoRecord(data));
+  let nextRecord = enrichOrcamentoRecord(mapDealToOrcamentoRecord(data), pricingRules);
 
   if (shouldRecalculatePricing) {
     const recomputeSeed = mapDealToOrcamentoRecord({
@@ -705,9 +712,11 @@ export async function updateOrcamento(id, patch) {
       ajuste_referencia_percent: undefined,
       ajuste_multicamera_percent: undefined,
     });
-    const recomputed = enrichOrcamentoRecord(recomputeSeed);
+    const recomputed = enrichOrcamentoRecord(recomputeSeed, pricingRules);
 
     const recalcPatch = {
+      preco_base: Number(recomputed.preco_base || 0),
+      valor_sugerido: Number(recomputed.valor_sugerido || 0),
       margem_estimada: Number(recomputed.margem_estimada || 0),
       revisao_manual: Boolean(recomputed.revisao_manual),
       valor_estimado: Number(recomputed.valor_estimado || 0),
@@ -718,6 +727,8 @@ export async function updateOrcamento(id, patch) {
       complexidade_nivel: String(recomputed.complexidade_nivel || ''),
       ajuste_referencia_percent: Number(recomputed.ajuste_referencia_percent || 0),
       ajuste_multicamera_percent: Number(recomputed.ajuste_multicamera_percent || 0),
+      pacote_sugerido: String(recomputed.pacote_sugerido || ''),
+      motivo_calculo: String(recomputed.motivo_calculo || ''),
     };
 
     const { data: recalcData, error: recalcError } = await client
@@ -728,12 +739,12 @@ export async function updateOrcamento(id, patch) {
       .single();
 
     if (!recalcError && recalcData) {
-      nextRecord = enrichOrcamentoRecord(mapDealToOrcamentoRecord(recalcData));
+      nextRecord = enrichOrcamentoRecord(mapDealToOrcamentoRecord(recalcData), pricingRules);
     } else if (recalcError) {
       console.warn('[Orcamentos][Recalculo]', recalcError);
     }
   } else if (shouldSyncPriceDerived) {
-    const derived = deriveFinancialMetricsFromFinalPrice(nextRecord, payload.preco_final);
+    const derived = deriveFinancialMetricsFromFinalPrice(nextRecord, payload.preco_final, pricingRules);
     const recalcPatch = {
       valor_estimado: Number(derived.valor_estimado || 0),
     };
@@ -746,7 +757,7 @@ export async function updateOrcamento(id, patch) {
       .single();
 
     if (!recalcError && recalcData) {
-      nextRecord = enrichOrcamentoRecord(mapDealToOrcamentoRecord(recalcData));
+      nextRecord = enrichOrcamentoRecord(mapDealToOrcamentoRecord(recalcData), pricingRules);
     } else if (recalcError) {
       console.warn('[Orcamentos][PrecoFinal]', recalcError);
     } else {
@@ -1034,7 +1045,10 @@ export async function updateContato(id, patch) {
 export async function fetchCommercialSettings() {
   const client = getSupabase();
   if (!client) {
-    return { ...COMMERCIAL_DEFAULTS };
+    return {
+      ...COMMERCIAL_DEFAULTS,
+      pricing: normalizePricingRules(COMMERCIAL_DEFAULTS.pricing),
+    };
   }
 
   const { data, error } = await client
@@ -1052,23 +1066,25 @@ export async function fetchCommercialSettings() {
       settings.scoreWeights = deepMerge(settings.scoreWeights, row.valor);
     }
     if (row.chave === 'pricing_rules' && row.valor && typeof row.valor === 'object') {
-      settings.pricing = deepMerge(settings.pricing, row.valor);
+      settings.pricing = normalizePricingRules(deepMerge(settings.pricing, row.valor));
     }
     if (row.chave === 'pipeline_status' && Array.isArray(row.valor)) {
       settings.pipelineStatus = row.valor;
     }
   }
 
+  settings.pricing = normalizePricingRules(settings.pricing || COMMERCIAL_DEFAULTS.pricing);
   return settings;
 }
 
 export async function saveCommercialSettings(settings) {
   const client = getSupabase();
   if (!client) throw new Error('Supabase nao configurado');
+  const normalizedPricing = normalizePricingRules(settings?.pricing || COMMERCIAL_DEFAULTS.pricing);
 
   const rows = [
     { chave: 'score_weights', valor: settings.scoreWeights || COMMERCIAL_DEFAULTS.scoreWeights },
-    { chave: 'pricing_rules', valor: settings.pricing || COMMERCIAL_DEFAULTS.pricing },
+    { chave: 'pricing_rules', valor: normalizedPricing },
     { chave: 'pipeline_status', valor: settings.pipelineStatus || COMMERCIAL_DEFAULTS.pipelineStatus },
   ];
 

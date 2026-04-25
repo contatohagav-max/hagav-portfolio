@@ -135,13 +135,20 @@ export function buildCommercialScopeText(orc = {}, revisoesText = '') {
   ].join(' ');
 }
 
-export function buildAutoOptionDraft({ orc, quantityText, totalText }) {
+export function buildAutoOptionDraft({ orc, quantityText, totalText, pricingRules }) {
   const unitLabels = inferUnitLabels(orc);
-  const requestedQuantity = parseQuantityNumber(quantityText, 1);
+  const serviceItems = getServiceItems(orc);
+  const inferredQuantity = serviceItems.reduce((sum, item) => (
+    sum + parseQuantityNumber(item?.quantidade, 1)
+  ), 0) || 1;
+  const requestedQuantity = serviceItems.length > 1
+    ? inferredQuantity
+    : parseQuantityNumber(quantityText, inferredQuantity);
   const requestedTotal = parseCurrencyNumber(totalText, 0);
   const pricing = buildComparativeProposalPricing(orc, {
     baseQuantity: requestedQuantity,
     baseTotal: requestedTotal,
+    pricingRules,
   });
   const [pedidoAtual, maisVolume, melhorCustoBeneficio] = pricing.scenarios || [];
 

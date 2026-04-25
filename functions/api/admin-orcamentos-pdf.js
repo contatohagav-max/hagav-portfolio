@@ -858,12 +858,18 @@ function mergeServiceItems(items, fallbackService = "Conteudo audiovisual", fall
 }
 
 function extractServiceItems(row, detalhes) {
+  const calculo = (
+    detalhes?.calculoAutomatico
+    && typeof detalhes.calculoAutomatico === "object"
+    && !Array.isArray(detalhes.calculoAutomatico)
+  ) ? detalhes.calculoAutomatico : {};
   const answers = (
     detalhes?.respostasCompletas
     && typeof detalhes.respostasCompletas === "object"
     && !Array.isArray(detalhes.respostasCompletas)
   ) ? detalhes.respostasCompletas : {};
 
+  const fromCalcArray = parseItemsFromArray(calculo?.itensServico);
   const fromArray = parseItemsFromArray(detalhes?.itensServico);
   const fromMaps = [
     parseItemsFromMap(answers?.flow_quantidades),
@@ -894,7 +900,7 @@ function extractServiceItems(row, detalhes) {
   );
 
   return mergeServiceItems(
-    [...fromArray, ...fromMaps, ...fromText],
+    [...fromCalcArray, ...fromArray, ...fromMaps, ...fromText],
     fallbackService,
     fallbackQty
   ).slice(0, 8);
@@ -1029,8 +1035,8 @@ function formatComparativeOptions(qtyBase, totalBase) {
   const unitBase = safeTotal / safeQty;
   const qty2 = Math.max(safeQty + 1, Math.round(safeQty * 1.5));
   const qty3 = Math.max(30, Math.round(safeQty * 3));
-  const discount2 = qty2 >= 30 ? 15 : (qty2 >= 15 ? 5 : 0);
-  const discount3 = qty3 >= 30 ? 15 : (qty3 >= 15 ? 5 : 0);
+  const discount2 = qty2 >= 30 ? 12 : (qty2 >= 20 ? 8 : (qty2 >= 10 ? 5 : (qty2 >= 5 ? 3 : 0)));
+  const discount3 = qty3 >= 30 ? 12 : (qty3 >= 20 ? 8 : (qty3 >= 10 ? 5 : (qty3 >= 5 ? 3 : 0)));
   const unit2 = unitBase * (1 - (discount2 / 100));
   const unit3 = unitBase * (1 - (discount3 / 100));
   const total2 = qty2 * unit2;
@@ -1101,6 +1107,8 @@ const TEMPLATE_OVERRIDE_ALLOWLIST = new Set([
   "valor_total_moeda",
   "valor_mensal_moeda",
   "valor_personalizado_moeda",
+  "pacote_sugerido",
+  "economia_total_moeda",
   "forma_pagamento",
   "data_validade",
   "data_emissao",
@@ -1180,6 +1188,9 @@ function buildTemplateValues(row, env, options = {}) {
   const comercial = (detalhes?.comercial && typeof detalhes.comercial === "object")
     ? detalhes.comercial
     : {};
+  const calculo = (detalhes?.calculoAutomatico && typeof detalhes.calculoAutomatico === "object")
+    ? detalhes.calculoAutomatico
+    : {};
   const respostas = parseDetalhesAnswers(detalhes);
   const flowHintMode = String(row?.fluxo || "").toUpperCase() === "DR" ? "mensal" : "direta";
   const savedMode = normalizeProposalMode(firstNonEmptyValue(comercial?.proposta_modo, comercial?.proposal_mode));
@@ -1189,10 +1200,6 @@ function buildTemplateValues(row, env, options = {}) {
   const serviceItems = extractServiceItems(row, detalhes);
   const quantitySummary = buildQuantitySummary(serviceItems);
   const qtyTotal = Math.max(1, Number(quantitySummary?.total || 1));
-  const baseUnitValue = 170;
-  const subtotalReference = qtyTotal * baseUnitValue;
-  const discountPercent = qtyTotal >= 30 ? 15 : (qtyTotal >= 15 ? 10 : 0);
-  const totalReferenceWithDiscount = subtotalReference * (1 - (discountPercent / 100));
   const primaryService = serviceItems.length > 1
     ? `Multiplos servicos (${serviceItems.length})`
     : (serviceItems[0]?.servico || "Conteudo audiovisual");
@@ -1252,16 +1259,18 @@ function buildTemplateValues(row, env, options = {}) {
       ""
     )
   );
-  const precoBaseNum = Number(row?.preco_base || 0);
+  const precoBaseNum = Number(calculo?.precoBase ?? row?.preco_base ?? 0);
   const precoFinalNum = Number(
     comercial?.preco_final
     ?? row?.preco_final
+    ?? calculo?.precoFinal
     ?? row?.valor_sugerido
     ?? row?.preco_base
     ?? 0
   );
   const valorSugeridoNum = Number(
-    row?.valor_sugerido
+    calculo?.valorSugerido
+    ?? row?.valor_sugerido
     ?? row?.preco_final
     ?? row?.preco_base
     ?? comercial?.preco_final
@@ -1270,9 +1279,24 @@ function buildTemplateValues(row, env, options = {}) {
   const valorTotalNum = Number(
     comercial?.valor_total
     ?? row?.preco_final
+    ?? calculo?.precoFinal
     ?? row?.valor_sugerido
     ?? row?.preco_base
     ?? 0
+  );
+  const baseUnitValue = qtyTotal > 0
+    ? Number((precoBaseNum || valorSugeridoNum || precoFinalNum || 0) / qtyTotal)
+    : 0;
+  const economiaTotalNum = Number(calculo?.economiaTotal ?? row?.economia_total ?? 0);
+  const discountPercent = Number(calculo?.descontoVolumePercent ?? row?.desconto_volume_percent ?? 0);
+  const subtotalReference = Math.max(precoBaseNum, baseUnitValue * qtyTotal);
+  const totalReferenceWithDiscount = Math.max(precoFinalNum, subtotalReference - economiaTotalNum);
+  const pacoteSugerido = firstNonEmptyValue(
+    templateOverrides?.pacote_sugerido,
+    comercial?.pacote_sugerido,
+    row?.pacote_sugerido,
+    calculo?.pacoteSugerido,
+    primaryService
   );
   const escopo = firstNonEmptyValue(
     templateOverrides?.escopo_comercial,
@@ -1374,9 +1398,9 @@ function buildTemplateValues(row, env, options = {}) {
   if (proposalMode === "mensal") {
     const mensalDisplay = firstNonEmptyValue(valorMensal, valorTotalMoeda);
     if (mensalDisplay) {
-      valorTotalMoeda = mensalDisplay.toLowerCase().includes("/mes")
+      valorTotalMoeda = /\/m[eê]s/i.test(mensalDisplay)
         ? mensalDisplay
-        : `${mensalDisplay}/mes`;
+        : `${mensalDisplay}/mês`;
     }
   }
   if (proposalMode === "personalizada") {
@@ -1432,6 +1456,13 @@ function buildTemplateValues(row, env, options = {}) {
     templateOverrides?.investimento_label,
     proposalMode === "mensal" ? "Valor mensal" : "Valor total"
   );
+  const unitLabel = inferUnitByService(primaryService, 1);
+  const economiaTotalTexto = economiaTotalNum > 0
+    ? formatMoney(economiaTotalNum)
+    : "Sem economia por escala";
+  const descontoAplicadoTexto = discountPercent > 0 || economiaTotalNum > 0
+    ? `Faixa aplicada: ${discountPercent > 0 ? `${Math.round(discountPercent)}%` : "ajuste protegido"} com economia de ${formatMoney(economiaTotalNum)}.`
+    : "Nesta proposta, nao foi aplicado desconto progressivo por volume.";
 
   const revisoesTexto = normalizeRevisoesText(revisoesInclusas);
   const whatsappHagav = getOfficialWhatsapp(env, detalhes);
@@ -1486,14 +1517,14 @@ function buildTemplateValues(row, env, options = {}) {
     valor_mensal_moeda: valorMensalFinal,
     valor_personalizado_moeda: valorPersonalizado,
     investimento_label: investimentoLabel,
-    valor_unitario_referencia: `${formatMoney(baseUnitValue)} por video`,
-    desconto_tabela_15: `${formatMoney(2550)} -> ${formatMoney(2295)} (10% de desconto)`,
-    desconto_tabela_30: `${formatMoney(5100)} -> ${formatMoney(4335)} (15% de desconto)`,
-    desconto_aplicado_texto: discountPercent > 0
-      ? `Nesta proposta, a faixa de ${discountPercent}% foi considerada na referencia comercial de volume.`
-      : "Nesta proposta, ainda nao foi aplicada faixa de desconto progressivo por volume.",
+    valor_unitario_referencia: `${formatMoney(baseUnitValue)} por ${unitLabel}`,
+    desconto_tabela_15: pacoteSugerido || "-",
+    desconto_tabela_30: economiaTotalTexto,
+    desconto_aplicado_texto: descontoAplicadoTexto,
     subtotal_referencia_moeda: formatMoney(subtotalReference),
     total_referencia_com_desconto_moeda: formatMoney(totalReferenceWithDiscount),
+    pacote_sugerido: pacoteSugerido,
+    economia_total_moeda: economiaTotalTexto,
     condicao_pagamento: condicaoPagamento,
     forma_pagamento: formaPagamento,
     condicoes_comerciais: condicoesComerciais,

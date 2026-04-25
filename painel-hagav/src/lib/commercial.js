@@ -1,4 +1,12 @@
 import { parseISO, isValid, differenceInMinutes } from 'date-fns';
+import {
+  DEFAULT_PRICING_RULES as SHARED_DEFAULT_PRICING_RULES,
+  computeCommercialPricing,
+  deriveFinalPriceMetrics,
+  normalizePricingRules as normalizeSharedPricingRules,
+  parseDurationToHours as parseSharedDurationToHours,
+  formatDurationCompact,
+} from '../../../shared/pricing-engine.js';
 
 const HIGH_VALUE_KEYWORDS = [
   'criativo',
@@ -196,72 +204,17 @@ export function getDealKpiPolicy() {
   };
 }
 
-const DEFAULT_PRICING_RULES = {
-  serviceBase: {
-    reels_shorts_tiktok: 170,
-    criativo_trafego_pago: 204,
-    corte_podcast: 123,
-    video_medio: 264,
-    depoimento: 220,
-    videoaula_modulo: 396,
-    youtube: 607,
-    vsl_15: 880,
-    vsl_longa: 2000,
-    motion_min: 900,
-    motion_max: 2500,
-    default_du: 190,
-    default_dr: 210,
-  },
-  volumeDiscounts: [
-    { min: 1, max: 4, percent: 0 },
-    { min: 5, max: 9, percent: 3 },
-    { min: 10, max: 19, percent: 6 },
-    { min: 20, max: 29, percent: 10 },
-    { min: 30, max: 99999, percent: 10 },
-  ],
-  complexidade: {
-    N1: 0.7,
-    N2: 1,
-    N3: 1.5,
-    n1MaxMin: 30,
-    n2MaxMin: 120,
-  },
-  urgencia: {
-    DU: {
-      '24h': 1.3,
-      '3 dias': 1.15,
-      'Essa semana': 1,
-      'Sem pressa': 1,
-    },
-    DR: {
-      Imediato: 1.2,
-      'Essa semana': 1,
-      'Esse mês': 1,
-      'Estou analisando': 1,
-    },
-    VSL: {
-      '3 dias': 1.4,
-    },
-  },
-  ajustes: {
-    semReferencia: 10,
-    multicamera: 15,
-  },
-  margem: {
-    choHora: 41.67,
-    minimaSegura: 60,
-    saudavelMin: 65,
-    saudavelMax: 75,
-    excelente: 75,
-    recusaAbaixo: 55,
-    repasseEditorMin: 30,
-    repasseEditorMax: 35,
-  },
-  pacotes: {
-    sugerirAcimaQtd: 8,
-    revisaoCapacidadeAcimaQtd: 30,
-  },
-};
+const DEFAULT_PRICING_RULES = SHARED_DEFAULT_PRICING_RULES;
+
+export function normalizePricingRules(value = {}) {
+  return normalizeSharedPricingRules(value);
+}
+
+export function parseDurationToHours(value, fallback = 0) {
+  return parseSharedDurationToHours(value, fallback);
+}
+
+export { formatDurationCompact };
 
 const DR_OFFICIAL_ITEM_TOTALS = {
   reels_shorts_tiktok: {
@@ -470,22 +423,7 @@ function parsePositiveNumber(raw) {
 }
 
 function parseHours(raw) {
-  const text = String(raw || '').toLowerCase().trim();
-  if (!text) return 0;
-
-  const hhmm = text.match(/^(\d{1,2}):(\d{2})$/);
-  if (hhmm) {
-    const hours = Number(hhmm[1]);
-    const minutes = Number(hhmm[2]);
-    return hours + (minutes / 60);
-  }
-
-  const value = parsePositiveNumber(text);
-  if (!value) return 0;
-  if (text.includes('min')) return value / 60;
-  if (text.includes('hora') || text.includes('h')) return value;
-  if (value > 20) return value / 60;
-  return value;
+  return parseDurationToHours(raw, 0);
 }
 
 function parseLabeledMap(value) {
@@ -807,10 +745,21 @@ function normalizeItemPayload(rawItem, defaults = {}) {
     quantidade: normalizeText(rawItem.quantidade || defaults.quantidade) || '-',
     material_gravado: normalizeText(rawItem.material_gravado || defaults.material_gravado),
     tempo_bruto: normalizeText(rawItem.tempo_bruto || defaults.tempo_bruto),
+    horas_estimadas: normalizeText(rawItem.horas_estimadas || rawItem.horas_por_unidade || rawItem.duracao_sugerida || ''),
+    horas_por_unidade: toNumber(rawItem.horas_por_unidade, 0),
+    horas_totais: toNumber(rawItem.horas_totais, 0),
     prazo: normalizeText(rawItem.prazo || defaults.prazo),
     referencia: normalizeText(rawItem.referencia || defaults.referencia),
     preco_base_item: toNumber(rawItem.preco_base_item, 0),
+    preco_referencia_item: toNumber(rawItem.preco_referencia_item, 0),
+    preco_minimo_margem_item: toNumber(rawItem.preco_minimo_margem_item, 0),
+    preco_antes_desconto_item: toNumber(rawItem.preco_antes_desconto_item, 0),
     valor_sugerido_item: toNumber(rawItem.valor_sugerido_item, 0),
+    custo_real_item: toNumber(rawItem.custo_real_item, 0),
+    lucro_item: toNumber(rawItem.lucro_item, 0),
+    margem_item: toNumber(rawItem.margem_item, 0),
+    economia_item: toNumber(rawItem.economia_item, 0),
+    desconto_volume_percent: toNumber(rawItem.desconto_volume_percent, 0),
     complexidade_nivel: normalizeText(rawItem.complexidade_nivel),
     multiplicador_complexidade: toNumber(rawItem.multiplicador_complexidade, 0),
     multiplicador_urgencia: toNumber(rawItem.multiplicador_urgencia, 0),
@@ -894,6 +843,10 @@ function extractServiceItems(record) {
   return extractItemsFromRecordFields(record)
     .map((item) => normalizeItemPayload(item, defaultData))
     .filter(Boolean);
+}
+
+export function extractPricingItemsFromRecord(record) {
+  return extractServiceItems(record);
 }
 
 function applyStructuredFallback(record) {
@@ -1029,14 +982,12 @@ function detectMulticamera(text) {
   return /(multicamera|multi camera|3 camera|tres camera|3\+ camera)/.test(normalized);
 }
 
-function computePricingSnapshot(record) {
+export function computePricingSnapshot(record, pricingRulesInput = DEFAULT_PRICING_RULES) {
   const flow = inferFlow(record);
   const items = extractServiceItems(record);
   const fallbackPrazo = normalizeText(record?.prazo || record?.Prazo || '');
   const fallbackReferencia = normalizeText(record?.referencia || record?.Referencia || '');
   const observacoes = normalizeText(record?.observacoes || record?.Observacoes || '');
-  const multicamera = detectMulticamera(`${observacoes} ${fallbackReferencia}`);
-  const ajusteMulticameraPercent = multicamera ? Number(DEFAULT_PRICING_RULES.ajustes.multicamera || 15) : 0;
 
   const itemList = items.length > 0
     ? items
@@ -1048,145 +999,13 @@ function computePricingSnapshot(record) {
       prazo: fallbackPrazo,
       referencia: fallbackReferencia,
     }];
-
-  const choHora = Number(DEFAULT_PRICING_RULES.margem.choHora || 41.67);
-  const itemHoursByService = {
-    reels_shorts_tiktok: 0.9,
-    criativo_trafego_pago: 1.2,
-    corte_podcast: 0.8,
-    video_medio: 2.1,
-    depoimento: 1.6,
-    videoaula_modulo: 2.8,
-    youtube: 4.0,
-    vsl_15: 6.0,
-    vsl_longa: 14.0,
-    motion: 10.0,
-    default: 1.4,
-  };
-
-  let subtotalBase = 0;
-  let subtotalSuggested = 0;
-  let totalQuantidade = 0;
-  let weightedComplexity = 0;
-  let maxUrgenciaMultiplier = 1;
-  let estimatedHours = 0;
-  let hasManualService = false;
-  let hasN3 = false;
-  let hasForcedManualUrgency = false;
-  let hasVslRawAbove30 = false;
-  let hasNoReference = false;
-  let faixaMinTotal = 0;
-  let faixaMaxTotal = 0;
-  let maxItemDiscountPercent = 0;
-
-  const itensServico = itemList.map((rawItem) => {
-    const servico = normalizeText(rawItem?.servico || 'Servico');
-    const quantidade = Math.max(1, Math.round(parsePositiveNumber(rawItem?.quantidade || '1') || 1));
-    const material = normalizeText(rawItem?.material_gravado);
-    const tempoBruto = normalizeText(rawItem?.tempo_bruto);
-    const prazo = normalizeText(rawItem?.prazo || fallbackPrazo);
-    const referencia = normalizeText(rawItem?.referencia || fallbackReferencia);
-
-    const serviceKey = mapServiceCatalog(servico);
-    const baseUnit = getUnitPriceFromRules(flow, serviceKey);
-    const complexidade = getComplexidadeByMinutes(parseHours(tempoBruto) * 60);
-    const urgenciaContext = getUrgencyContext(flow, prazo || fallbackPrazo, serviceKey);
-    const urgenciaMultiplier = urgenciaContext.multiplier;
-    const drOfficialTotal = flow === 'DR' ? getDrOfficialItemTotal(serviceKey, quantidade) : null;
-
-    const baseItem = drOfficialTotal ?? (baseUnit * quantidade);
-    let suggestedItem = baseItem * complexidade.multiplicador * urgenciaMultiplier;
-    if (flow === 'DR' && drOfficialTotal === null) {
-      const itemDiscountPercent = getVolumeDiscount(quantidade);
-      maxItemDiscountPercent = Math.max(maxItemDiscountPercent, itemDiscountPercent);
-      if (itemDiscountPercent > 0) {
-        suggestedItem *= (1 - (itemDiscountPercent / 100));
-      }
-    }
-    if (inferMaterialState(material) === 'nao') {
-      suggestedItem *= 1.05;
-    }
-
-    const refMissing = !hasReference(referencia);
-    if (refMissing) {
-      hasNoReference = true;
-      suggestedItem *= (1 + Number(DEFAULT_PRICING_RULES.ajustes.semReferencia || 10) / 100);
-    }
-    if (ajusteMulticameraPercent > 0) {
-      suggestedItem *= (1 + (ajusteMulticameraPercent / 100));
-    }
-
-    subtotalBase += baseItem;
-    subtotalSuggested += suggestedItem;
-    totalQuantidade += quantidade;
-    weightedComplexity += complexidade.multiplicador * quantidade;
-    maxUrgenciaMultiplier = Math.max(maxUrgenciaMultiplier, urgenciaMultiplier);
-    hasForcedManualUrgency = hasForcedManualUrgency || Boolean(urgenciaContext.forcedManual);
-
-    const serviceHours = itemHoursByService[serviceKey] || itemHoursByService.default;
-    estimatedHours += (serviceHours * complexidade.multiplicador) * quantidade;
-
-    const spread = serviceKey === 'youtube' || serviceKey === 'vsl_15' || serviceKey === 'vsl_longa' || serviceKey === 'motion' ? 0.2 : 0.1;
-    faixaMinTotal += suggestedItem * (1 - spread);
-    faixaMaxTotal += suggestedItem * (1 + spread);
-
-    const tempoMinutes = parseHours(tempoBruto) * 60;
-    hasManualService = hasManualService || serviceKey === 'motion';
-    hasVslRawAbove30 = hasVslRawAbove30
-      || ((serviceKey === 'vsl_15' || serviceKey === 'vsl_longa') && tempoMinutes > 30);
-    hasN3 = hasN3 || complexidade.nivel === 'N3';
-
-    return {
-      servico,
-      quantidade,
-      material_gravado: material,
-      tempo_bruto: tempoBruto,
-      referencia,
-      prazo,
-      preco_base_item: roundCurrency(baseItem),
-      valor_sugerido_item: roundCurrency(suggestedItem),
-      complexidade_nivel: complexidade.nivel,
-      multiplicador_complexidade: roundCurrency(complexidade.multiplicador),
-      multiplicador_urgencia: roundCurrency(urgenciaMultiplier),
-    };
-  });
-
-  const descontoVolumePercent = maxItemDiscountPercent;
-
-  const precoBase = Math.max(1, roundCurrency(subtotalBase));
-  const valorSugerido = Math.max(1, roundCurrency(subtotalSuggested));
-  const faixaMin = Math.max(1, roundCurrency(faixaMinTotal || (valorSugerido * 0.9)));
-  const faixaMax = Math.max(faixaMin, roundCurrency(faixaMaxTotal || (valorSugerido * 1.1)));
-  const faixaSugerida = `R$ ${faixaMin.toFixed(2)} a R$ ${faixaMax.toFixed(2)}`;
-
-  const custoEstimado = roundCurrency(choHora * Math.max(estimatedHours, 0.5));
-  const margem = valorSugerido > 0 ? ((valorSugerido - custoEstimado) / valorSugerido) * 100 : 0;
-  const margemEstimada = Math.round(Math.min(95, Math.max(0, margem)) * 10) / 10;
-
-  const complexidadeMedia = totalQuantidade > 0 ? weightedComplexity / totalQuantidade : 1;
-  const complexidadeNivel = complexidadeMedia <= 0.8 ? 'N1' : (complexidadeMedia < 1.3 ? 'N2' : 'N3');
-  const revisaoManual = totalQuantidade > Number(DEFAULT_PRICING_RULES.pacotes.revisaoCapacidadeAcimaQtd || 30)
-    || hasManualService
-    || hasN3
-    || hasForcedManualUrgency
-    || hasVslRawAbove30
-    || margemEstimada < Number(DEFAULT_PRICING_RULES.margem.recusaAbaixo || 55);
-
-  return {
-    precoBase,
-    valorSugerido,
-    margemEstimada,
-    faixaSugerida,
-    descontoVolumePercent,
-    multiplicadorUrgencia: roundCurrency(maxUrgenciaMultiplier),
-    multiplicadorComplexidade: roundCurrency(complexidadeMedia),
-    complexidadeNivel,
-    ajusteReferenciaPercent: hasNoReference ? Number(DEFAULT_PRICING_RULES.ajustes.semReferencia || 10) : 0,
-    ajusteMulticameraPercent,
-    revisaoManual,
-    totalQuantidade,
-    itensServico,
-  };
+  return computeCommercialPricing({
+    flow,
+    prazo: fallbackPrazo,
+    referencia: fallbackReferencia,
+    observacoes,
+    items: itemList,
+  }, pricingRulesInput);
 }
 
 function sumServiceItemQuantities(items = []) {
@@ -1277,7 +1096,55 @@ function buildPricingVariantRecord(record, targetTotal = 1) {
   };
 }
 
-export function buildComparativeProposalPricing(record, { baseQuantity, baseTotal } = {}) {
+export function buildRecordFieldsFromItems(items = [], fallback = {}) {
+  const safeItems = Array.isArray(items) ? items.filter(Boolean) : [];
+  const uniqueValues = (field) => [...new Set(
+    safeItems
+      .map((item) => normalizeText(item?.[field]))
+      .filter(Boolean)
+  )];
+
+  const servico = safeItems.length > 0
+    ? safeItems.map((item) => normalizeText(item?.servico)).filter(Boolean).join(' | ')
+    : normalizeText(fallback?.servico);
+
+  const quantidade = safeItems.length > 1
+    ? safeItems.map((item) => `${normalizeText(item?.servico || 'Servico')}: ${normalizeText(item?.quantidade || '-')}`).join(' | ')
+    : normalizeText(safeItems[0]?.quantidade || fallback?.quantidade);
+
+  const materialGravado = safeItems.length > 1
+    ? safeItems.map((item) => `${normalizeText(item?.servico || 'Servico')}: ${normalizeText(item?.material_gravado || '-')}`).join(' | ')
+    : normalizeText(safeItems[0]?.material_gravado || fallback?.material_gravado);
+
+  const tempoBruto = safeItems.length > 1
+    ? safeItems
+      .map((item) => {
+        const tempo = normalizeText(item?.horas_estimadas || item?.tempo_bruto || '');
+        const display = tempo || formatDurationCompact(Number(item?.horas_por_unidade || 0)) || '-';
+        return `${normalizeText(item?.servico || 'Servico')}: ${display}`;
+      })
+      .join(' | ')
+    : normalizeText(
+      safeItems[0]?.horas_estimadas
+      || safeItems[0]?.tempo_bruto
+      || formatDurationCompact(Number(safeItems[0]?.horas_por_unidade || 0))
+      || fallback?.tempo_bruto
+    );
+
+  const prazoValues = uniqueValues('prazo');
+  const referenciaValues = uniqueValues('referencia');
+
+  return {
+    servico,
+    quantidade,
+    material_gravado: materialGravado,
+    tempo_bruto: tempoBruto,
+    prazo: prazoValues.length <= 1 ? (prazoValues[0] || normalizeText(fallback?.prazo)) : prazoValues.join(' | '),
+    referencia: referenciaValues.length <= 1 ? (referenciaValues[0] || normalizeText(fallback?.referencia)) : referenciaValues.join(' | '),
+  };
+}
+
+export function buildComparativeProposalPricing(record, { baseQuantity, baseTotal, pricingRules } = {}) {
   const safeRecord = record && typeof record === 'object' ? record : {};
   const items = extractServiceItems(safeRecord);
   const inferredBaseQty = Math.max(
@@ -1293,7 +1160,7 @@ export function buildComparativeProposalPricing(record, { baseQuantity, baseTota
   const qty3 = Math.max(qty2 + 1, Math.max(30, Math.round(inferredBaseQty * 3)));
 
   const baseRecord = buildPricingVariantRecord(safeRecord, inferredBaseQty);
-  const baseSnapshot = computePricingSnapshot(baseRecord);
+  const baseSnapshot = computePricingSnapshot(baseRecord, pricingRules);
   const baseDisplayTotal = roundCurrency(
     toNumber(baseTotal, 0)
     || toNumber(safeRecord?.preco_final, 0)
@@ -1320,13 +1187,13 @@ export function buildComparativeProposalPricing(record, { baseQuantity, baseTota
       key: 'mais_volume',
       title: 'Mais volume',
       quantity: qty2,
-      snapshot: computePricingSnapshot(buildPricingVariantRecord(safeRecord, qty2)),
+      snapshot: computePricingSnapshot(buildPricingVariantRecord(safeRecord, qty2), pricingRules),
     },
     {
       key: 'melhor_custo_beneficio',
       title: 'Melhor custo-beneficio',
       quantity: qty3,
-      snapshot: computePricingSnapshot(buildPricingVariantRecord(safeRecord, qty3)),
+      snapshot: computePricingSnapshot(buildPricingVariantRecord(safeRecord, qty3), pricingRules),
     },
   ].map((scenario, index, list) => {
     if (index === 0) return scenario;
@@ -1353,35 +1220,9 @@ export function buildComparativeProposalPricing(record, { baseQuantity, baseTota
   };
 }
 
-export function deriveFinancialMetricsFromFinalPrice(record, precoFinalInput) {
-  const custoBase = roundCurrency(toNumber(record?.preco_base ?? record?.custo_base, 0));
-  const precoFinal = roundCurrency(toNumber(precoFinalInput ?? record?.preco_final, 0));
-  const precoFinalValido = Number.isFinite(precoFinal) && precoFinal > 0;
-
-  const margemBruta = precoFinalValido
-    ? ((precoFinal - custoBase) / precoFinal) * 100
-    : 0;
-  const margemPercentual = Number.isFinite(margemBruta) ? margemBruta : 0;
-  const lucroEstimado = precoFinalValido ? (precoFinal - custoBase) : 0;
-  const potencialTotal = precoFinalValido
-    ? precoFinal
-    : (
-      toNumber(record?.valor_estimado, 0)
-      || toNumber(record?.valor_sugerido, 0)
-      || toNumber(record?.preco_base, 0)
-      || 0
-    );
-
-  return {
-    custo_base: custoBase,
-    preco_final: precoFinalValido ? precoFinal : 0,
-    margem_percentual: Math.round(margemPercentual * 10) / 10,
-    margem_estimada: Math.round(margemPercentual * 10) / 10,
-    margem_comercial: Math.round(margemPercentual * 10) / 10,
-    lucro_estimado: roundCurrency(lucroEstimado),
-    valor_estimado: roundCurrency(potencialTotal),
-    potencial_total: roundCurrency(potencialTotal),
-  };
+export function deriveFinancialMetricsFromFinalPrice(record, precoFinalInput, pricingRulesInput = DEFAULT_PRICING_RULES) {
+  const snapshot = computePricingSnapshot(record, pricingRulesInput);
+  return deriveFinalPriceMetrics(snapshot, toNumber(precoFinalInput ?? record?.preco_final, 0), pricingRulesInput);
 }
 
 export function estimateValorPotencial(record) {
@@ -1528,10 +1369,10 @@ export function enrichLeadRecord(record) {
   return enriched;
 }
 
-export function enrichOrcamentoRecord(record) {
+export function enrichOrcamentoRecord(record, pricingRulesInput = DEFAULT_PRICING_RULES) {
   const normalizedRecord = applyStructuredFallback(record);
   const enrichedLead = enrichLeadRecord(normalizedRecord);
-  const snapshot = computePricingSnapshot(enrichedLead);
+  const snapshot = computePricingSnapshot(enrichedLead, pricingRulesInput);
   const itensServico = Array.isArray(snapshot.itensServico) ? snapshot.itensServico : extractServiceItems(enrichedLead);
 
   const incompletoCampos = [];
@@ -1545,14 +1386,6 @@ export function enrichOrcamentoRecord(record) {
   if (!Array.isArray(itensServico) || itensServico.length === 0 || itensServico.some((item) => !normalizeText(item?.material_gravado))) {
     incompletoCampos.push('material_gravado');
   }
-  const tempoInvalido = Array.isArray(itensServico)
-    ? itensServico.some((item) => {
-      const material = inferMaterialState(item?.material_gravado);
-      if (material !== 'sim') return false;
-      return !normalizeText(item?.tempo_bruto);
-    })
-    : !normalizeText(enrichedLead?.tempo_bruto);
-  if (tempoInvalido) incompletoCampos.push('tempo_bruto');
 
   const valorPotencial = estimateValorPotencial(enrichedLead);
   const precoBaseRaw = toNumber(enrichedLead?.preco_base, 0);
@@ -1583,7 +1416,8 @@ export function enrichOrcamentoRecord(record) {
       preco_base: precoBase,
       valor_estimado: valorPotencial,
     },
-    precoFinal
+    precoFinal,
+    pricingRulesInput
   );
   const margemComercial = Math.round(Number(financeiros.margem_percentual || 0) * 10) / 10;
 
@@ -1594,18 +1428,23 @@ export function enrichOrcamentoRecord(record) {
     margem_estimada: Math.round(margemAutomatica * 10) / 10,
     margem_percentual: margemComercial,
     lucro_estimado: roundCurrency(financeiros.lucro_estimado || 0),
+    custo_real: roundCurrency(snapshot.custoReal || snapshot.custoEstimado || 0),
     potencial_total: roundCurrency(financeiros.potencial_total || financeiros.valor_estimado || 0),
     preco_base: Math.round((precoBase || 0) * 100) / 100,
     valor_sugerido: Math.round((valorSugerido || 0) * 100) / 100,
     preco_final: Math.round((precoFinal || 0) * 100) / 100,
     faixa_sugerida: faixaSugerida,
     desconto_volume_percent: Number.isFinite(descontoVolumePercent) ? descontoVolumePercent : snapshot.descontoVolumePercent,
+    economia_total: roundCurrency(snapshot.economiaTotal || 0),
     multiplicador_urgencia: Number.isFinite(multipUrg) ? multipUrg : snapshot.multiplicadorUrgencia,
     multiplicador_complexidade: Number.isFinite(multipComp) ? multipComp : snapshot.multiplicadorComplexidade,
     complexidade_nivel: complexidade,
     revisao_manual: revisaoManual,
     ajuste_referencia_percent: toNumber(enrichedLead?.ajuste_referencia_percent, snapshot.ajusteReferenciaPercent),
     ajuste_multicamera_percent: toNumber(enrichedLead?.ajuste_multicamera_percent, snapshot.ajusteMulticameraPercent),
+    pacote_sugerido: normalizeText(enrichedLead?.pacote_sugerido) || snapshot.pacoteSugerido,
+    motivo_calculo: normalizeText(enrichedLead?.motivo_calculo) || snapshot.motivoCalculo,
+    margem_status: financeiros.margem_status || snapshot.margemStatus || null,
     valor_estimado: Math.round(Number(financeiros.valor_estimado || precoFinal || precoBase || valorPotencial) * 100) / 100,
     itens_servico: itensServico,
     quantidade_total: Number(snapshot.totalQuantidade || sumQuantidade(enrichedLead?.quantidade || enrichedLead?.Quantidade || '1')),
@@ -1853,7 +1692,7 @@ export const COMMERCIAL_DEFAULTS = {
     servicoAltoValor: 12,
     semPressa: -6,
   },
-  pricing: DEFAULT_PRICING_RULES,
+  pricing: normalizePricingRules(DEFAULT_PRICING_RULES),
   pipelineStatus: [
     DEAL_STATUS.NOVO,
     DEAL_STATUS.CONTATADO,

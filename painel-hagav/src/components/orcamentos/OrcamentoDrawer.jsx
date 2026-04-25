@@ -1,12 +1,20 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { X, Save, Loader2, MessageCircle, ExternalLink, AlertTriangle, CheckCircle2, Send, Ban, RotateCw, Eye, Download } from 'lucide-react';
+import { X, Save, Loader2, MessageCircle, ExternalLink, AlertTriangle, CheckCircle2, Send, Ban, RotateCw, Eye, Download, Plus, Trash2 } from 'lucide-react';
 import { OrcStatusBadge, PrioridadeBadge, UrgenciaBadge, TemperaturaBadge } from '@/components/ui/StatusBadge';
 import EduTooltip from '@/components/ui/EduTooltip';
 import ProposalPreview from '@/components/orcamentos/ProposalPreview';
-import { generateDealPdf, updateOrcamento } from '@/lib/supabase';
-import { deriveFinancialMetricsFromFinalPrice } from '@/lib/commercial';
+import { fetchCommercialSettings, generateDealPdf, updateOrcamento } from '@/lib/supabase';
+import {
+  COMMERCIAL_DEFAULTS,
+  computePricingSnapshot,
+  deriveFinancialMetricsFromFinalPrice,
+  extractPricingItemsFromRecord,
+  formatDurationCompact,
+  normalizePricingRules,
+  parseDurationToHours,
+} from '@/lib/commercial';
 import { buildAutoOptionDraft, buildCommercialScopeText, buildProposalPreviewModel } from '@/lib/proposal';
 import { fmtDateTime, fmtBRL, whatsappLink, ORC_STATUS_LABELS } from '@/lib/utils';
 
@@ -104,6 +112,58 @@ const PROPOSAL_DRAW_FIELDS = [
   'numero_proposta',
   'data_emissao',
   'cta_aprovacao',
+  'opcao1_titulo',
+  'opcao1_qtd',
+  'opcao1_preco',
+  'opcao1_unitario',
+  'opcao1_desc',
+  'opcao1_desconto',
+  'opcao2_titulo',
+  'opcao2_qtd',
+  'opcao2_preco',
+  'opcao2_unitario',
+  'opcao2_desc',
+  'opcao2_desconto',
+  'opcao3_titulo',
+  'opcao3_qtd',
+  'opcao3_preco',
+  'opcao3_unitario',
+  'opcao3_desc',
+  'opcao3_desconto',
+  'texto_comparativo',
+];
+
+const PRICING_SERVICE_OPTIONS = [
+  'Reels / Shorts / TikTok',
+  'Criativo de tráfego pago',
+  'Corte de podcast',
+  'Vídeo médio',
+  'Depoimento',
+  'Videoaula / módulo',
+  'YouTube',
+  'VSL até 15min',
+  'VSL longa',
+  'Motion',
+];
+
+const ITEM_MATERIAL_OPTIONS = ['Sim', 'Não', 'Parcial'];
+
+const AUTO_SYNC_PROPOSAL_FIELDS = [
+  'cliente_nome',
+  'whatsapp',
+  'empresa',
+  'instagram',
+  'email_cliente',
+  'servico_principal',
+  'quantidade',
+  'quantidade_mensal',
+  'prazo',
+  'escopo_comercial',
+  'escopo_mensal',
+  'referencia_texto',
+  'valor_total_moeda',
+  'valor_mensal_moeda',
+  'valor_personalizado_moeda',
   'opcao1_titulo',
   'opcao1_qtd',
   'opcao1_preco',
@@ -260,6 +320,67 @@ function parseCurrencyNumber(value, fallback = 0) {
   return parsed;
 }
 
+function summarizeDraftField(items = [], getValue, fallback = '') {
+  const safeItems = Array.isArray(items) ? items.filter(Boolean) : [];
+  if (safeItems.length === 0) return normalizeText(fallback);
+  if (safeItems.length === 1) return normalizeText(getValue(safeItems[0]) || fallback);
+  return safeItems
+    .map((item) => {
+      const service = normalizeText(item?.servico || 'Serviço');
+      const value = normalizeText(getValue(item) || '-');
+      return `${service}: ${value}`;
+    })
+    .join(' | ');
+}
+
+function getFirstItemValue(items = [], field, fallback = '') {
+  const safeItems = Array.isArray(items) ? items : [];
+  const firstValue = safeItems.find((item) => normalizeText(item?.[field]))?.[field];
+  return normalizeText(firstValue || fallback);
+}
+
+function normalizePricingItemDraft(item = {}, fallback = {}) {
+  const tempoRaw = normalizeText(item?.horas_estimadas || item?.tempo_bruto || fallback?.tempo_bruto);
+  const horas = normalizeText(item?.horas_estimadas || '');
+  return {
+    servico: normalizeText(item?.servico || fallback?.servico || 'Serviço'),
+    quantidade: normalizeText(item?.quantidade || fallback?.quantidade || '1') || '1',
+    material_gravado: normalizeText(item?.material_gravado || fallback?.material_gravado || 'Sim') || 'Sim',
+    horas_estimadas: horas || tempoRaw,
+    tempo_bruto: tempoRaw,
+    prazo: normalizeText(item?.prazo || fallback?.prazo),
+    referencia: normalizeText(item?.referencia || fallback?.referencia),
+  };
+}
+
+function buildInitialPricingItems(record) {
+  const extracted = extractPricingItemsFromRecord(record)
+    .map((item) => normalizePricingItemDraft(item, record))
+    .filter((item) => normalizeText(item?.servico));
+
+  if (extracted.length > 0) return extracted;
+  return [normalizePricingItemDraft({
+    servico: normalizeText(record?.servico || 'Serviço'),
+    quantidade: normalizeText(record?.quantidade || '1'),
+    material_gravado: normalizeText(record?.material_gravado || 'Sim'),
+    tempo_bruto: normalizeText(record?.tempo_bruto || ''),
+    prazo: normalizeText(record?.prazo || ''),
+    referencia: normalizeText(record?.referencia || ''),
+  })];
+}
+
+function buildSavedProposalDirtyMap(record) {
+  const detalhes = parseDetalhes(record?.detalhes);
+  const comercial = parseDetalhes(detalhes?.comercial);
+  const dirty = {};
+  AUTO_SYNC_PROPOSAL_FIELDS.forEach((field) => {
+    if (normalizeText(comercial?.[field])) {
+      dirty[field] = true;
+    }
+  });
+  return dirty;
+}
+
 function isLikelyInternalObservation(value) {
   const key = normalizeText(value)
     .normalize('NFD')
@@ -287,10 +408,17 @@ function pickClientObservationText(...values) {
   return '';
 }
 
-function buildProposalDraftFromRecord(record, forcedMode) {
+function buildProposalDraftFromRecord(record, forcedMode, options = {}) {
   const detalhes = parseDetalhes(record?.detalhes);
   const comercial = parseDetalhes(detalhes?.comercial);
   const respostas = readAnswersFromDetalhes(detalhes);
+  const pricingRules = options?.pricingRules;
+  const preferLiveRecord = Boolean(options?.preferLiveRecord);
+  const pickStoredOrLive = (storedValue, liveValue, ...fallbackValues) => firstFilledText(
+    preferLiveRecord ? liveValue : storedValue,
+    preferLiveRecord ? storedValue : liveValue,
+    ...fallbackValues
+  );
   const savedMode = normalizeProposalMode(
     forcedMode || comercial?.proposta_modo || comercial?.proposal_mode || ''
   );
@@ -303,21 +431,24 @@ function buildProposalDraftFromRecord(record, forcedMode) {
     ''
   );
   const valorBase = Number(
-    record?.preco_final
+    options?.priceReference
+    || record?.preco_final
     || record?.valor_sugerido
     || record?.preco_base
     || 0
   );
-  const quantidadePadrao = firstFilledText(
+  const quantidadePadrao = pickStoredOrLive(
     comercial?.quantidade,
     record?.quantidade,
     modePreset.quantidade
   );
   const quantityNumber = parseQuantityNumber(
-    comercial?.quantidade
-      || comercial?.opcao1_qtd
-      || record?.quantidade
-      || modePreset.quantidade,
+    pickStoredOrLive(
+      comercial?.quantidade,
+      record?.quantidade,
+      comercial?.opcao1_qtd,
+      modePreset.quantidade
+    ),
     10
   );
   const defaultValor = fmtBRL(valorBase || quantityNumber * 170);
@@ -325,15 +456,16 @@ function buildProposalDraftFromRecord(record, forcedMode) {
     orc: record,
     quantityText: quantidadePadrao,
     totalText: defaultValor,
+    pricingRules,
   });
   const escopoDefault = buildCommercialScopeText(
     record,
     firstFilledText(comercial?.revisoes_inclusas, detalhes?.revisoes_inclusas, '1 rodada')
   );
   const referencia = firstFilledText(
+    record?.referencia,
     comercial?.referencia_texto,
     detalhes?.referencia,
-    record?.referencia,
     respostas?.flow_referencia,
     respostas?.unica_referencia,
     respostas?.rec_referencia,
@@ -369,7 +501,7 @@ function buildProposalDraftFromRecord(record, forcedMode) {
       ''
     )
   );
-  const prazo = firstFilledText(
+  const prazo = pickStoredOrLive(
     comercial?.prazo,
     record?.prazo,
     respostas?.flow_prazo,
@@ -379,43 +511,59 @@ function buildProposalDraftFromRecord(record, forcedMode) {
     modePreset.prazo
   );
   const condicoesComerciaisDefault = DEFAULT_CONDICOES_COMERCIAIS.replace('[data]', dataValidade || '[data]');
-  const valorMensalPadrao = firstFilledText(
+  const valorMensalPadrao = pickStoredOrLive(
     comercial?.valor_mensal_moeda,
+    defaultValor,
     proposalMode === 'mensal' ? defaultValor : ''
   );
-  const valorPersonalizadoPadrao = firstFilledText(
+  const valorPersonalizadoPadrao = pickStoredOrLive(
     comercial?.valor_personalizado_moeda,
+    defaultValor,
     proposalMode === 'personalizada' ? defaultValor : ''
+  );
+  const escopoMensalPadrao = firstFilledText(
+    proposalMode === 'mensal' ? escopoDefault : '',
+    proposalMode === 'mensal' ? modePreset.escopo_comercial : ''
   );
 
   return {
-    cliente_nome: normalizeText(firstFilledText(comercial?.cliente_nome, comercial?.nome_cliente, record?.nome)),
-    whatsapp: normalizeText(firstFilledText(comercial?.whatsapp, record?.whatsapp)),
-    empresa: normalizeText(empresa),
-    instagram: normalizeText(instagram),
-    email_cliente: normalizeText(email),
-    servico_principal: normalizeText(firstFilledText(comercial?.servico_principal, record?.servico, modePreset.servico_principal)),
+    cliente_nome: normalizeText(pickStoredOrLive(
+      firstFilledText(comercial?.cliente_nome, comercial?.nome_cliente),
+      record?.nome
+    )),
+    whatsapp: normalizeText(pickStoredOrLive(comercial?.whatsapp, record?.whatsapp)),
+    empresa: normalizeText(pickStoredOrLive(comercial?.empresa, empresa)),
+    instagram: normalizeText(pickStoredOrLive(comercial?.instagram, instagram)),
+    email_cliente: normalizeText(pickStoredOrLive(comercial?.email_cliente || comercial?.email, email)),
+    servico_principal: normalizeText(pickStoredOrLive(
+      comercial?.servico_principal,
+      record?.servico,
+      modePreset.servico_principal
+    )),
     quantidade: normalizeText(quantidadePadrao),
-    quantidade_mensal: normalizeText(firstFilledText(
+    quantidade_mensal: normalizeText(pickStoredOrLive(
       comercial?.quantidade_mensal,
+      proposalMode === 'mensal' ? quantidadePadrao : '',
       proposalMode === 'mensal' ? quantidadePadrao : '',
       modePreset.quantidade_mensal
     )),
     prazo: normalizeText(prazo),
-    escopo_comercial: normalizeText(firstFilledText(
+    escopo_comercial: normalizeText(pickStoredOrLive(
       comercial?.escopo_comercial,
-      comercial?.descricao_escopo,
       escopoDefault,
+      comercial?.descricao_escopo,
       modePreset.escopo_comercial
     )),
-    escopo_mensal: normalizeText(firstFilledText(
+    escopo_mensal: normalizeText(pickStoredOrLive(
       comercial?.escopo_mensal,
-      proposalMode === 'mensal' ? (comercial?.escopo_comercial || escopoDefault || modePreset.escopo_comercial) : ''
+      escopoMensalPadrao,
+      proposalMode === 'mensal' ? comercial?.escopo_comercial : '',
+      proposalMode === 'mensal' ? modePreset.escopo_comercial : ''
     )),
     condicoes_comerciais: normalizeText(firstFilledText(comercial?.condicoes_comerciais, condicoesComerciaisDefault)),
-    referencia_texto: normalizeText(referencia),
+    referencia_texto: normalizeText(pickStoredOrLive(comercial?.referencia_texto, referencia)),
     observacao_adicional: normalizeText(observacaoAdicional),
-    valor_total_moeda: normalizeText(firstFilledText(comercial?.valor_total_moeda, defaultValor)),
+    valor_total_moeda: normalizeText(pickStoredOrLive(comercial?.valor_total_moeda, defaultValor)),
     valor_mensal_moeda: normalizeText(valorMensalPadrao),
     valor_personalizado_moeda: normalizeText(valorPersonalizadoPadrao),
     forma_pagamento: normalizeText(comercial?.forma_pagamento || 'PIX / Transferencia / Conforme combinado'),
@@ -427,25 +575,25 @@ function buildProposalDraftFromRecord(record, forcedMode) {
     numero_proposta: normalizeText(comercial?.numero_proposta || `PROP-${record?.id || ''}`),
     data_emissao: normalizeText(comercial?.data_emissao || ''),
     cta_aprovacao: normalizeText(comercial?.cta_aprovacao || 'Aprovar proposta no WhatsApp'),
-    opcao1_titulo: normalizeText(comercial?.opcao1_titulo || optionDefaults.opcao1_titulo),
-    opcao1_qtd: normalizeText(comercial?.opcao1_qtd || optionDefaults.opcao1_qtd),
-    opcao1_preco: normalizeText(comercial?.opcao1_preco || optionDefaults.opcao1_preco),
-    opcao1_unitario: normalizeText(comercial?.opcao1_unitario || optionDefaults.opcao1_unitario),
-    opcao1_desc: normalizeText(comercial?.opcao1_desc || optionDefaults.opcao1_desc),
-    opcao1_desconto: normalizeText(comercial?.opcao1_desconto || optionDefaults.opcao1_desconto),
-    opcao2_titulo: normalizeText(comercial?.opcao2_titulo || optionDefaults.opcao2_titulo),
-    opcao2_qtd: normalizeText(comercial?.opcao2_qtd || optionDefaults.opcao2_qtd),
-    opcao2_preco: normalizeText(comercial?.opcao2_preco || optionDefaults.opcao2_preco),
-    opcao2_unitario: normalizeText(comercial?.opcao2_unitario || optionDefaults.opcao2_unitario),
-    opcao2_desc: normalizeText(comercial?.opcao2_desc || optionDefaults.opcao2_desc),
-    opcao2_desconto: normalizeText(comercial?.opcao2_desconto || optionDefaults.opcao2_desconto),
-    opcao3_titulo: normalizeText(comercial?.opcao3_titulo || optionDefaults.opcao3_titulo),
-    opcao3_qtd: normalizeText(comercial?.opcao3_qtd || optionDefaults.opcao3_qtd),
-    opcao3_preco: normalizeText(comercial?.opcao3_preco || optionDefaults.opcao3_preco),
-    opcao3_unitario: normalizeText(comercial?.opcao3_unitario || optionDefaults.opcao3_unitario),
-    opcao3_desc: normalizeText(comercial?.opcao3_desc || optionDefaults.opcao3_desc),
-    opcao3_desconto: normalizeText(comercial?.opcao3_desconto || optionDefaults.opcao3_desconto),
-    texto_comparativo: normalizeText(comercial?.texto_comparativo || optionDefaults.texto_comparativo || ''),
+    opcao1_titulo: normalizeText(pickStoredOrLive(comercial?.opcao1_titulo, optionDefaults.opcao1_titulo)),
+    opcao1_qtd: normalizeText(pickStoredOrLive(comercial?.opcao1_qtd, optionDefaults.opcao1_qtd)),
+    opcao1_preco: normalizeText(pickStoredOrLive(comercial?.opcao1_preco, optionDefaults.opcao1_preco)),
+    opcao1_unitario: normalizeText(pickStoredOrLive(comercial?.opcao1_unitario, optionDefaults.opcao1_unitario)),
+    opcao1_desc: normalizeText(pickStoredOrLive(comercial?.opcao1_desc, optionDefaults.opcao1_desc)),
+    opcao1_desconto: normalizeText(pickStoredOrLive(comercial?.opcao1_desconto, optionDefaults.opcao1_desconto)),
+    opcao2_titulo: normalizeText(pickStoredOrLive(comercial?.opcao2_titulo, optionDefaults.opcao2_titulo)),
+    opcao2_qtd: normalizeText(pickStoredOrLive(comercial?.opcao2_qtd, optionDefaults.opcao2_qtd)),
+    opcao2_preco: normalizeText(pickStoredOrLive(comercial?.opcao2_preco, optionDefaults.opcao2_preco)),
+    opcao2_unitario: normalizeText(pickStoredOrLive(comercial?.opcao2_unitario, optionDefaults.opcao2_unitario)),
+    opcao2_desc: normalizeText(pickStoredOrLive(comercial?.opcao2_desc, optionDefaults.opcao2_desc)),
+    opcao2_desconto: normalizeText(pickStoredOrLive(comercial?.opcao2_desconto, optionDefaults.opcao2_desconto)),
+    opcao3_titulo: normalizeText(pickStoredOrLive(comercial?.opcao3_titulo, optionDefaults.opcao3_titulo)),
+    opcao3_qtd: normalizeText(pickStoredOrLive(comercial?.opcao3_qtd, optionDefaults.opcao3_qtd)),
+    opcao3_preco: normalizeText(pickStoredOrLive(comercial?.opcao3_preco, optionDefaults.opcao3_preco)),
+    opcao3_unitario: normalizeText(pickStoredOrLive(comercial?.opcao3_unitario, optionDefaults.opcao3_unitario)),
+    opcao3_desc: normalizeText(pickStoredOrLive(comercial?.opcao3_desc, optionDefaults.opcao3_desc)),
+    opcao3_desconto: normalizeText(pickStoredOrLive(comercial?.opcao3_desconto, optionDefaults.opcao3_desconto)),
+    texto_comparativo: normalizeText(pickStoredOrLive(comercial?.texto_comparativo, optionDefaults.texto_comparativo || '')),
   };
 }
 
@@ -562,8 +710,11 @@ function downloadPdfFromBase64(base64, fileName = 'proposta-hagav.pdf') {
 }
 
 export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
+  const initialStoredSuggested = Number(orc?.valor_sugerido ?? orc?.preco_base ?? 0);
+  const initialFinalPrice = Number(orc?.preco_final ?? initialStoredSuggested ?? 0);
   const [statusOrc, setStatusOrc] = useState(orc?.status_orcamento ?? 'orcamento');
-  const [precoFinal, setPrecoFinal] = useState(orc?.preco_final ?? 0);
+  const [precoFinal, setPrecoFinal] = useState(initialFinalPrice);
+  const [precoFinalTouched, setPrecoFinalTouched] = useState(() => Math.abs(initialFinalPrice - initialStoredSuggested) > 0.009);
   const [obsInternas, setObsInternas] = useState(orc?.observacoes_internas ?? '');
   const [urgencia, setUrgencia] = useState(orc?.urgencia ?? 'media');
   const [prioridade, setPrioridade] = useState(orc?.prioridade ?? 'media');
@@ -580,16 +731,70 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
   const [pdfLoading, setPdfLoading] = useState(false);
   const [error, setError] = useState('');
   const [info, setInfo] = useState('');
+  const [pricingRules, setPricingRules] = useState(() => normalizePricingRules(COMMERCIAL_DEFAULTS.pricing));
+  const [pricingRulesLoading, setPricingRulesLoading] = useState(true);
+  const [pricingItems, setPricingItems] = useState(() => buildInitialPricingItems(orc));
   const [proposalMode, setProposalMode] = useState(() => {
     const detalhes = parseDetalhes(orc?.detalhes);
     const comercial = parseDetalhes(detalhes?.comercial);
     return normalizeProposalMode(comercial?.proposta_modo || comercial?.proposal_mode || '')
       || inferProposalModeFromFlow(orc, 'direta');
   });
-  const [proposalDraft, setProposalDraft] = useState(() => buildProposalDraftFromRecord(orc));
+  const [proposalDirtyFields, setProposalDirtyFields] = useState(() => buildSavedProposalDirtyMap(orc));
+  const [proposalDraft, setProposalDraft] = useState(() => buildProposalDraftFromRecord(orc, undefined, {
+    pricingRules: COMMERCIAL_DEFAULTS.pricing,
+    priceReference: initialFinalPrice,
+  }));
 
   if (!orc) return null;
-  const itensServico = Array.isArray(orc.itens_servico) ? orc.itens_servico : [];
+  const pricingRecord = useMemo(() => ({
+    ...orc,
+    itens_servico: pricingItems,
+    servico: pricingItems.map((item) => normalizeText(item?.servico)).filter(Boolean).join(' | ') || orc?.servico || '',
+    quantidade: summarizeDraftField(pricingItems, (item) => item?.quantidade, orc?.quantidade),
+    material_gravado: summarizeDraftField(pricingItems, (item) => item?.material_gravado, orc?.material_gravado),
+    tempo_bruto: summarizeDraftField(
+      pricingItems,
+      (item) => item?.horas_estimadas || item?.tempo_bruto || formatDurationCompact(parseDurationToHours(item?.horas_estimadas || item?.tempo_bruto, 0)),
+      orc?.tempo_bruto
+    ),
+    prazo: getFirstItemValue(pricingItems, 'prazo', orc?.prazo),
+    referencia: getFirstItemValue(pricingItems, 'referencia', orc?.referencia),
+  }), [orc, pricingItems]);
+  const parsedPrecoFinal = Number(precoFinal || 0);
+  const autoPricing = useMemo(
+    () => computePricingSnapshot(pricingRecord, pricingRules),
+    [pricingRecord, pricingRules]
+  );
+  const financialMetrics = useMemo(
+    () => deriveFinancialMetricsFromFinalPrice(pricingRecord, parsedPrecoFinal, pricingRules),
+    [parsedPrecoFinal, pricingRecord, pricingRules]
+  );
+  const itensServico = Array.isArray(autoPricing?.itensServico) && autoPricing.itensServico.length > 0
+    ? autoPricing.itensServico
+    : pricingItems;
+  const proposalRecord = useMemo(() => ({
+    ...pricingRecord,
+    servico: pricingItems.map((item) => normalizeText(item?.servico)).filter(Boolean).join(' | ') || pricingRecord?.servico || orc?.servico || '',
+    quantidade: pricingItems.length > 1
+      ? `${Number(autoPricing?.totalQuantidade || pricingItems.length || 1)} itens`
+      : summarizeDraftField(pricingItems, (item) => item?.quantidade, orc?.quantidade),
+    prazo: getFirstItemValue(pricingItems, 'prazo', pricingRecord?.prazo || orc?.prazo),
+    referencia: pricingItems.length > 1
+      ? summarizeDraftField(pricingItems, (item) => item?.referencia, pricingRecord?.referencia || orc?.referencia)
+      : getFirstItemValue(pricingItems, 'referencia', pricingRecord?.referencia || orc?.referencia),
+    preco_base: Number(autoPricing?.precoBase || orc?.preco_base || 0),
+    valor_sugerido: Number(autoPricing?.valorSugerido || orc?.valor_sugerido || 0),
+    preco_final: parsedPrecoFinal > 0 ? parsedPrecoFinal : Number(autoPricing?.precoFinal || orc?.preco_final || 0),
+  }), [autoPricing, orc, parsedPrecoFinal, pricingItems, pricingRecord]);
+  const autoProposalDraft = useMemo(
+    () => buildProposalDraftFromRecord(proposalRecord, proposalMode, {
+      pricingRules,
+      preferLiveRecord: true,
+      priceReference: parsedPrecoFinal > 0 ? parsedPrecoFinal : Number(autoPricing?.precoFinal || 0),
+    }),
+    [autoPricing?.precoFinal, parsedPrecoFinal, pricingRules, proposalMode, proposalRecord]
+  );
   const serviceNames = [
     ...new Set(
       [
@@ -611,17 +816,27 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
 
   const servicoResumo = itensServico.length > 0
     ? itensServico.map((item) => item?.servico).filter(Boolean).join(' | ')
-    : (orc.servico || '');
+    : (proposalRecord.servico || orc.servico || '');
   const quantidadeResumo = itensServico.length > 0
     ? (
       itensServico.length === 1
         ? normalizeText(itensServico[0]?.quantidade || '-')
         : itensServico.map((item) => `${item?.servico || 'Servico'}: ${item?.quantidade || '-'}`).join(' | ')
     )
-    : cleanSingleServiceField(orc.quantidade || '');
-  const materialResumo = cleanSingleServiceField(orc.material_gravado);
-  const tempoResumo = cleanSingleServiceField(orc.tempo_bruto);
-  const referenciaResumo = cleanSingleServiceField(orc.referencia);
+    : cleanSingleServiceField(proposalRecord.quantidade || orc.quantidade || '');
+  const materialResumo = itensServico.length > 0
+    ? summarizeDraftField(itensServico, (item) => item?.material_gravado, orc.material_gravado)
+    : cleanSingleServiceField(orc.material_gravado);
+  const tempoResumo = itensServico.length > 0
+    ? summarizeDraftField(
+      itensServico,
+      (item) => item?.horas_estimadas || item?.tempo_bruto || formatDurationCompact(Number(item?.horas_por_unidade || 0)),
+      orc.tempo_bruto
+    )
+    : cleanSingleServiceField(orc.tempo_bruto);
+  const referenciaResumo = itensServico.length > 0
+    ? summarizeDraftField(itensServico, (item) => item?.referencia, orc.referencia)
+    : cleanSingleServiceField(orc.referencia);
   const referenceText = referenciaResumo || '—';
   const referenceUrl = extractReferenceUrl(referenceText);
   const canExpandReference = referenceText.length > 84 || Boolean(referenceUrl);
@@ -641,43 +856,45 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
   const propostaPdfBlockedMessage = getPdfEngineBlockedMessage(propostaPdfMeta);
   const showPropostaPdfBlockedWarning = hasPropostaGerada && !propostaPdfLiberada;
   const canSendProposta = Boolean(propostaLink) && propostaPdfLiberada && hasWhatsapp;
-  const financialMetrics = useMemo(
-    () => deriveFinancialMetricsFromFinalPrice(orc, precoFinal),
-    [orc, precoFinal]
-  );
+  const marginStatus = financialMetrics.margem_status || autoPricing.margemStatus || null;
   const proposalPreview = useMemo(
     () => buildProposalPreviewModel({
-      orc,
+      orc: proposalRecord,
       proposalMode,
       proposalDraft,
     }),
-    [orc, proposalMode, proposalDraft]
+    [proposalDraft, proposalMode, proposalRecord]
   );
 
   function buildProposalDraftForMode(mode, currentDraft = proposalDraft) {
-    const normalizedMode = normalizeProposalMode(mode) || inferProposalModeFromFlow(orc, 'direta');
+    const normalizedMode = normalizeProposalMode(mode) || inferProposalModeFromFlow(proposalRecord, 'direta');
     const preset = PROPOSAL_MODE_PRESETS[normalizedMode] || PROPOSAL_MODE_PRESETS.direta;
     const next = {
-      ...buildProposalDraftFromRecord(orc, normalizedMode),
+      ...buildProposalDraftFromRecord(proposalRecord, normalizedMode, {
+        pricingRules,
+        preferLiveRecord: true,
+        priceReference: parsedPrecoFinal > 0 ? parsedPrecoFinal : Number(autoPricing?.precoFinal || 0),
+      }),
       ...(currentDraft && typeof currentDraft === 'object' ? currentDraft : {}),
     };
     const valueReference = parseCurrencyNumber(
       next.valor_total_moeda,
-      Number(financialMetrics.preco_final || orc?.valor_sugerido || orc?.preco_final || orc?.preco_base || 0)
+      Number(financialMetrics.preco_final || autoPricing?.valorSugerido || proposalRecord?.preco_final || proposalRecord?.preco_base || 0)
     );
 
     if (normalizedMode === 'opcoes') {
       Object.assign(next, buildAutoOptionDraft({
-        orc,
+        orc: proposalRecord,
         quantityText: next.quantidade,
         totalText: next.valor_total_moeda,
+        pricingRules,
       }));
     }
 
     if (normalizedMode === 'mensal') {
       next.quantidade_mensal = next.quantidade_mensal || next.quantidade || preset.quantidade_mensal;
       next.duracao_contrato_meses = next.duracao_contrato_meses || preset.duracao_contrato_meses || '3';
-      next.escopo_mensal = next.escopo_mensal || next.escopo_comercial || buildCommercialScopeText(orc);
+      next.escopo_mensal = next.escopo_mensal || next.escopo_comercial || buildCommercialScopeText(proposalRecord);
       next.valor_mensal_moeda = next.valor_mensal_moeda || next.valor_total_moeda || fmtBRL(valueReference || 0);
     }
 
@@ -706,7 +923,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
   }
 
   function buildProposalTemplateOverrides() {
-    const mode = normalizeProposalMode(proposalMode) || inferProposalModeFromFlow(orc, 'direta');
+    const mode = normalizeProposalMode(proposalMode) || inferProposalModeFromFlow(proposalRecord, 'direta');
     const nextDraft = {
       ...proposalDraft,
     };
@@ -718,9 +935,9 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
     if (mode === 'mensal') {
       const valorMensal = normalizeText(nextDraft.valor_mensal_moeda || nextDraft.valor_total_moeda);
       if (valorMensal) {
-        nextDraft.valor_total_moeda = valorMensal.toLowerCase().includes('/mes')
+        nextDraft.valor_total_moeda = /\/m[eê]s/i.test(valorMensal)
           ? valorMensal
-          : `${valorMensal}/mes`;
+          : `${valorMensal}/mês`;
       }
       nextDraft.quantidade_mensal = normalizeText(nextDraft.quantidade_mensal || nextDraft.quantidade);
     }
@@ -735,7 +952,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
 
   function syncPreviewDraft(modeValue, draftValue, previewValue) {
     if (typeof window === 'undefined') return;
-    const safeMode = normalizeProposalMode(modeValue) || inferProposalModeFromFlow(orc, 'direta');
+    const safeMode = normalizeProposalMode(modeValue) || inferProposalModeFromFlow(proposalRecord, 'direta');
     const payload = {
       mode: safeMode,
       source: 'orcamento_drawer',
@@ -758,13 +975,55 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
     }
   }
 
+  function updatePricingItem(index, field, value) {
+    setPricingItems((prev) => prev.map((item, itemIndex) => {
+      if (itemIndex !== index) return item;
+      if (field === 'horas_estimadas' || field === 'tempo_bruto') {
+        return {
+          ...item,
+          horas_estimadas: value,
+          tempo_bruto: value,
+        };
+      }
+      return {
+        ...item,
+        [field]: value,
+      };
+    }));
+  }
+
+  function addPricingItem() {
+    const seed = pricingItems[pricingItems.length - 1] || pricingItems[0] || {};
+    setPricingItems((prev) => [
+      ...prev,
+      normalizePricingItemDraft({
+        servico: 'Serviço',
+        quantidade: '1',
+        material_gravado: seed.material_gravado || 'Sim',
+        prazo: seed.prazo || proposalRecord?.prazo || '',
+        referencia: seed.referencia || proposalRecord?.referencia || '',
+        horas_estimadas: '',
+        tempo_bruto: '',
+      }, proposalRecord),
+    ]);
+  }
+
+  function removePricingItem(index) {
+    setPricingItems((prev) => {
+      if (prev.length <= 1) return prev;
+      return prev.filter((_, itemIndex) => itemIndex !== index);
+    });
+  }
+
   function applyProposalMode(mode) {
-    const normalizedMode = normalizeProposalMode(mode) || inferProposalModeFromFlow(orc, 'direta');
+    const normalizedMode = normalizeProposalMode(mode) || inferProposalModeFromFlow(proposalRecord, 'direta');
     setProposalMode(normalizedMode);
-    setProposalDraft((prev) => buildProposalDraftForMode(normalizedMode, prev));
+    setProposalDirtyFields({});
+    setProposalDraft(buildProposalDraftForMode(normalizedMode, {}));
   }
 
   function updateProposalDraftField(field, value) {
+    setProposalDirtyFields((prev) => ({ ...prev, [field]: true }));
     setProposalDraft((prev) => {
       const nextDraft = {
         ...prev,
@@ -772,9 +1031,10 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
       };
       if (proposalMode === 'opcoes' && ['quantidade', 'valor_total_moeda'].includes(field)) {
         Object.assign(nextDraft, buildAutoOptionDraft({
-          orc,
+          orc: proposalRecord,
           quantityText: field === 'quantidade' ? value : nextDraft.quantidade,
           totalText: field === 'valor_total_moeda' ? value : nextDraft.valor_total_moeda,
+          pricingRules,
         }));
       }
       return nextDraft;
@@ -783,33 +1043,71 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
 
   function hydrateProposalDraft() {
     setError('');
+    setProposalDirtyFields({});
     const nextDraft = buildProposalDraftForMode(proposalMode, {});
     setProposalDraft(nextDraft);
     setInfo('Campos da proposta preenchidos automaticamente com os dados do orçamento.');
   }
 
-  function buildFinancialPersistencePatch() {
+  function buildFinancialPersistencePatch(finalPriceOverride = null) {
     const detalhesAtual = parseDetalhes(orc?.detalhes);
     const comercialAtual = parseDetalhes(detalhesAtual?.comercial);
-    const margemAutomaticaAtual = Number(orc?.margem_automatica ?? orc?.margem_estimada ?? 0);
-    const margemComercialAtual = Number(financialMetrics.margem_percentual || 0);
     const nowIso = new Date().toISOString();
     const proposalState = buildProposalDraftCommercialState();
+    const finalPriceValue = Number(
+      finalPriceOverride
+      ?? financialMetrics.preco_final
+      ?? autoPricing.precoFinal
+      ?? 0
+    ) || 0;
+    const itemDrafts = Array.isArray(autoPricing?.itensServico) && autoPricing.itensServico.length > 0
+      ? autoPricing.itensServico
+      : pricingItems;
+    const calculationSnapshot = {
+      ...autoPricing,
+      precoFinalEditado: finalPriceValue,
+      margemComercial: Number(financialMetrics.margem_percentual || 0),
+      lucroComercial: Number(financialMetrics.lucro_estimado || 0),
+      margemStatus: financialMetrics.margem_status || autoPricing.margemStatus || null,
+      itensServico: itemDrafts,
+      atualizado_em: nowIso,
+    };
 
     return {
-      preco_final: Number(financialMetrics.preco_final || 0),
-      valor_estimado: Number(financialMetrics.valor_estimado || 0),
+      preco_base: Number(autoPricing.precoBase || 0),
+      valor_sugerido: Number(autoPricing.valorSugerido || 0),
+      preco_final: finalPriceValue,
+      valor_estimado: Number(financialMetrics.valor_estimado || autoPricing.valorEstimado || 0),
+      margem_estimada: Number(autoPricing.margemEstimada || 0),
+      faixa_sugerida: String(autoPricing.faixaSugerida || ''),
+      desconto_volume_percent: Number(autoPricing.descontoVolumePercent || 0),
+      multiplicador_urgencia: Number(autoPricing.multiplicadorUrgencia || 0),
+      multiplicador_complexidade: Number(autoPricing.multiplicadorComplexidade || 0),
+      complexidade_nivel: String(autoPricing.complexidadeNivel || ''),
+      ajuste_referencia_percent: Number(autoPricing.ajusteReferenciaPercent || 0),
+      ajuste_multicamera_percent: Number(autoPricing.ajusteMulticameraPercent || 0),
+      revisao_manual: Boolean(autoPricing.revisaoManual),
+      alerta_capacidade: Boolean(autoPricing.alertaCapacidade),
+      operacao_especial: Boolean(autoPricing.operacaoEspecial),
+      pacote_sugerido: String(autoPricing.pacoteSugerido || ''),
+      motivo_calculo: String(autoPricing.motivoCalculo || ''),
       detalhes: {
         ...detalhesAtual,
+        calculoAutomatico: calculationSnapshot,
         comercial: {
           ...comercialAtual,
           ...proposalState,
-          margem_automatica: Number.isFinite(margemAutomaticaAtual) ? margemAutomaticaAtual : 0,
-          margem_percentual: Number.isFinite(margemComercialAtual) ? margemComercialAtual : 0,
-          margem_comercial: Number.isFinite(margemComercialAtual) ? margemComercialAtual : 0,
+          pricing_rule_version: Number(autoPricing.pricingRuleVersion || 0),
+          margem_automatica: Number(autoPricing.margemEstimada || 0),
+          margem_percentual: Number(financialMetrics.margem_percentual || 0),
+          margem_comercial: Number(financialMetrics.margem_percentual || 0),
           lucro_estimado: Number(financialMetrics.lucro_estimado || 0),
-          potencial_total: Number(financialMetrics.potencial_total || financialMetrics.valor_estimado || 0),
-          preco_final: Number(financialMetrics.preco_final || 0),
+          potencial_total: Number(financialMetrics.potencial_total || financialMetrics.valor_estimado || autoPricing.valorEstimado || 0),
+          custo_real: Number(autoPricing.custoReal || autoPricing.custoEstimado || 0),
+          preco_base: Number(autoPricing.precoBase || 0),
+          valor_sugerido: Number(autoPricing.valorSugerido || 0),
+          preco_final: finalPriceValue,
+          pacote_sugerido: String(autoPricing.pacoteSugerido || ''),
           atualizado_em: nowIso,
         },
       },
@@ -817,8 +1115,35 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
   }
 
   useEffect(() => {
+    let active = true;
+    async function loadPricingRules() {
+      setPricingRulesLoading(true);
+      try {
+        const settings = await fetchCommercialSettings();
+        if (!active) return;
+        setPricingRules(normalizePricingRules(settings?.pricing || COMMERCIAL_DEFAULTS.pricing));
+      } catch (err) {
+        console.warn('[Orcamentos][PricingSettings]', err);
+        if (active) {
+          setPricingRules(normalizePricingRules(COMMERCIAL_DEFAULTS.pricing));
+        }
+      } finally {
+        if (active) setPricingRulesLoading(false);
+      }
+    }
+
+    loadPricingRules();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
     setStatusOrc(orc?.status_orcamento ?? 'orcamento');
-    setPrecoFinal(orc?.preco_final ?? 0);
+    const nextStoredSuggested = Number(orc?.valor_sugerido ?? orc?.preco_base ?? 0);
+    const nextFinalPrice = Number(orc?.preco_final ?? nextStoredSuggested ?? 0);
+    setPrecoFinal(nextFinalPrice);
+    setPrecoFinalTouched(Math.abs(nextFinalPrice - nextStoredSuggested) > 0.009);
     setObsInternas(orc?.observacoes_internas ?? '');
     setUrgencia(orc?.urgencia ?? 'media');
     setPrioridade(orc?.prioridade ?? 'media');
@@ -832,7 +1157,12 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
     const comercial = parseDetalhes(detalhes?.comercial);
     const nextMode = normalizeProposalMode(comercial?.proposta_modo || comercial?.proposal_mode || '')
       || inferProposalModeFromFlow(orc, 'direta');
-    const nextDraft = buildProposalDraftForMode(nextMode, {});
+    const nextDraft = buildProposalDraftFromRecord(orc, nextMode, {
+      pricingRules: COMMERCIAL_DEFAULTS.pricing,
+      priceReference: nextFinalPrice,
+    });
+    setPricingItems(buildInitialPricingItems(orc));
+    setProposalDirtyFields(buildSavedProposalDirtyMap(orc));
     setProposalMode(nextMode);
     setProposalDraft(nextDraft);
   }, [
@@ -851,50 +1181,46 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
   ]);
 
   useEffect(() => {
-    syncPreviewDraft(proposalMode, proposalDraft, proposalPreview);
-  }, [orc?.id, proposalMode, proposalDraft, proposalPreview]);
+    setProposalDraft((prev) => {
+      const current = prev && typeof prev === 'object' ? prev : {};
+      const nextDraft = { ...current };
+      let changed = false;
+
+      AUTO_SYNC_PROPOSAL_FIELDS.forEach((field) => {
+        if (proposalDirtyFields[field]) return;
+        const desired = normalizeText(autoProposalDraft?.[field] || '');
+        if (normalizeText(nextDraft[field]) !== desired) {
+          nextDraft[field] = desired;
+          changed = true;
+        }
+      });
+
+      return changed ? nextDraft : prev;
+    });
+  }, [autoProposalDraft, proposalDirtyFields]);
 
   useEffect(() => {
-    if (proposalMode === 'personalizada' || proposalMode === 'mensal') return;
-    const nextTotal = fmtBRL(Number(financialMetrics.preco_final || 0));
-    if (!nextTotal || nextTotal === '—') return;
-
-    setProposalDraft((prev) => {
-      if (!prev || normalizeText(prev.valor_total_moeda) === nextTotal) return prev;
-      const nextDraft = {
-        ...prev,
-        valor_total_moeda: nextTotal,
-      };
-
-      if (proposalMode === 'opcoes') {
-        Object.assign(nextDraft, buildAutoOptionDraft({
-          orc,
-          quantityText: nextDraft.quantidade,
-          totalText: nextDraft.valor_total_moeda,
-        }));
-      }
-
-      return nextDraft;
+    if (precoFinalTouched) return;
+    const suggested = Number(autoPricing?.precoFinal || autoPricing?.valorSugerido || 0);
+    if (!Number.isFinite(suggested) || suggested <= 0) return;
+    setPrecoFinal((current) => {
+      const currentNumber = Number(current || 0);
+      return Math.abs(currentNumber - suggested) > 0.009 ? suggested : current;
     });
-  }, [financialMetrics.preco_final, proposalMode, orc]);
+  }, [autoPricing?.precoFinal, autoPricing?.valorSugerido, precoFinalTouched]);
+
+  useEffect(() => {
+    syncPreviewDraft(proposalMode, proposalDraft, proposalPreview);
+  }, [orc?.id, proposalMode, proposalDraft, proposalPreview]);
 
   async function handleSaveProposalDraft() {
     setDraftSaving(true);
     setError('');
     setInfo('');
     try {
-      const detalhesAtual = parseDetalhes(orc?.detalhes);
-      const comercialAtual = parseDetalhes(detalhesAtual?.comercial);
-      const updated = await updateOrcamento(orc.id, {
-        detalhes: {
-          ...detalhesAtual,
-          comercial: {
-            ...comercialAtual,
-            ...buildProposalDraftCommercialState(),
-          },
-        },
-      });
+      const updated = await updateOrcamento(orc.id, buildFinancialPersistencePatch());
       onUpdated?.(updated);
+      setPrecoFinal(updated?.preco_final ?? Number(financialMetrics.preco_final || 0));
       setInfo('Rascunho da proposta salvo no orçamento.');
     } catch (err) {
       setError(err.message ?? 'Erro ao salvar rascunho da proposta.');
@@ -920,6 +1246,11 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
       });
       onUpdated?.(updated);
       setPrecoFinal(updated?.preco_final ?? Number(financialMetrics.preco_final || 0));
+      setPrecoFinalTouched(
+        Math.abs(
+          Number(updated?.preco_final ?? 0) - Number(updated?.valor_sugerido ?? autoPricing?.valorSugerido ?? 0)
+        ) > 0.009
+      );
       setInfo('Orcamento salvo com campos financeiros atualizados.');
     } catch (err) {
       setError(err.message ?? 'Erro ao salvar.');
@@ -1162,7 +1493,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
   }
 
   async function handleRecalculateValues() {
-    const nextPrecoFinal = Number(orc?.valor_sugerido || orc?.preco_base || precoFinal || 0);
+    const nextPrecoFinal = Number(autoPricing?.precoFinal || autoPricing?.valorSugerido || autoPricing?.precoBase || precoFinal || 0);
     if (!Number.isFinite(nextPrecoFinal) || nextPrecoFinal <= 0) {
       setError('Nao foi possivel recalcular: valor sugerido indisponivel.');
       return;
@@ -1174,7 +1505,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
     try {
       const updated = await updateOrcamento(orc.id, {
         status_orcamento: statusOrc,
-        preco_final: nextPrecoFinal,
+        ...buildFinancialPersistencePatch(nextPrecoFinal),
         recalcular_pricing: true,
         observacoes_internas: obsInternas,
         urgencia,
@@ -1184,6 +1515,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
         proximo_followup_em: fromDateTimeLocal(followup),
       });
       setPrecoFinal(nextPrecoFinal);
+      setPrecoFinalTouched(false);
       onUpdated?.(updated);
       setInfo('Valores recalculados e sincronizados.');
     } catch (err) {
@@ -1214,26 +1546,40 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
           <div className="grid grid-cols-2 gap-3">
             <div className="bg-hagav-surface border border-hagav-border rounded-xl p-4 text-center">
               <p className="text-[10px] text-hagav-gray uppercase tracking-wider mb-1">Preco base</p>
-              <p className="text-2xl font-bold text-hagav-white">{fmtBRL(orc.preco_base)}</p>
+              <p className="text-2xl font-bold text-hagav-white">{fmtBRL(autoPricing.precoBase || orc.preco_base || 0)}</p>
             </div>
             <div className="bg-hagav-gold/5 border border-hagav-gold/20 rounded-xl p-4 text-center relative overflow-hidden">
               <div className="absolute top-0 left-0 right-0 h-px bg-gold-gradient" />
               <p className="text-[10px] text-hagav-gray uppercase tracking-wider mb-1">Valor sugerido</p>
-              <p className="text-2xl font-bold text-hagav-gold">{fmtBRL(orc.valor_sugerido || orc.preco_base)}</p>
+              <p className="text-2xl font-bold text-hagav-gold">{fmtBRL(autoPricing.valorSugerido || orc.valor_sugerido || orc.preco_base || 0)}</p>
             </div>
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
             <InfoRow label="Preco final editavel" value={fmtBRL(financialMetrics.preco_final || 0)} />
-            <InfoRow label="Margem automatica (motor)" value={`${Number(orc.margem_automatica ?? orc.margem_estimada ?? 0).toFixed(1)}%`} />
+            <InfoRow label="Margem automatica (motor)" value={`${Number(autoPricing.margemEstimada ?? orc.margem_automatica ?? orc.margem_estimada ?? 0).toFixed(1)}%`} />
             <InfoRow label="Margem comercial (preco final)" value={`${Number(financialMetrics.margem_percentual || 0).toFixed(1)}%`} />
             <InfoRow label="Lucro estimado" value={fmtBRL(financialMetrics.lucro_estimado || 0)} />
-            <InfoRow label="Valor potencial" value={fmtBRL(financialMetrics.valor_estimado || orc.preco_final || orc.preco_base)} />
-            <InfoRow label="Pacote sugerido" value={orc.pacote_sugerido || '—'} />
-            <InfoRow label="Faixa sugerida" value={orc.faixa_sugerida || '—'} />
+            <InfoRow label="Custo real" value={fmtBRL(autoPricing.custoReal || autoPricing.custoEstimado || 0)} />
+            <InfoRow label="Horas totais" value={`${Number(autoPricing.totalHoras || 0).toFixed(2)}h`} />
+            <InfoRow label="Pacote sugerido" value={autoPricing.pacoteSugerido || orc.pacote_sugerido || '—'} />
+            <InfoRow label="Faixa sugerida" value={autoPricing.faixaSugerida || orc.faixa_sugerida || '—'} />
             <InfoRow label="Proposta PDF" value={propostaLink ? 'Gerada' : 'Pendente'} />
             <InfoRow label="Proposta gerada em" value={propostaGeradaEm ? fmtDateTime(propostaGeradaEm) : '—'} />
           </div>
+
+          {marginStatus && (
+            <div className={`rounded-lg border px-3 py-2 text-sm ${
+              marginStatus.tone === 'red'
+                ? 'bg-red-500/10 border-red-500/25 text-red-200'
+                : marginStatus.tone === 'yellow'
+                  ? 'bg-amber-500/10 border-amber-500/25 text-amber-200'
+                  : 'bg-emerald-500/10 border-emerald-500/25 text-emerald-200'
+            }`}>
+              <p className="font-medium">{marginStatus.label}</p>
+              <p className="text-xs opacity-90 mt-1">{marginStatus.description}</p>
+            </div>
+          )}
 
           {showPropostaPdfBlockedWarning && (
             <p className="text-xs text-amber-300 bg-amber-500/10 border border-amber-500/25 rounded-lg px-3 py-2">
@@ -1259,21 +1605,147 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
             </div>
           )}
 
-          {orc.resumo_orcamento && (
+          {(autoPricing.motivoCalculo || orc.resumo_orcamento) && (
             <div className="bg-hagav-surface border border-hagav-gold/20 rounded-lg p-4">
               <p className="text-[10px] text-hagav-gold uppercase tracking-wider mb-1.5">Resumo de precificacao</p>
-              <p className="text-sm text-hagav-light whitespace-pre-wrap leading-relaxed">{orc.resumo_orcamento}</p>
+              <p className="text-sm text-hagav-light whitespace-pre-wrap leading-relaxed">{autoPricing.motivoCalculo || orc.resumo_orcamento}</p>
             </div>
           )}
 
           <div>
-            <p className="text-xs text-hagav-gray uppercase tracking-wider mb-2">Dados para operacao</p>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <div>
+                <p className="text-xs text-hagav-gray uppercase tracking-wider">Dados para operacao</p>
+                <p className="text-[11px] text-hagav-gray">Edite quantidade, prazo, referencia e tempo real por item.</p>
+              </div>
+              <button type="button" onClick={addPricingItem} className="btn-ghost btn-sm">
+                <Plus size={13} />
+                Adicionar item
+              </button>
+            </div>
+
+            {pricingRulesLoading && (
+              <p className="text-[11px] text-hagav-gray mb-2">Carregando regras comerciais salvas no admin...</p>
+            )}
+
+            <datalist id="hagav-service-options">
+              {PRICING_SERVICE_OPTIONS.map((option) => (
+                <option key={option} value={option} />
+              ))}
+            </datalist>
+
+            <div className="space-y-3">
+              {pricingItems.map((item, idx) => {
+                const itemResult = itensServico[idx] || {};
+                const parsedHours = parseDurationToHours(item?.horas_estimadas || item?.tempo_bruto, 0);
+                const effectiveHours = Number(itemResult?.horas_por_unidade || parsedHours || 0);
+                return (
+                  <div key={`pricing-item-${idx}`} className="bg-hagav-surface border border-hagav-border rounded-lg p-3 space-y-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-[11px] text-hagav-gold uppercase tracking-wider">Item {idx + 1}</p>
+                      <button
+                        type="button"
+                        onClick={() => removePricingItem(idx)}
+                        disabled={pricingItems.length <= 1}
+                        className={`btn-ghost btn-sm ${pricingItems.length <= 1 ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      >
+                        <Trash2 size={13} />
+                        Remover
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-6 gap-2">
+                      <div className="xl:col-span-2">
+                        <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Serviço</label>
+                        <input
+                          type="text"
+                          list="hagav-service-options"
+                          value={item?.servico || ''}
+                          onChange={(e) => updatePricingItem(idx, 'servico', e.target.value)}
+                          className="hinput w-full"
+                          placeholder="Ex.: Reels / Shorts / TikTok"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Quantidade</label>
+                        <input
+                          type="number"
+                          min="1"
+                          step="1"
+                          value={item?.quantidade || '1'}
+                          onChange={(e) => updatePricingItem(idx, 'quantidade', e.target.value)}
+                          className="hinput w-full"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Material</label>
+                        <select
+                          value={item?.material_gravado || 'Sim'}
+                          onChange={(e) => updatePricingItem(idx, 'material_gravado', e.target.value)}
+                          className="hselect w-full"
+                        >
+                          {ITEM_MATERIAL_OPTIONS.map((option) => (
+                            <option key={option} value={option}>{option}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Tempo estimado</label>
+                        <input
+                          type="text"
+                          value={item?.horas_estimadas || item?.tempo_bruto || ''}
+                          onChange={(e) => updatePricingItem(idx, 'horas_estimadas', e.target.value)}
+                          className="hinput w-full"
+                          placeholder="1h, 1:30, 2h30, 0:45"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Prazo</label>
+                        <input
+                          type="text"
+                          value={item?.prazo || ''}
+                          onChange={(e) => updatePricingItem(idx, 'prazo', e.target.value)}
+                          className="hinput w-full"
+                          placeholder="Ex.: Essa semana"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_220px] gap-2">
+                      <div>
+                        <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Referencia do item</label>
+                        <textarea
+                          value={item?.referencia || ''}
+                          onChange={(e) => updatePricingItem(idx, 'referencia', e.target.value)}
+                          rows={2}
+                          className="hinput w-full resize-none"
+                          placeholder="Link, observacao ou briefing desse item"
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <InfoRow label="Horas/un" value={effectiveHours > 0 ? `${effectiveHours.toFixed(2)}h` : '—'} />
+                        <InfoRow label="Custo real" value={fmtBRL(itemResult?.custo_real_item || 0)} />
+                        <InfoRow label="Sugerido" value={fmtBRL(itemResult?.valor_sugerido_item || 0)} />
+                        <InfoRow label="Margem" value={Number.isFinite(Number(itemResult?.margem_item)) ? `${Number(itemResult.margem_item).toFixed(1)}%` : '—'} />
+                      </div>
+                    </div>
+
+                    <p className="text-[11px] text-hagav-gray">
+                      {parsedHours > 0
+                        ? `Tempo informado reconhecido: ${formatDurationCompact(parsedHours) || `${parsedHours.toFixed(2)}h`}.`
+                        : `Sem tempo informado válido: usando preset operacional de ${effectiveHours > 0 ? `${effectiveHours.toFixed(2)}h` : '0h'} para este serviço.`}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mt-3">
               <InfoRow label="Servico/Operacao" value={servicoResumo} />
               <InfoRow label="Quantidade" value={quantidadeResumo} />
               <InfoRow label="Material gravado" value={materialResumo} />
-              <InfoRow label="Tempo bruto" value={tempoResumo} />
-              <InfoRow label="Prazo" value={orc.prazo} />
+              <InfoRow label="Tempo estimado" value={tempoResumo} />
+              <InfoRow label="Prazo" value={proposalRecord.prazo || '—'} />
               <div className="bg-hagav-surface border border-hagav-border rounded-lg p-3 md:col-span-2">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
@@ -1311,21 +1783,6 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
               <InfoRow label="Origem" value={orc.origem} />
               <InfoRow label="Criado em" value={fmtDateTime(orc.created_at)} />
             </div>
-            {itensServico.length > 1 ? (
-              <div className="mt-3 bg-hagav-surface border border-hagav-border rounded-lg p-3">
-                <p className="text-[10px] text-hagav-gray uppercase tracking-wider mb-2">Itens por servico</p>
-                <div className="space-y-2">
-                  {itensServico.map((item, idx) => (
-                    <div key={`${item?.servico || 'item'}-${idx}`} className="grid grid-cols-12 gap-2 text-xs">
-                      <div className="col-span-4 text-hagav-light">{item?.servico || 'Servico'}</div>
-                      <div className="col-span-2 text-hagav-gray">Qtd: {item?.quantidade || '-'}</div>
-                      <div className="col-span-3 text-hagav-gray">Base: {fmtBRL(item?.preco_base_item || 0)}</div>
-                      <div className="col-span-3 text-hagav-gold">Sug.: {fmtBRL(item?.valor_sugerido_item || 0)}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ) : null}
           </div>
 
           {observacoesText && (
@@ -1779,7 +2236,10 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
                 step="0.01"
                 min="0"
                 value={precoFinal}
-                onChange={(e) => setPrecoFinal(e.target.value)}
+                onChange={(e) => {
+                  setPrecoFinalTouched(true);
+                  setPrecoFinal(e.target.value);
+                }}
                 className="hinput w-full"
                 placeholder="0.00"
               />

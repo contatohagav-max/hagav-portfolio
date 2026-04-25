@@ -1,3 +1,9 @@
+import {
+  DEFAULT_PRICING_RULES as SHARED_DEFAULT_PRICING_RULES,
+  computeCommercialPricing,
+  normalizePricingRules,
+} from '../../shared/pricing-engine.js';
+
 const DDD_VALIDOS = new Set([
   "11","12","13","14","15","16","17","18","19",
   "21","22","24","27","28",
@@ -37,72 +43,7 @@ const DEFAULT_SCORE_WEIGHTS = {
   semPressa: -6
 };
 
-const DEFAULT_PRICING_RULES = {
-  serviceBase: {
-    reels_shorts_tiktok: 170,
-    criativo_trafego_pago: 204,
-    corte_podcast: 123,
-    video_medio: 264,
-    depoimento: 220,
-    videoaula_modulo: 396,
-    youtube: 607,
-    vsl_15: 880,
-    vsl_longa: 2000,
-    motion_min: 900,
-    motion_max: 2500,
-    default_du: 190,
-    default_dr: 210
-  },
-  volumeDiscounts: [
-    { min: 1, max: 4, percent: 0 },
-    { min: 5, max: 9, percent: 3 },
-    { min: 10, max: 19, percent: 6 },
-    { min: 20, max: 29, percent: 10 },
-    { min: 30, max: 99999, percent: 10 }
-  ],
-  complexidade: {
-    N1: 0.7,
-    N2: 1.0,
-    N3: 1.5,
-    n1MaxMin: 30,
-    n2MaxMin: 120
-  },
-  urgencia: {
-    DU: {
-      "24h": 1.3,
-      "3 dias": 1.15,
-      "essa semana": 1.0,
-      "sem pressa": 1.0
-    },
-    DR: {
-      imediato: 1.2,
-      "essa semana": 1.0,
-      "esse mês": 1.0,
-      "estou analisando": 1.0
-    },
-    VSL: {
-      "3 dias": 1.4
-    }
-  },
-  ajustes: {
-    semReferencia: 10,
-    multicamera: 15
-  },
-  margem: {
-    choHora: 41.67,
-    minimaSegura: 60,
-    saudavelMin: 65,
-    saudavelMax: 75,
-    excelente: 75,
-    recusaAbaixo: 55,
-    repasseEditorMin: 30,
-    repasseEditorMax: 35
-  },
-  pacotes: {
-    sugerirAcimaQtd: 8,
-    revisaoCapacidadeAcimaQtd: 30
-  }
-};
+const DEFAULT_PRICING_RULES = SHARED_DEFAULT_PRICING_RULES;
 
 const DR_OFFICIAL_ITEM_TOTALS = {
   reels_shorts_tiktok: {
@@ -737,7 +678,7 @@ async function loadPricingContext(config) {
   ]);
 
   return {
-    pricingRules: deepMerge(DEFAULT_PRICING_RULES, pricing || {}),
+    pricingRules: normalizePricingRules(pricing || {}),
     scoreWeights: deepMerge(DEFAULT_SCORE_WEIGHTS, score || {})
   };
 }
@@ -760,20 +701,29 @@ function buildOrcamentoDetalhesSerializado(lead, pricing) {
     referencia: row.Referencia || "",
     observacoes: row.Observacoes || "",
     calculoAutomatico: {
+      pricingRuleVersion: Number(pricing?.pricingRuleVersion || 0),
+      basePriceMode: pricing?.basePriceMode || "reference",
+      choHora: Number(pricing?.choHora || 0),
       precoBase: Number(pricing?.precoBase || 0),
       precoFinal: Number(pricing?.precoFinal || 0),
       valorSugerido: Number(pricing?.valorSugerido || 0),
+      custoReal: Number(pricing?.custoReal || pricing?.custoEstimado || 0),
+      lucroEstimado: Number(pricing?.lucroEstimado || 0),
       faixaSugerida: pricing?.faixaSugerida || "",
       margemEstimada: Number(pricing?.margemEstimada || 0),
+      margemStatus: pricing?.margemStatus || null,
       revisaoManual: Boolean(pricing?.revisaoManual),
       motivoCalculo: pricing?.motivoCalculo || "",
       complexidadeNivel: pricing?.complexidadeNivel || "",
       multiplicadorComplexidade: Number(pricing?.multiplicadorComplexidade || 1),
       multiplicadorUrgencia: Number(pricing?.multiplicadorUrgencia || 1),
       descontoVolumePercent: Number(pricing?.descontoVolumePercent || 0),
+      economiaTotal: Number(pricing?.economiaTotal || 0),
       ajusteReferenciaPercent: Number(pricing?.ajusteReferenciaPercent || 0),
       ajusteMulticameraPercent: Number(pricing?.ajusteMulticameraPercent || 0),
       pacoteSugerido: pricing?.pacoteSugerido || "",
+      totalQuantidade: Number(pricing?.totalQuantidade || 0),
+      totalHoras: Number(pricing?.totalHoras || 0),
       statusOrcamento: pricing?.statusOrcamento || STATUS_ORCAMENTO_PADRAO,
       itensServico: Array.isArray(pricing?.itensServico) ? pricing.itensServico : []
     },
@@ -1591,244 +1541,60 @@ function calculateOrcamentoPricing(row, pricingRules, rawAnswers) {
     : parseLabeledMap(row?.MaterialGravado, 180, 40);
   const prazoBase = structured.prazo || row?.Prazo;
   const referenciaBase = structured.referencia || row?.Referencia;
-  const prazoKey = canonicalPrazoKey(prazoBase);
-  const observacoes = String(row?.Observacoes || "");
-  const referencia = String(referenciaBase || "");
-
-  const adjustments = pricingRules?.ajustes || DEFAULT_PRICING_RULES.ajustes;
-  const marginRules = pricingRules?.margem || DEFAULT_PRICING_RULES.margem;
-  const semReferenciaPercent = !referencia.trim() ? Number(adjustments?.semReferencia || 10) : 0;
-  const multicameraPercent = detectMulticamera(`${observacoes} ${referencia}`) ? Number(adjustments?.multicamera || 15) : 0;
-  const operacaoEspecial = detectOperacaoEspecial(`${observacoes} ${row?.ServicoOuOperacao || ""}`);
-
-  let subtotalBase = 0;
-  let subtotalSuggested = 0;
-  let faixaMinTotal = 0;
-  let faixaMaxTotal = 0;
-  let totalQty = 0;
-  let weightedComplexity = 0;
-  let maxUrgencyMultiplier = 1;
-  let hasHeavyService = false;
-  let revisaoManual = false;
-  let alertaCapacidade = false;
-  let prazoBloqueado = false;
-  let estimatedHours = 0;
-  let globalSuggestedFactor = 1;
-  let maxItemDiscountPercent = 0;
-  const itensServico = [];
-  const reasons = [];
-
-  const baseHoursByService = {
-    reels_shorts_tiktok: 0.9,
-    criativo_trafego_pago: 1.2,
-    corte_podcast: 0.8,
-    video_medio: 2.1,
-    depoimento: 1.6,
-    videoaula_modulo: 2.8,
-    youtube: 4.0,
-    vsl_15: 6.0,
-    vsl_longa: 14.0,
-    motion: 10.0,
-    default: 1.4
-  };
-
   const structuredItems = Array.isArray(structured.items) ? structured.items : [];
   const baseItems = structuredItems.length > 0
     ? structuredItems
-    : services.map((serviceLabel, index) => ({
+    : (services.length > 0 ? services : [row?.ServicoOuOperacao || "Servico"]).map((serviceLabel, index) => ({
       servico: serviceLabel,
-      quantidade: qtyParts[index] || "1",
+      quantidade: qtyParts[index] || row?.Quantidade || "1",
       material_gravado: materialMap[normalizeServiceKey(serviceLabel)] || row?.MaterialGravado || "",
-      tempo_bruto: tempoMap[normalizeServiceKey(serviceLabel)] || "",
-      referencia: referenciaBase || "",
-      prazo: prazoBase || ""
+      tempo_bruto: tempoMap[normalizeServiceKey(serviceLabel)] || row?.TempoBruto || "",
+      referencia: referenciaBase || row?.Referencia || "",
+      prazo: prazoBase || row?.Prazo || ""
     }));
 
-  for (let index = 0; index < baseItems.length; index += 1) {
-    const item = baseItems[index] || {};
-    const serviceLabel = stripDangerousText(String(item?.servico || services[index] || ""), LIMITS.service);
-    const qty = Math.max(1, Math.round(parsePositiveNumber(item?.quantidade || qtyParts[index] || "1") || 1));
-    const serviceKey = mapServiceCatalog(serviceLabel);
-    const unit = getUnitPriceFromRules(flow, serviceKey, pricingRules);
-    const tempoRaw = stripDangerousText(String(item?.tempo_bruto || tempoMap[normalizeServiceKey(serviceLabel)] || ""), LIMITS.duration);
-    const tempoMinutes = Math.round(parseHours(tempoRaw) * 60);
-    const complexity = getComplexidadeByMinutes(tempoMinutes, pricingRules);
-    const urg = getUrgencyMultiplier(flow, prazoKey, serviceKey, pricingRules);
-    const materialRaw = String(item?.material_gravado || materialMap[normalizeServiceKey(serviceLabel)] || row?.MaterialGravado || "").toLowerCase();
-    const materialPronto = materialRaw.includes("sim");
-    const drOfficialTotal = flow === "DR" ? getDrOfficialItemTotal(serviceKey, qty) : null;
+  const items = baseItems
+    .map((item, index) => ({
+      servico: stripDangerousText(String(item?.servico || services[index] || row?.ServicoOuOperacao || "Servico"), LIMITS.service),
+      quantidade: stripDangerousText(String(item?.quantidade || qtyParts[index] || row?.Quantidade || "1"), 60) || "1",
+      material_gravado: stripDangerousText(
+        String(item?.material_gravado || materialMap[normalizeServiceKey(item?.servico || services[index] || "")] || row?.MaterialGravado || ""),
+        40
+      ),
+      tempo_bruto: stripDangerousText(
+        String(item?.tempo_bruto || tempoMap[normalizeServiceKey(item?.servico || services[index] || "")] || row?.TempoBruto || ""),
+        LIMITS.duration
+      ),
+      horas_estimadas: stripDangerousText(
+        String(item?.horas_estimadas || item?.duracao_sugerida || item?.horas_por_unidade || ""),
+        LIMITS.duration
+      ),
+      referencia: stripDangerousText(String(item?.referencia || referenciaBase || row?.Referencia || ""), LIMITS.referencia),
+      prazo: stripDangerousText(String(item?.prazo || prazoBase || row?.Prazo || ""), 60)
+    }))
+    .filter((item) => Boolean(item.servico));
 
-    let itemBase = drOfficialTotal ?? (unit.value * qty);
-    let itemSuggested = itemBase * complexity.multiplicador * urg.multiplier;
-
-    if (flow === "DR" && drOfficialTotal === null) {
-      const itemDiscountPercent = getVolumeDiscount(qty, pricingRules);
-      maxItemDiscountPercent = Math.max(maxItemDiscountPercent, itemDiscountPercent);
-      if (itemDiscountPercent > 0) {
-        itemSuggested *= (1 - (itemDiscountPercent / 100));
-      }
-    }
-
-    if (!materialPronto && materialRaw.trim()) {
-      itemSuggested *= 1.05;
-      reasons.push(`${serviceLabel}: material nao totalmente pronto aplicou +5%.`);
-    }
-
-    subtotalBase += itemBase;
-    subtotalSuggested += itemSuggested;
-    totalQty += qty;
-    weightedComplexity += complexity.multiplicador * qty;
-    maxUrgencyMultiplier = Math.max(maxUrgencyMultiplier, urg.multiplier);
-    hasHeavyService = hasHeavyService || unit.heavy;
-    revisaoManual = revisaoManual || unit.manual || urg.forcedManual;
-    prazoBloqueado = prazoBloqueado || urg.blocked;
-    urg.reasons.forEach((reason) => reasons.push(reason));
-
-    const hourBase = baseHoursByService[serviceKey] || baseHoursByService.default;
-    estimatedHours += (hourBase * complexity.multiplicador) * qty;
-
-    if (complexity.nivel === "N3") {
-      revisaoManual = true;
-      reasons.push(`${serviceLabel}: bruto acima de 2h exige revisao manual.`);
-    }
-    if ((serviceKey === "vsl_15" || serviceKey === "vsl_longa") && tempoMinutes > 30) {
-      revisaoManual = true;
-      reasons.push("VSL com bruto acima de 30min exige revisao manual.");
-    }
-
-    itensServico.push({
-      servico: serviceLabel,
-      quantidade: qty,
-      material_gravado: stripDangerousText(String(item?.material_gravado || ""), 40),
-      tempo_bruto: tempoRaw,
-      referencia: stripDangerousText(String(item?.referencia || referenciaBase || ""), LIMITS.referencia),
-      prazo: stripDangerousText(String(item?.prazo || prazoBase || ""), 60),
-      preco_base_item: roundCurrency(itemBase),
-      valor_sugerido_item: roundCurrency(itemSuggested),
-      complexidade_nivel: complexity.nivel,
-      multiplicador_complexidade: roundCurrency(complexity.multiplicador),
-      multiplicador_urgencia: roundCurrency(urg.multiplier)
-    });
-
-    const spread = unit.heavy ? 0.2 : (serviceKey === "video_medio" || serviceKey === "depoimento" || serviceKey === "videoaula_modulo" ? 0.1 : 0.05);
-    faixaMinTotal += itemSuggested * (1 - spread);
-    faixaMaxTotal += itemSuggested * (1 + spread);
-  }
-
-  if (!services.length) {
-    const fallbackQty = Math.max(1, Math.round(parsePositiveNumber(row?.Quantidade || "1") || 1));
-    const fallbackUnit = getUnitPriceFromRules(flow, "default", pricingRules);
-    subtotalBase = fallbackUnit.value * fallbackQty;
-    subtotalSuggested = subtotalBase;
-    faixaMinTotal = subtotalBase * 0.95;
-    faixaMaxTotal = subtotalBase * 1.05;
-    totalQty = fallbackQty;
-    weightedComplexity = fallbackQty;
-    estimatedHours = fallbackQty * 1.4;
-    reasons.push("Servico nao mapeado automaticamente, aplicado valor base padrao.");
-    revisaoManual = true;
-    itensServico.push({
-      servico: stripDangerousText(String(row?.ServicoOuOperacao || "Servico padrao"), LIMITS.service),
-      quantidade: fallbackQty,
+  const pricing = computeCommercialPricing({
+    flow,
+    prazo: stripDangerousText(String(prazoBase || row?.Prazo || ""), 60),
+    referencia: stripDangerousText(String(referenciaBase || row?.Referencia || ""), LIMITS.referencia),
+    observacoes: stripDangerousText(String(row?.Observacoes || ""), LIMITS.extras),
+    items: items.length > 0 ? items : [{
+      servico: stripDangerousText(String(row?.ServicoOuOperacao || "Servico"), LIMITS.service),
+      quantidade: stripDangerousText(String(row?.Quantidade || "1"), 60) || "1",
       material_gravado: stripDangerousText(String(row?.MaterialGravado || ""), 40),
       tempo_bruto: stripDangerousText(String(row?.TempoBruto || ""), LIMITS.duration),
-      referencia: stripDangerousText(String(referenciaBase || ""), LIMITS.referencia),
-      prazo: stripDangerousText(String(prazoBase || ""), 60),
-      preco_base_item: roundCurrency(subtotalBase),
-      valor_sugerido_item: roundCurrency(subtotalSuggested),
-      complexidade_nivel: "N2",
-      multiplicador_complexidade: 1,
-      multiplicador_urgencia: 1
-    });
-  }
-
-  if (semReferenciaPercent > 0) {
-    const factor = 1 + (semReferenciaPercent / 100);
-    globalSuggestedFactor *= factor;
-    subtotalSuggested *= factor;
-    faixaMinTotal *= factor;
-    faixaMaxTotal *= factor;
-    reasons.push(`Sem referencia visual: +${semReferenciaPercent}%.`);
-  }
-
-  if (multicameraPercent > 0) {
-    const factor = 1 + (multicameraPercent / 100);
-    globalSuggestedFactor *= factor;
-    subtotalSuggested *= factor;
-    faixaMinTotal *= factor;
-    faixaMaxTotal *= factor;
-    reasons.push(`Multicamera detectada: +${multicameraPercent}%.`);
-  }
-
-  if (operacaoEspecial) {
-    revisaoManual = true;
-    reasons.push("Operacao especial detectada: revisao manual obrigatoria.");
-  }
-
-  const discountPercent = maxItemDiscountPercent;
-
-  const pacote = getPackageSuggestion(flow, totalQty, subtotalSuggested, pricingRules);
-  if (totalQty > Number((pricingRules?.pacotes || DEFAULT_PRICING_RULES.pacotes).revisaoCapacidadeAcimaQtd || 30)) {
-    alertaCapacidade = true;
-    revisaoManual = true;
-    reasons.push("Volume acima de 30 itens: revisar capacidade antes de aprovar.");
-  }
-
-  if (hasHeavyService) {
-    reasons.push("Servico pesado identificado: revisar escopo antes de enviar proposta.");
-  }
-
-  const precoBase = Math.max(1, roundCurrency(subtotalBase));
-  const valorSugerido = Math.max(1, roundCurrency(subtotalSuggested));
-  const faixaMin = Math.max(1, roundCurrency(faixaMinTotal));
-  const faixaMax = Math.max(faixaMin, roundCurrency(faixaMaxTotal));
-  const faixaSugerida = `R$ ${faixaMin.toFixed(2)} a R$ ${faixaMax.toFixed(2)}`;
-
-  const complexityAvg = totalQty > 0 ? (weightedComplexity / totalQty) : 1;
-  const complexityLevel = complexityAvg <= 0.8 ? "N1" : (complexityAvg < 1.3 ? "N2" : "N3");
-  const custoEstimado = roundCurrency((Number(marginRules?.choHora || 41.67) || 41.67) * Math.max(estimatedHours, 0.5));
-  const margemPercent = valorSugerido > 0 ? roundCurrency(((valorSugerido - custoEstimado) / valorSugerido) * 100) : 0;
-  if (margemPercent < Number(marginRules?.recusaAbaixo || 55)) {
-    revisaoManual = true;
-    reasons.push(`Margem estimada (${margemPercent}%) abaixo do limite de ${marginRules?.recusaAbaixo || 55}%.`);
-  }
-  if (prazoBloqueado) {
-    revisaoManual = true;
-  }
-
-  if (itensServico.length > 0) {
-    for (const item of itensServico) {
-      item.valor_sugerido_item = roundCurrency((Number(item.valor_sugerido_item || 0) * globalSuggestedFactor));
-    }
-  }
+      referencia: stripDangerousText(String(referenciaBase || row?.Referencia || ""), LIMITS.referencia),
+      prazo: stripDangerousText(String(prazoBase || row?.Prazo || ""), 60)
+    }]
+  }, pricingRules);
 
   return {
-    precoBase,
-    precoFinal: valorSugerido,
-    valorSugerido,
-    faixaSugerida,
-    margemEstimada: margemPercent,
-    custoEstimado,
-    totalQuantidade: totalQty,
-    pacoteSugerido: pacote,
+    ...pricing,
     statusOrcamento: STATUS_ORCAMENTO_PADRAO,
     observacoesInternas: "",
     linkPdf: "",
-    revisaoManual,
-    alertaCapacidade,
-    operacaoEspecial,
-    complexidadeNivel: revisaoManual && complexityLevel === "N3" ? "manual" : complexityLevel,
-    multiplicadorComplexidade: roundCurrency(complexityAvg),
-    multiplicadorUrgencia: roundCurrency(maxUrgencyMultiplier),
-    descontoVolumePercent: discountPercent,
-    ajusteReferenciaPercent: semReferenciaPercent,
-    ajusteMulticameraPercent: multicameraPercent,
-    itensServico,
-    motivoCalculo: stripDangerousText(reasons.join(" "), 2000),
-    metrics: {
-      prazoKey,
-      hasHeavyService
-    }
+    motivoCalculo: stripDangerousText(pricing?.motivoCalculo || "", 2000)
   };
 }
 

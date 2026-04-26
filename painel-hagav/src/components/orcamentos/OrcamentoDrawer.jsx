@@ -1537,7 +1537,10 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
   return (
     <>
       <div className="drawer-overlay" onClick={onClose} />
-      <aside className="drawer-panel orcamento-drawer-panel flex flex-col">
+      <aside
+        className="drawer-panel flex flex-col"
+        style={{ width: showLiveProposalPreview ? 'min(96vw, 72rem)' : 'min(94vw, 48rem)' }}
+      >
         <div className="drawer-head">
           <div>
             <p className="text-xs text-hagav-gray uppercase tracking-wider mb-1">Orcamento #{orc.id}</p>
@@ -1549,7 +1552,12 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
           </button>
         </div>
 
-        <div className="drawer-body">
+        <div className={showLiveProposalPreview
+          ? 'flex-1 min-h-0 grid gap-4 max-h-[min(72vh,940px)] grid-rows-[minmax(0,1.15fr)_minmax(0,0.85fr)] xl:grid-cols-[minmax(0,1.06fr)_minmax(340px,0.94fr)] xl:grid-rows-1'
+          : 'flex-1 min-h-0 flex flex-col'
+        }>
+          <div className={showLiveProposalPreview ? 'min-h-0 overflow-y-auto pr-1 space-y-3' : 'flex flex-col flex-1 min-h-0 overflow-y-auto space-y-3'}>
+            <div className="px-4 py-5 space-y-5 md:px-6">
           <div className="grid grid-cols-2 gap-3">
             <div className="bg-hagav-surface border border-hagav-border rounded-xl p-4 text-center">
               <p className="text-[10px] text-hagav-gray uppercase tracking-wider mb-1">Preco base</p>
@@ -1837,14 +1845,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
                 </button>
               ))}
             </div>
-            <div
-              className={
-                showLiveProposalPreview
-                  ? 'grid gap-4 items-start max-h-[min(72vh,980px)] grid-rows-[minmax(0,1.15fr)_minmax(0,0.85fr)] xl:grid-cols-[minmax(0,1.08fr)_minmax(340px,0.92fr)] xl:grid-rows-1'
-                  : 'grid grid-cols-1 gap-4 items-start'
-              }
-            >
-              <div className={showLiveProposalPreview ? 'min-h-0 overflow-y-auto pr-1 space-y-3' : 'space-y-3'}>
+            <div className="space-y-3">
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-2">
               <div>
                 <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Nome do cliente</label>
@@ -2162,17 +2163,6 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
                     </div>
                   </div>
                 )}
-              </div>
-
-              {showLiveProposalPreview && (
-                <div className="min-h-0 overflow-y-auto pl-0 pr-1 space-y-2 xl:pl-1">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-xs text-hagav-gray uppercase tracking-wider">Preview da proposta</p>
-                    <span className="text-[11px] text-hagav-gray">Atualiza conforme você edita.</span>
-                  </div>
-                  <ProposalPreview preview={proposalPreview} />
-                </div>
-              )}
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-6 gap-2">
@@ -2324,15 +2314,10 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
             </div>
           </div>
 
-          {error && (
-            <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{error}</p>
-          )}
-          {info && (
-            <p className="text-xs text-hagav-light bg-hagav-surface border border-hagav-border rounded-lg px-3 py-2">{info}</p>
-          )}
+
         </div>
 
-        <div className="drawer-foot orcamento-actions-foot">
+            <div className="orcamento-actions-foot pt-1">
           {(error || info) && (
             <p
               className={`orcamento-feedback ${
@@ -2433,8 +2418,23 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
               Salvar
             </button>
           </div>
+            </div>
+          </div>
+
+          {showLiveProposalPreview && (
+            <div className="min-h-0 overflow-y-auto pl-0 pr-1 space-y-2 xl:pl-1">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs text-hagav-gray uppercase tracking-wider">Preview da proposta</p>
+                <span className="text-[11px] text-hagav-gray">Atualiza conforme você edita.</span>
+              </div>
+              <ProposalPreview preview={proposalPreview} />
+            </div>
+          )}
         </div>
       </aside>
     </>
   );
 }
+
+
+

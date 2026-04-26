@@ -3,7 +3,7 @@
 import { useEffect } from 'react';
 import { X } from 'lucide-react';
 
-export default function Modal({ open, onClose, title, children, width = 'max-w-lg' }) {
+export default function Modal({ open, onClose, title, children, width = 'max-w-lg', bodyClassName = '' }) {
   useEffect(() => {
     if (!open) return;
     const handler = (e) => e.key === 'Escape' && onClose();
@@ -33,7 +33,7 @@ export default function Modal({ open, onClose, title, children, width = 'max-w-l
           </button>
         </div>
         {/* Body */}
-        <div className="modal-body">{children}</div>
+        <div className={`modal-body ${bodyClassName}`.trim()}>{children}</div>
       </div>
     </div>
   );

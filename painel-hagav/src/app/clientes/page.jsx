@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   CalendarClock,
   Download,
+  Eye,
   ExternalLink,
   FileText,
   MessageCircle,
@@ -14,6 +15,8 @@ import {
   Users,
   Undo2,
 } from 'lucide-react';
+import ContractPreview from '@/components/clientes/ContractPreview';
+import CollapsibleActionBlock from '@/components/ui/CollapsibleActionBlock';
 import Modal from '@/components/ui/Modal';
 import EmptyState from '@/components/ui/EmptyState';
 import EduTooltip from '@/components/ui/EduTooltip';
@@ -238,6 +241,100 @@ function appendContratoHistorico(contratoAtual, evento) {
   return [...historicoAtual, evento].slice(-30);
 }
 
+function buildContractPreviewModel({
+  row,
+  nomeContratante,
+  cpfCnpj,
+  emailCliente,
+  resumoServico,
+  valorFinal,
+  dataInicio,
+  vencimento,
+  duracaoMeses,
+  responsavel,
+  formaPagamento,
+  pix,
+  obsContrato,
+  recorrente,
+  statusEdicao,
+}) {
+  if (!row) return null;
+
+  const contrato = row?.contrato || {};
+  const valorNumerico = Number(valorFinal || row?.valor_contrato || row?.preco_final || row?.valor_sugerido || 0);
+  const contractNumber = String(
+    contrato?.numero_contrato
+    || contrato?.contrato_numero
+    || `CTR-${row?.id || ''}`
+  ).trim();
+  const emissionRaw = contrato?.data_emissao || new Date().toISOString();
+  const previewStatus = String(statusEdicao || contrato?.status || resolveDisplayStatusContrato(row) || 'aguardando_contrato').toLowerCase();
+  const durationSafe = Math.max(1, Number.parseInt(String(duracaoMeses || contrato?.duracao_meses || 12), 10) || 12);
+
+  return {
+    title: 'CONTRATO DE PRESTAÇÃO DE SERVIÇOS',
+    subtitle: 'Documento comercial para validação das partes, escopo contratado, investimento e vigência do atendimento.',
+    contractNumber,
+    emissionDate: fmtDate(emissionRaw),
+    status: STATUS_CONTRATO_LABELS[previewStatus] || STATUS_CONTRATO_LABELS.aguardando_contrato,
+    client: {
+      name: String(nomeContratante || row?.nome || '').trim(),
+      whatsapp: String(row?.whatsapp || '').trim(),
+      document: String(cpfCnpj || contrato?.cpf_cnpj_cliente || contrato?.cpf_cnpj || '').trim(),
+      email: String(emailCliente || contrato?.email_cliente || row?.email || '').trim(),
+    },
+    serviceSummary: String(
+      resumoServico
+      || contrato?.resumo_servico
+      || contrato?.descricao_servico
+      || row?.resumo_orcamento
+      || row?.plano_servico
+      || row?.servico
+      || ''
+    ).trim(),
+    value: fmtBRL(Number.isFinite(valorNumerico) ? valorNumerico : 0),
+    paymentMethod: String(formaPagamento || contrato?.forma_pagamento || 'A combinar').trim(),
+    pix: String(pix || contrato?.pix || contrato?.chave_pix || '').trim(),
+    startDate: fmtDate(dataInicio || contrato?.data_inicio || row?.inicio_contrato),
+    endDate: fmtDate(vencimento || contrato?.data_fim || contrato?.vencimento || row?.vencimento_contrato),
+    durationLabel: `${durationSafe} ${durationSafe === 1 ? 'mês' : 'meses'}`,
+    responsible: String(responsavel || contrato?.responsavel || row?.responsavel || 'Time HAGAV').trim(),
+    projectType: recorrente ? 'Recorrente' : 'Pontual',
+    observation: String(obsContrato || contrato?.observacoes || '').trim(),
+    terms: [
+      {
+        title: 'Prazos e fluxo',
+        items: [
+          'Os prazos são definidos conforme demanda, volume e complexidade do serviço.',
+          'A produção inicia após envio completo dos materiais e briefing.',
+          'Atrasos no envio de materiais ou feedback impactam diretamente os prazos.',
+        ],
+      },
+      {
+        title: 'Revisões',
+        items: [
+          'Inclui 1 rodada de ajustes por entrega.',
+          'Mudanças de estrutura, roteiro, identidade visual ou refação total são tratadas como demanda adicional.',
+        ],
+      },
+      {
+        title: 'Rescisão e vigência',
+        items: [
+          'O contrato pode ser rescindido mediante aviso prévio de 15 dias.',
+          'Será cobrado o valor proporcional aos serviços já prestados até a data da rescisão.',
+        ],
+      },
+      {
+        title: 'Prioridade e continuidade',
+        items: [
+          'Demandas urgentes dependem de disponibilidade e podem exigir ajuste de valor.',
+          'A continuidade do atendimento depende da regularidade dos pagamentos.',
+        ],
+      },
+    ],
+  };
+}
+
 export default function ClientesPage() {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -265,6 +362,9 @@ export default function ClientesPage() {
   const [obsContrato, setObsContrato] = useState('');
   const [recorrente, setRecorrente] = useState(true);
   const [statusEdicao, setStatusEdicao] = useState('ativo');
+  const [showLiveContractPreview, setShowLiveContractPreview] = useState(false);
+  const [proposalContractCollapsed, setProposalContractCollapsed] = useState(false);
+  const [operationCollapsed, setOperationCollapsed] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -324,6 +424,9 @@ export default function ClientesPage() {
     setObsContrato(String(contrato?.observacoes || ''));
     setRecorrente(typeof contrato?.recorrente === 'boolean' ? contrato.recorrente : Boolean(selected?.recorrente_contrato));
     setStatusEdicao(String(contrato?.status || resolveDisplayStatusContrato(selected) || 'ativo'));
+    setShowLiveContractPreview(false);
+    setProposalContractCollapsed(false);
+    setOperationCollapsed(false);
   }, [selected]);
 
   useEffect(() => {
@@ -363,6 +466,40 @@ export default function ClientesPage() {
       receitaAtiva,
     };
   }, [rows]);
+
+  const contractPreview = useMemo(() => buildContractPreviewModel({
+    row: selected,
+    nomeContratante,
+    cpfCnpj,
+    emailCliente,
+    resumoServico,
+    valorFinal,
+    dataInicio,
+    vencimento,
+    duracaoMeses,
+    responsavel,
+    formaPagamento,
+    pix,
+    obsContrato,
+    recorrente,
+    statusEdicao,
+  }), [
+    selected,
+    nomeContratante,
+    cpfCnpj,
+    emailCliente,
+    resumoServico,
+    valorFinal,
+    dataInicio,
+    vencimento,
+    duracaoMeses,
+    responsavel,
+    formaPagamento,
+    pix,
+    obsContrato,
+    recorrente,
+    statusEdicao,
+  ]);
 
   async function handleGenerateContractPdf(row) {
     if (!row?.id) return;
@@ -930,142 +1067,208 @@ export default function ClientesPage() {
         </div>
       )}
 
-      <Modal open={Boolean(selected)} onClose={() => setSelected(null)} title="Contrato do cliente" width="max-w-3xl">
+      <Modal
+        open={Boolean(selected)}
+        onClose={() => setSelected(null)}
+        title="Contrato do cliente"
+        width={showLiveContractPreview ? 'max-w-6xl' : 'max-w-3xl'}
+        bodyClassName={showLiveContractPreview ? 'overflow-hidden' : ''}
+      >
         {selected && (
-          <div className="space-y-3">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-              <div className="md:col-span-2">
-                <p className="text-[10px] text-hagav-gray uppercase tracking-wider">Dados do contratante</p>
-              </div>
-              <div>
-                <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Nome do contratante</label>
-                <input type="text" value={nomeContratante} onChange={(e) => setNomeContratante(e.target.value)} className="hinput w-full" />
-              </div>
-              <div>
-                <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">WhatsApp</label>
-                <input type="text" value={selected.whatsapp || ''} disabled className="hinput w-full opacity-80" />
-              </div>
-              <div>
-                <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">CPF/CNPJ</label>
-                <input type="text" value={cpfCnpj} onChange={(e) => setCpfCnpj(e.target.value)} className="hinput w-full" />
-              </div>
-              <div>
-                <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">E-mail</label>
-                <input type="email" value={emailCliente} onChange={(e) => setEmailCliente(e.target.value)} className="hinput w-full" />
-              </div>
-
-              <div className="md:col-span-2 mt-1">
-                <p className="text-[10px] text-hagav-gray uppercase tracking-wider">Servico</p>
-              </div>
-              <div className="md:col-span-2">
-                <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Resumo do servico</label>
-                <textarea rows={2} value={resumoServico} onChange={(e) => setResumoServico(e.target.value)} className="hinput w-full resize-none" />
-              </div>
-              <div>
-                <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Valor final (R$)</label>
-                <input type="number" min="0" step="0.01" value={valorFinal} onChange={(e) => setValorFinal(e.target.value)} className="hinput w-full" />
-              </div>
-              <div>
-                <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Duracao (meses)</label>
-                <input type="number" min="1" step="1" value={duracaoMeses} onChange={(e) => setDuracaoMeses(e.target.value)} className="hinput w-full" />
+          <div
+            className={
+              showLiveContractPreview
+                ? 'grid gap-4 max-h-[min(72vh,940px)] grid-rows-[minmax(0,1.15fr)_minmax(0,0.85fr)] xl:grid-cols-[minmax(0,1.06fr)_minmax(340px,0.94fr)] xl:grid-rows-1'
+                : 'space-y-3'
+            }
+          >
+            <div className={showLiveContractPreview ? 'min-h-0 overflow-y-auto pr-1 space-y-3' : 'space-y-3'}>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <p className="text-xs text-hagav-gold uppercase tracking-wider">Contrato comercial</p>
+                  <p className="text-[11px] text-hagav-gray">Revise e personalize o documento antes de gerar ou enviar.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowLiveContractPreview((prev) => !prev)}
+                  className={`btn-ghost btn-sm ${showLiveContractPreview ? 'border-hagav-gold/70 text-hagav-gold bg-hagav-gold/10' : ''}`}
+                >
+                  <Eye size={12} />
+                  {showLiveContractPreview ? 'Ocultar preview ao vivo' : 'Preview ao vivo'}
+                </button>
               </div>
 
-              <div className="md:col-span-2 mt-1">
-                <p className="text-[10px] text-hagav-gray uppercase tracking-wider">Pagamento</p>
-              </div>
-              <div>
-                <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Forma de pagamento</label>
-                <input type="text" value={formaPagamento} onChange={(e) => setFormaPagamento(e.target.value)} className="hinput w-full" />
-              </div>
-              <div>
-                <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Chave PIX</label>
-                <input type="text" value={pix} onChange={(e) => setPix(e.target.value)} className="hinput w-full" />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                <div className="md:col-span-2">
+                  <p className="text-[10px] text-hagav-gray uppercase tracking-wider">Dados do contratante</p>
+                </div>
+                <div>
+                  <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Nome do contratante</label>
+                  <input type="text" value={nomeContratante} onChange={(e) => setNomeContratante(e.target.value)} className="hinput w-full" />
+                </div>
+                <div>
+                  <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">WhatsApp</label>
+                  <input type="text" value={selected.whatsapp || ''} disabled className="hinput w-full opacity-80" />
+                </div>
+                <div>
+                  <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">CPF/CNPJ</label>
+                  <input type="text" value={cpfCnpj} onChange={(e) => setCpfCnpj(e.target.value)} className="hinput w-full" />
+                </div>
+                <div>
+                  <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">E-mail</label>
+                  <input type="email" value={emailCliente} onChange={(e) => setEmailCliente(e.target.value)} className="hinput w-full" />
+                </div>
+
+                <div className="md:col-span-2 mt-1">
+                  <p className="text-[10px] text-hagav-gray uppercase tracking-wider">Servico</p>
+                </div>
+                <div className="md:col-span-2">
+                  <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Resumo do servico</label>
+                  <textarea rows={2} value={resumoServico} onChange={(e) => setResumoServico(e.target.value)} className="hinput w-full resize-none" />
+                </div>
+                <div>
+                  <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Valor final (R$)</label>
+                  <input type="number" min="0" step="0.01" value={valorFinal} onChange={(e) => setValorFinal(e.target.value)} className="hinput w-full" />
+                </div>
+                <div>
+                  <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Duracao (meses)</label>
+                  <input type="number" min="1" step="1" value={duracaoMeses} onChange={(e) => setDuracaoMeses(e.target.value)} className="hinput w-full" />
+                </div>
+
+                <div className="md:col-span-2 mt-1">
+                  <p className="text-[10px] text-hagav-gray uppercase tracking-wider">Pagamento</p>
+                </div>
+                <div>
+                  <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Forma de pagamento</label>
+                  <input type="text" value={formaPagamento} onChange={(e) => setFormaPagamento(e.target.value)} className="hinput w-full" />
+                </div>
+                <div>
+                  <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Chave PIX</label>
+                  <input type="text" value={pix} onChange={(e) => setPix(e.target.value)} className="hinput w-full" />
+                </div>
+
+                <div className="md:col-span-2 mt-1">
+                  <p className="text-[10px] text-hagav-gray uppercase tracking-wider">Contrato</p>
+                </div>
+                <div>
+                  <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Data inicio</label>
+                  <input type="date" value={dataInicio} onChange={(e) => setDataInicio(e.target.value)} className="hinput w-full" />
+                </div>
+                <div>
+                  <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Vencimento (auto)</label>
+                  <input type="date" value={vencimento} readOnly className="hinput w-full opacity-80" />
+                </div>
+                <div>
+                  <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Responsavel</label>
+                  <input type="text" value={responsavel} onChange={(e) => setResponsavel(e.target.value)} className="hinput w-full" />
+                </div>
+                <div>
+                  <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Status contrato</label>
+                  <select value={statusEdicao} onChange={(e) => setStatusEdicao(e.target.value)} className="hselect w-full">
+                    <option value="aguardando_contrato">Aguardando contrato</option>
+                    <option value="ativo">Ativo</option>
+                    <option value="vencendo">Vencendo</option>
+                    <option value="vencido">Vencido</option>
+                    <option value="encerrado">Encerrado</option>
+                  </select>
+                </div>
+                <label className="flex items-center gap-2 text-sm text-hagav-light self-end pb-2">
+                  <input
+                    type="checkbox"
+                    checked={recorrente}
+                    onChange={(e) => setRecorrente(e.target.checked)}
+                    className="rounded border-hagav-border bg-hagav-surface"
+                  />
+                  Contrato recorrente
+                </label>
+                <div className="md:col-span-2">
+                  <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Observacoes do contrato</label>
+                  <textarea rows={3} value={obsContrato} onChange={(e) => setObsContrato(e.target.value)} className="hinput w-full resize-none" />
+                </div>
               </div>
 
-              <div className="md:col-span-2 mt-1">
-                <p className="text-[10px] text-hagav-gray uppercase tracking-wider">Contrato</p>
-              </div>
-              <div>
-                <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Data inicio</label>
-                <input type="date" value={dataInicio} onChange={(e) => setDataInicio(e.target.value)} className="hinput w-full" />
-              </div>
-              <div>
-                <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Vencimento (auto)</label>
-                <input type="date" value={vencimento} readOnly className="hinput w-full opacity-80" />
-              </div>
-              <div>
-                <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Responsavel</label>
-                <input type="text" value={responsavel} onChange={(e) => setResponsavel(e.target.value)} className="hinput w-full" />
-              </div>
-              <div>
-                <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Status contrato</label>
-                <select value={statusEdicao} onChange={(e) => setStatusEdicao(e.target.value)} className="hselect w-full">
-                  <option value="aguardando_contrato">Aguardando contrato</option>
-                  <option value="ativo">Ativo</option>
-                  <option value="vencendo">Vencendo</option>
-                  <option value="vencido">Vencido</option>
-                  <option value="encerrado">Encerrado</option>
-                </select>
-              </div>
-              <label className="flex items-center gap-2 text-sm text-hagav-light self-end pb-2">
-                <input
-                  type="checkbox"
-                  checked={recorrente}
-                  onChange={(e) => setRecorrente(e.target.checked)}
-                  className="rounded border-hagav-border bg-hagav-surface"
-                />
-                Contrato recorrente
-              </label>
-              <div className="md:col-span-2">
-                <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Observacoes do contrato</label>
-                <textarea rows={3} value={obsContrato} onChange={(e) => setObsContrato(e.target.value)} className="hinput w-full resize-none" />
-              </div>
-            </div>
-
-            <div>
-              <p className="text-[10px] text-hagav-gray uppercase tracking-wider mb-2">Acoes</p>
-            </div>
-            <div className="modal-actions">
-              <button type="button" className="btn-gold btn-sm" onClick={() => handleSaveContrato('ativo', 'ativar')} disabled={saving}>
-                {saving ? <RefreshCw size={12} className="animate-spin" /> : <Power size={12} />}
-                Ativar cliente
-              </button>
-              <button type="button" className="btn-ghost btn-sm" onClick={() => handleSaveContrato('ativo', 'renovar')} disabled={saving}>
-                {saving ? <RefreshCw size={12} className="animate-spin" /> : <RotateCw size={12} />}
-                Renovar contrato
-              </button>
-              <button type="button" className="btn-ghost btn-sm" onClick={() => handleSaveContrato(statusEdicao, 'salvar')} disabled={saving}>
-                <RefreshCw size={12} /> Salvar alteracoes
-              </button>
-              <button type="button" className="btn-ghost btn-sm" onClick={() => handleSaveContrato('encerrado', 'encerrar')} disabled={saving}>
-                <Power size={12} /> Encerrar contrato
-              </button>
-              <button type="button" className="btn-ghost btn-sm" onClick={handleReabrirNegociacao} disabled={saving}>
-                <Undo2 size={12} /> Reabrir negociacao
-              </button>
-              <button type="button" className="btn-ghost btn-sm" onClick={() => handleGenerateContractPdf(selected)} disabled={saving}>
-                <Download size={12} /> Gerar contrato PDF
-              </button>
-              <button
-                type="button"
-                className="btn-ghost btn-sm"
-                onClick={() => handleEnviarContratoWhatsApp(selected)}
-                disabled={saving || !canUseContractPdf(selected)}
-              >
-                <MessageCircle size={12} /> Enviar contrato no WhatsApp
-              </button>
-              {canUseContractPdf(selected) ? (
-                <a href={selected.contrato_link_pdf} target="_blank" rel="noreferrer" className="btn-ghost btn-sm">
-                  <ExternalLink size={12} /> Ver contrato
-                </a>
-              ) : (
-                <span className="text-xs text-hagav-gray">
-                  {String(selected?.contrato_link_pdf || '').trim()
-                    ? getContratoPdfBlockedMessage(readContratoPdfMeta(selected))
-                    : 'Gere o contrato PDF para habilitar envio e visualizacao.'}
-                </span>
+              {feedback && (
+                <p className="text-xs text-hagav-light bg-hagav-surface border border-hagav-border rounded-lg px-3 py-2">
+                  {feedback}
+                </p>
               )}
+
+              <CollapsibleActionBlock
+                title="Proposta e contrato"
+                description="Envie a proposta e avance a conversa com o cliente."
+                collapsed={proposalContractCollapsed}
+                onToggle={() => setProposalContractCollapsed((prev) => !prev)}
+                contentClassName="orcamento-action-grid"
+              >
+                <button
+                  type="button"
+                  className={`btn-ghost btn-sm orcamento-action-button ${showLiveContractPreview ? 'border-hagav-gold/70 text-hagav-gold bg-hagav-gold/10' : ''}`}
+                  onClick={() => setShowLiveContractPreview((prev) => !prev)}
+                  disabled={saving}
+                >
+                  <Eye size={12} />
+                  Preview ao vivo
+                </button>
+                <button type="button" className="btn-ghost btn-sm orcamento-action-button" onClick={() => handleGenerateContractPdf(selected)} disabled={saving}>
+                  <Download size={12} /> Gerar contrato PDF
+                </button>
+                <button
+                  type="button"
+                  className={`btn-ghost btn-sm orcamento-action-button ${!canUseContractPdf(selected) ? 'opacity-60 cursor-not-allowed' : ''}`}
+                  onClick={() => handleEnviarContratoWhatsApp(selected)}
+                  disabled={saving || !canUseContractPdf(selected)}
+                >
+                  <MessageCircle size={12} /> Enviar contrato no WhatsApp
+                </button>
+                {canUseContractPdf(selected) ? (
+                  <a href={selected.contrato_link_pdf} target="_blank" rel="noreferrer" className="btn-ghost btn-sm orcamento-action-button">
+                    <ExternalLink size={12} /> Ver contrato
+                  </a>
+                ) : (
+                  <span className="text-xs text-hagav-gray md:col-span-2 xl:col-span-3">
+                    {String(selected?.contrato_link_pdf || '').trim()
+                      ? getContratoPdfBlockedMessage(readContratoPdfMeta(selected))
+                      : 'Gere o contrato PDF para habilitar envio e visualizacao.'}
+                  </span>
+                )}
+              </CollapsibleActionBlock>
+
+              <CollapsibleActionBlock
+                title="Operação"
+                description="Ajustes manuais e encerramento da negociação quando necessário."
+                collapsed={operationCollapsed}
+                onToggle={() => setOperationCollapsed((prev) => !prev)}
+                contentClassName="orcamento-action-grid"
+              >
+                <button type="button" className="btn-gold btn-sm orcamento-action-button" onClick={() => handleSaveContrato('ativo', 'ativar')} disabled={saving}>
+                  {saving ? <RefreshCw size={12} className="animate-spin" /> : <Power size={12} />}
+                  Ativar cliente
+                </button>
+                <button type="button" className="btn-ghost btn-sm orcamento-action-button" onClick={() => handleSaveContrato('ativo', 'renovar')} disabled={saving}>
+                  {saving ? <RefreshCw size={12} className="animate-spin" /> : <RotateCw size={12} />}
+                  Renovar contrato
+                </button>
+                <button type="button" className="btn-ghost btn-sm orcamento-action-button" onClick={() => handleSaveContrato(statusEdicao, 'salvar')} disabled={saving}>
+                  <RefreshCw size={12} /> Salvar alteracoes
+                </button>
+                <button type="button" className="btn-ghost btn-sm orcamento-action-button" onClick={() => handleSaveContrato('encerrado', 'encerrar')} disabled={saving}>
+                  <Power size={12} /> Encerrar contrato
+                </button>
+                <button type="button" className="btn-ghost btn-sm orcamento-action-button" onClick={handleReabrirNegociacao} disabled={saving}>
+                  <Undo2 size={12} /> Reabrir negociacao
+                </button>
+              </CollapsibleActionBlock>
             </div>
+
+            {showLiveContractPreview && (
+              <div className="min-h-0 overflow-y-auto pl-0 pr-1 space-y-2 xl:pl-1">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs text-hagav-gray uppercase tracking-wider">Preview do contrato</p>
+                  <span className="text-[11px] text-hagav-gray">Atualiza conforme você edita.</span>
+                </div>
+                <ContractPreview preview={contractPreview} />
+              </div>
+            )}
           </div>
         )}
       </Modal>

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { X, Save, Loader2, MessageCircle, ExternalLink, AlertTriangle, CheckCircle2, Send, Ban, RotateCw, Eye, Download, Plus, Trash2 } from 'lucide-react';
 import { OrcStatusBadge, PrioridadeBadge, UrgenciaBadge, TemperaturaBadge } from '@/components/ui/StatusBadge';
 import EduTooltip from '@/components/ui/EduTooltip';
+import CollapsibleActionBlock from '@/components/ui/CollapsibleActionBlock';
 import ProposalPreview from '@/components/orcamentos/ProposalPreview';
 import { fetchCommercialSettings, generateDealPdf, updateOrcamento } from '@/lib/supabase';
 import {
@@ -741,6 +742,9 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
       || inferProposalModeFromFlow(orc, 'direta');
   });
   const [proposalDirtyFields, setProposalDirtyFields] = useState(() => buildSavedProposalDirtyMap(orc));
+  const [showLiveProposalPreview, setShowLiveProposalPreview] = useState(false);
+  const [proposalContactCollapsed, setProposalContactCollapsed] = useState(false);
+  const [operationCollapsed, setOperationCollapsed] = useState(false);
   const [proposalDraft, setProposalDraft] = useState(() => buildProposalDraftFromRecord(orc, undefined, {
     pricingRules: COMMERCIAL_DEFAULTS.pricing,
     priceReference: initialFinalPrice,
@@ -1163,6 +1167,9 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
     });
     setPricingItems(buildInitialPricingItems(orc));
     setProposalDirtyFields(buildSavedProposalDirtyMap(orc));
+    setShowLiveProposalPreview(false);
+    setProposalContactCollapsed(false);
+    setOperationCollapsed(false);
     setProposalMode(nextMode);
     setProposalDraft(nextDraft);
   }, [
@@ -1804,9 +1811,19 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
           )}
 
           <div className="bg-hagav-surface border border-hagav-gold/25 rounded-lg p-3 space-y-3">
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-xs text-hagav-gold uppercase tracking-wider">Proposta comercial</p>
-              <span className="text-[11px] text-hagav-gray">Revise e complete os dados antes de gerar o PDF.</span>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <p className="text-xs text-hagav-gold uppercase tracking-wider">Proposta comercial</p>
+                <span className="text-[11px] text-hagav-gray">Revise e complete os dados antes de gerar o PDF.</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowLiveProposalPreview((prev) => !prev)}
+                className={`btn-ghost btn-sm ${showLiveProposalPreview ? 'border-hagav-gold/70 text-hagav-gold bg-hagav-gold/10' : ''}`}
+              >
+                <Eye size={13} />
+                {showLiveProposalPreview ? 'Ocultar preview ao vivo' : 'Preview ao vivo'}
+              </button>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
               {PROPOSAL_MODE_OPTIONS.map((mode) => (
@@ -1820,8 +1837,14 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
                 </button>
               ))}
             </div>
-            <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.08fr)_minmax(340px,0.92fr)] gap-4 items-start">
-              <div className="space-y-3">
+            <div
+              className={
+                showLiveProposalPreview
+                  ? 'grid gap-4 items-start max-h-[min(72vh,980px)] grid-rows-[minmax(0,1.15fr)_minmax(0,0.85fr)] xl:grid-cols-[minmax(0,1.08fr)_minmax(340px,0.92fr)] xl:grid-rows-1'
+                  : 'grid grid-cols-1 gap-4 items-start'
+              }
+            >
+              <div className={showLiveProposalPreview ? 'min-h-0 overflow-y-auto pr-1 space-y-3' : 'space-y-3'}>
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-2">
               <div>
                 <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Nome do cliente</label>
@@ -2141,16 +2164,18 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
                 )}
               </div>
 
-              <div className="space-y-2 xl:sticky xl:top-2">
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-xs text-hagav-gray uppercase tracking-wider">Preview da proposta</p>
-                  <span className="text-[11px] text-hagav-gray">Atualiza conforme você edita.</span>
+              {showLiveProposalPreview && (
+                <div className="min-h-0 overflow-y-auto pl-0 pr-1 space-y-2 xl:pl-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs text-hagav-gray uppercase tracking-wider">Preview da proposta</p>
+                    <span className="text-[11px] text-hagav-gray">Atualiza conforme você edita.</span>
+                  </div>
+                  <ProposalPreview preview={proposalPreview} />
                 </div>
-                <ProposalPreview preview={proposalPreview} />
-              </div>
+              )}
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-2">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-6 gap-2">
               <button
                 type="button"
                 onClick={hydrateProposalDraft}
@@ -2171,12 +2196,21 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
               </button>
               <button
                 type="button"
+                onClick={() => setShowLiveProposalPreview((prev) => !prev)}
+                disabled={saving || pdfLoading || draftSaving}
+                className={`btn-ghost btn-sm ${showLiveProposalPreview ? 'border-hagav-gold/70 text-hagav-gold bg-hagav-gold/10' : ''}`}
+              >
+                <Eye size={13} />
+                Preview ao vivo
+              </button>
+              <button
+                type="button"
                 onClick={handleOpenProposalPreview}
                 disabled={saving || pdfLoading || draftSaving}
                 className="btn-ghost btn-sm"
               >
                 <Eye size={13} />
-                Abrir preview
+                Abrir preview externo
               </button>
               <button
                 type="button"
@@ -2310,12 +2344,13 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
               {error || info}
             </p>
           )}
-          <div className="orcamento-action-block">
-            <div className="orcamento-action-head">
-              <p className="orcamento-action-kicker">Proposta e contato</p>
-              <p className="orcamento-action-caption">Envie a proposta e avance a conversa com o cliente.</p>
-            </div>
-            <div className="orcamento-action-grid">
+          <CollapsibleActionBlock
+            title="Proposta e contrato"
+            description="Envie a proposta e avance a conversa com o cliente."
+            collapsed={proposalContactCollapsed}
+            onToggle={() => setProposalContactCollapsed((prev) => !prev)}
+            contentClassName="orcamento-action-grid"
+          >
               <button
                 type="button"
                 onClick={handleDownloadPropostaPdf}
@@ -2352,15 +2387,15 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
                   </span>
                 )}
               </EduTooltip>
-            </div>
-          </div>
+          </CollapsibleActionBlock>
 
-          <div className="orcamento-action-block">
-            <div className="orcamento-action-head">
-              <p className="orcamento-action-kicker">Operação</p>
-              <p className="orcamento-action-caption">Ajustes manuais e encerramento da negociação quando necessário.</p>
-            </div>
-            <div className="orcamento-action-grid orcamento-action-grid-compact">
+          <CollapsibleActionBlock
+            title="Operação"
+            description="Ajustes manuais e encerramento da negociação quando necessário."
+            collapsed={operationCollapsed}
+            onToggle={() => setOperationCollapsed((prev) => !prev)}
+            contentClassName="orcamento-action-grid orcamento-action-grid-compact"
+          >
               <button
                 type="button"
                 onClick={handleRecalculateValues}
@@ -2379,8 +2414,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
                 <Ban size={13} />
                 Marcar perdido
               </button>
-            </div>
-          </div>
+          </CollapsibleActionBlock>
 
           <div className="orcamento-action-commit">
             {canApproveOrcamento && (

@@ -1,3 +1,6 @@
+﻿import { authenticateRequest, getClientIp } from '../_utils/admin-auth.js';
+import { applyRateLimit } from '../_utils/rate-limit.js';
+
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
@@ -1398,9 +1401,9 @@ function buildTemplateValues(row, env, options = {}) {
   if (proposalMode === "mensal") {
     const mensalDisplay = firstNonEmptyValue(valorMensal, valorTotalMoeda);
     if (mensalDisplay) {
-      valorTotalMoeda = /\/m[eê]s/i.test(mensalDisplay)
+      valorTotalMoeda = /\/m[eÃª]s/i.test(mensalDisplay)
         ? mensalDisplay
-        : `${mensalDisplay}/mês`;
+        : `${mensalDisplay}/mÃªs`;
     }
   }
   if (proposalMode === "personalizada") {
@@ -1779,9 +1782,24 @@ export async function onRequestPost(context) {
     return fail(requestId, "env", "supabase_not_configured", 503);
   }
 
-  const auth = await isAuthorized(request, env, config);
+  const rateState = applyRateLimit({
+    namespace: 'admin-proposta-pdf',
+    key: getClientIp(request) || 'anonymous',
+    limit: 20,
+    windowMs: 60 * 1000,
+    blockMs: 60 * 1000,
+  });
+  if (!rateState.ok) {
+    return fail(requestId, 'rate_limit', 'rate_limited', 429, { retry_after_seconds: rateState.retryAfterSeconds });
+  }
+
+  const auth = await authenticateRequest(request, env, {
+    requiredRoles: ['operacao', 'comercial', 'admin'],
+    allowBearer: true,
+    allowCookie: true,
+  });
   if (!auth.ok) {
-    return fail(requestId, "auth", auth.reason, auth.status || 401);
+    return fail(requestId, 'auth', auth.reason, auth.status || 401);
   }
 
   let body;
@@ -2013,3 +2031,5 @@ export async function onRequest(context) {
   }
   return json({ ok: false, error: "method_not_allowed" }, 405);
 }
+
+

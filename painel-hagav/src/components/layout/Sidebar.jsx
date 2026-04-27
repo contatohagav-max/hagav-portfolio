@@ -1,21 +1,20 @@
-'use client';
+﻿'use client';
 
-// Using img instead of next/image to avoid basePath prefix on static asset
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import {
-  LayoutDashboard, Users, FileText, Kanban, Settings, X,
-} from 'lucide-react';
+import { FileText, Kanban, LayoutDashboard, Settings, Users, X } from 'lucide-react';
 import EduTooltip from '@/components/ui/EduTooltip';
+import { useAuth } from '@/context/AuthContext';
 import { classNames } from '@/lib/utils';
+import { roleLabel } from '@/lib/auth';
 
 const NAV = [
-  { href: '/',              label: 'Dashboard',     icon: LayoutDashboard },
-  { href: '/leads',         label: 'Leads',         icon: Users },
-  { href: '/orcamentos',    label: 'Orçamentos',    icon: FileText },
-  { href: '/clientes',      label: 'Clientes',      icon: Users },
-  { href: '/pipeline',      label: 'Pipeline',      icon: Kanban },
-  { href: '/configuracoes', label: 'Configurações', icon: Settings },
+  { href: '/', label: 'Dashboard', icon: LayoutDashboard, permission: 'readDashboard' },
+  { href: '/leads', label: 'Leads', icon: Users, permission: 'readLeads' },
+  { href: '/orcamentos', label: 'Orcamentos', icon: FileText, permission: 'readOrcamentos' },
+  { href: '/clientes', label: 'Clientes', icon: Users, permission: 'readClientes' },
+  { href: '/pipeline', label: 'Pipeline', icon: Kanban, permission: 'readPipeline' },
+  { href: '/configuracoes', label: 'Configuracoes', icon: Settings, permission: 'manageSettings' },
 ];
 
 const NAV_TOOLTIPS = {
@@ -32,7 +31,7 @@ const NAV_TOOLTIPS = {
     observe: 'Somente leads qualificados devem seguir para Orcamentos.',
   },
   '/orcamentos': {
-    title: 'Orçamentos',
+    title: 'Orcamentos',
     whatIs: 'Etapa comercial de proposta, ajuste e fechamento.',
     purpose: 'Precificar, negociar e aprovar proposta comercial.',
     observe: 'Mantenha foco em proposta_enviada, ajustando e aprovado.',
@@ -47,12 +46,13 @@ const NAV_TOOLTIPS = {
     title: 'Pipeline',
     whatIs: 'Quadro visual das etapas do processo comercial.',
     purpose: 'Mover oportunidades com clareza de status.',
-    observe: 'Evite acúmulo em Novo, Contatado e Qualificado.',
+    observe: 'Evite acumulo em Novo, Contatado e Qualificado.',
   },
 };
 
 export default function Sidebar({ open, onClose }) {
   const pathname = usePathname();
+  const { actor, can } = useAuth();
 
   return (
     <aside className={classNames(
@@ -61,27 +61,18 @@ export default function Sidebar({ open, onClose }) {
       'transition-transform duration-200 ease-in-out',
       open ? 'translate-x-0' : '-translate-x-full lg:translate-x-0',
     )}>
-      {/* Logo */}
       <div className="flex items-center justify-between px-4 py-4 border-b border-hagav-border">
         <div className="flex items-center gap-3">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/admin/hagav-logo.png"
-            alt="HAGAV Studio"
-            className="h-10 w-auto object-contain"
-          />
+          <img src="/admin/hagav-logo.png" alt="HAGAV Studio" className="h-10 w-auto object-contain" />
         </div>
-        <button
-          onClick={onClose}
-          className="lg:hidden text-hagav-gray hover:text-hagav-white p-1 rounded"
-        >
+        <button onClick={onClose} className="lg:hidden text-hagav-gray hover:text-hagav-white p-1 rounded">
           <X size={16} />
         </button>
       </div>
 
-      {/* Nav */}
       <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
-        {NAV.map(({ href, label, icon: Icon }) => {
+        {NAV.filter((item) => item.permission ? can(item.permission) : true).map(({ href, label, icon: Icon }) => {
           const active = pathname === href || (href !== '/' && pathname.startsWith(href));
           const tooltip = NAV_TOOLTIPS[href];
           return (
@@ -104,10 +95,9 @@ export default function Sidebar({ open, onClose }) {
         })}
       </nav>
 
-      {/* Footer */}
       <div className="px-5 py-4 border-t border-hagav-border">
         <p className="text-[10px] text-hagav-gray/60 uppercase tracking-widest">HAGAV Studio</p>
-        <p className="text-[10px] text-hagav-gray/40">v1.0.0 · Interno</p>
+        <p className="text-[10px] text-hagav-gray/40">Acesso {roleLabel(actor?.role || 'viewer')}</p>
       </div>
     </aside>
   );

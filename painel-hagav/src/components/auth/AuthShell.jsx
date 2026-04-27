@@ -1,13 +1,23 @@
-'use client';
+﻿'use client';
 
-// Using img instead of next/image to avoid basePath prefix on static asset
+import { useEffect } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { Loader2 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import LoginScreen from './LoginScreen';
 import AppShell from '@/components/layout/AppShell';
-import { Loader2 } from 'lucide-react';
 
 export default function AuthShell({ children }) {
   const { session, loading } = useAuth();
+  const pathname = usePathname();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  useEffect(() => {
+    if (!loading && session && pathname === '/login') {
+      router.replace(searchParams.get('next') || '/');
+    }
+  }, [loading, pathname, router, searchParams, session]);
 
   if (loading) {
     return (
@@ -20,6 +30,7 @@ export default function AuthShell({ children }) {
   }
 
   if (!session) return <LoginScreen />;
+  if (pathname === '/login') return null;
 
   return <AppShell>{children}</AppShell>;
 }

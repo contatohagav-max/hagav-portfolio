@@ -1,9 +1,10 @@
-'use client';
+﻿'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { Menu, Search, Bell, LogOut, User, ChevronDown } from 'lucide-react';
+import { Bell, ChevronDown, LogOut, Menu, Search, Shield, User } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
+import { roleLabel } from '@/lib/auth';
 
 function parseScopedSearch(raw) {
   const value = String(raw || '').trim();
@@ -16,32 +17,26 @@ function parseScopedSearch(raw) {
   const query = String(match[2] || '').trim();
   if (!query) return null;
 
-  if (scope === 'lead' || scope === 'leads') {
-    return { targetBase: '/leads', query };
-  }
-  if (scope === 'orcamento' || scope === 'orcamentos' || scope === 'orc') {
-    return { targetBase: '/orcamentos', query };
-  }
-  if (scope === 'cliente' || scope === 'clientes') {
-    return { targetBase: '/clientes', query };
-  }
+  if (scope === 'lead' || scope === 'leads') return { targetBase: '/leads', query };
+  if (scope === 'orcamento' || scope === 'orcamentos' || scope === 'orc') return { targetBase: '/orcamentos', query };
+  if (scope === 'cliente' || scope === 'clientes') return { targetBase: '/clientes', query };
   return null;
 }
 
 export default function Topbar({ onMenuClick }) {
   const router = useRouter();
   const pathname = usePathname();
-  const { session, logout } = useAuth();
-  const [searchVal, setSearchVal]   = useState('');
-  const [menuOpen, setMenuOpen]     = useState(false);
+  const { session, actor, logout } = useAuth();
+  const [searchVal, setSearchVal] = useState('');
+  const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
 
-  const email = session?.user?.email ?? 'Admin';
+  const email = actor?.email || session?.user?.email || 'Admin';
+  const role = actor?.role || 'viewer';
 
-  // Close dropdown on outside click
   useEffect(() => {
-    function handler(e) {
-      if (menuRef.current && !menuRef.current.contains(e.target)) setMenuOpen(false);
+    function handler(event) {
+      if (menuRef.current && !menuRef.current.contains(event.target)) setMenuOpen(false);
     }
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
@@ -68,7 +63,6 @@ export default function Topbar({ onMenuClick }) {
 
   return (
     <header className="h-16 flex items-center gap-3 px-4 lg:px-6 bg-hagav-dark/95 border-b border-hagav-border shrink-0 backdrop-blur-md">
-      {/* Mobile menu */}
       <button
         onClick={onMenuClick}
         className="lg:hidden text-hagav-gray hover:text-hagav-white p-2 rounded-lg hover:bg-hagav-muted/30 transition-colors"
@@ -76,21 +70,22 @@ export default function Topbar({ onMenuClick }) {
         <Menu size={18} />
       </button>
 
-      {/* Search */}
       <form onSubmit={handleGlobalSearch} className="flex-1 max-w-xl relative">
         <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-hagav-gray pointer-events-none" />
         <input
           type="text"
-          placeholder="Buscar e Enter (ou use lead:, orc:, cliente:)"
+          placeholder="Buscar e filtrar (use lead, orc, cliente)"
           value={searchVal}
-          onChange={e => setSearchVal(e.target.value)}
+          onChange={(event) => setSearchVal(event.target.value)}
           className="hinput w-full pl-8 text-sm"
         />
       </form>
 
-      <div className="flex-1" />
+      <div className="hidden md:flex items-center gap-2 rounded-full border border-hagav-border bg-hagav-surface/60 px-3 py-1.5">
+        <Shield size={13} className="text-hagav-gold" />
+        <span className="text-[10px] uppercase tracking-[0.22em] text-hagav-gold">{roleLabel(role)}</span>
+      </div>
 
-      {/* Notifications */}
       <button
         type="button"
         disabled
@@ -100,36 +95,42 @@ export default function Topbar({ onMenuClick }) {
         <Bell size={17} />
       </button>
 
-      {/* Profile dropdown */}
       <div className="relative pl-2 border-l border-hagav-border" ref={menuRef}>
         <button
-          onClick={() => setMenuOpen(v => !v)}
+          onClick={() => setMenuOpen((value) => !value)}
           className="flex items-center gap-2 cursor-pointer group rounded-xl px-2.5 py-1.5 hover:bg-hagav-muted/25 transition-colors"
         >
           <div className="w-7 h-7 rounded-full bg-hagav-gold/20 border border-hagav-gold/30 flex items-center justify-center">
             <User size={13} className="text-hagav-gold" />
           </div>
-          <span className="hidden sm:block text-sm font-medium text-hagav-light group-hover:text-hagav-white transition-colors max-w-[120px] truncate">
+          <span className="hidden sm:block text-sm font-medium text-hagav-light group-hover:text-hagav-white transition-colors max-w-[140px] truncate">
             {email}
           </span>
           <ChevronDown size={13} className="text-hagav-gray hidden sm:block" />
         </button>
 
-        {menuOpen && (
-          <div className="absolute right-0 top-12 w-56 bg-hagav-dark border border-hagav-border rounded-xl shadow-modal z-50 animate-fade-in overflow-hidden">
+        {menuOpen ? (
+          <div className="absolute right-0 top-12 w-60 bg-hagav-dark border border-hagav-border rounded-xl shadow-modal z-50 animate-fade-in overflow-hidden">
             <div className="px-4 py-3 border-b border-hagav-border">
               <p className="text-xs text-hagav-gray">Conectado como</p>
               <p className="text-sm font-medium text-hagav-white truncate">{email}</p>
+              <div className="mt-2 inline-flex items-center gap-2 rounded-full border border-hagav-gold/25 bg-hagav-gold/10 px-2.5 py-1">
+                <Shield size={12} className="text-hagav-gold" />
+                <span className="text-[10px] uppercase tracking-[0.2em] text-hagav-gold">{roleLabel(role)}</span>
+              </div>
             </div>
             <button
-              onClick={() => { setMenuOpen(false); logout(); }}
+              onClick={() => {
+                setMenuOpen(false);
+                logout();
+              }}
               className="w-full flex items-center gap-2.5 px-4 py-3 text-sm text-red-400 hover:bg-red-500/10 transition-colors"
             >
               <LogOut size={14} />
               Sair do painel
             </button>
           </div>
-        )}
+        ) : null}
       </div>
     </header>
   );

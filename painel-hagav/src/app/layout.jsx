@@ -1,4 +1,5 @@
 import './globals.css';
+import { Suspense } from 'react';
 import { AuthProvider } from '@/context/AuthContext';
 import AuthShell from '@/components/auth/AuthShell';
 
@@ -13,7 +14,9 @@ export default function RootLayout({ children }) {
     <html lang="pt-BR">
       <body>
         <AuthProvider>
-          <AuthShell>{children}</AuthShell>
+          <Suspense fallback={null}>
+            <AuthShell>{children}</AuthShell>
+          </Suspense>
         </AuthProvider>
       </body>
     </html>

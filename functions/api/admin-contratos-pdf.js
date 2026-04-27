@@ -1,3 +1,6 @@
+﻿import { authenticateRequest, getClientIp } from '../_utils/admin-auth.js';
+import { applyRateLimit } from '../_utils/rate-limit.js';
+
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
@@ -805,7 +808,7 @@ function sanitizeContractInput(rawInput = {}) {
   const numericValor = Number(input?.valor_total ?? input?.valor_final ?? input?.preco_final ?? NaN);
 
   const out = {
-    nome_cliente: normalizeTemplateText(input?.nome_cliente, 180, { allowEmpty: true }),
+    nome_cliente: normalizeTemplateText(input?.nome_cliente ?? input?.cliente_nome, 180, { allowEmpty: true }),
     cpf_cnpj_cliente: normalizeTemplateText(input?.cpf_cnpj ?? input?.cpf_cnpj_cliente, 60, { allowEmpty: true }),
     email_cliente: normalizeTemplateText(input?.email_cliente, 140, { allowEmpty: true }),
     forma_pagamento: normalizeTemplateText(input?.forma_pagamento, 120, { allowEmpty: true }),
@@ -921,7 +924,7 @@ function buildTemplateValues(row, env, runtime = {}) {
     80
   );
 
-  const clienteNome = firstNonEmptyValue(row?.nome, contrato?.nome_cliente, detalhes?.nome, "-");
+  const clienteNome = firstNonEmptyValue(contrato?.nome_cliente, row?.nome, detalhes?.nome, "-");
   const empresaCliente = firstNonEmptyValue(
     contrato?.empresa_cliente,
     detalhes?.empresa_cliente,
@@ -1360,9 +1363,24 @@ export async function onRequestPost(context) {
     return fail(requestId, "env", "supabase_not_configured", 503);
   }
 
-  const auth = await isAuthorized(request, env, config);
+  const rateState = applyRateLimit({
+    namespace: 'admin-contrato-pdf',
+    key: getClientIp(request) || 'anonymous',
+    limit: 20,
+    windowMs: 60 * 1000,
+    blockMs: 60 * 1000,
+  });
+  if (!rateState.ok) {
+    return fail(requestId, 'rate_limit', 'rate_limited', 429, { retry_after_seconds: rateState.retryAfterSeconds });
+  }
+
+  const auth = await authenticateRequest(request, env, {
+    requiredRoles: ['operacao', 'comercial', 'admin'],
+    allowBearer: true,
+    allowCookie: true,
+  });
   if (!auth.ok) {
-    return fail(requestId, "auth", auth.reason, auth.status || 401);
+    return fail(requestId, 'auth', auth.reason, auth.status || 401);
   }
 
   let body;
@@ -1588,3 +1606,5 @@ export async function onRequest(context) {
   }
   return json({ ok: false, error: "method_not_allowed" }, 405);
 }
+
+

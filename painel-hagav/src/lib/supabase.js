@@ -1,4 +1,4 @@
-import { createClient } from '@supabase/supabase-js';
+﻿import { createClient } from '@supabase/supabase-js';
 import {
   buildDashboardInsights,
   deriveFinancialMetricsFromFinalPrice,
@@ -772,23 +772,7 @@ export async function updateOrcamento(id, patch) {
 }
 
 function getAdminApiKey(explicitKey) {
-  const direct = String(explicitKey || '').trim();
-  if (direct) return direct;
-
-  const fromEnv = String(
-    process.env.NEXT_PUBLIC_ADMIN_DASHBOARD_KEY
-      || process.env.NEXT_PUBLIC_ORCAMENTO_ADMIN_KEY
-      || process.env.NEXT_PUBLIC_HAGAV_ADMIN_KEY
-      || ''
-  ).trim();
-  if (fromEnv) return fromEnv;
-
-  if (typeof window === 'undefined') return '';
-  try {
-    return String(window.sessionStorage.getItem('hagav_admin_key') || '').trim();
-  } catch {
-    return '';
-  }
+  return String(explicitKey || '').trim();
 }
 
 async function getSupabaseSessionToken() {
@@ -885,7 +869,7 @@ async function generatePdfDocument(endpoint, id, { adminKey, payload } = {}) {
     };
 
     if (reason === 'admin_key_not_configured_or_session_missing') {
-      throw new Error(withMeta('Sessao sem autorizacao para PDF. Configure ADMIN_DASHBOARD_KEY no deploy ou refaca login no painel.'));
+      throw new Error(withMeta('Sua sessao administrativa expirou ou nao esta autorizada. Refaca o login no painel.'));
     }
     if (reason === 'unauthorized') {
       throw new Error(withMeta('Sem autorizacao para gerar PDF. Verifique chave admin ou sessao autenticada.'));
@@ -1140,3 +1124,4 @@ export async function fetchDashboardMetrics() {
 
   return buildDashboardInsights(leads, orcamentos);
 }
+

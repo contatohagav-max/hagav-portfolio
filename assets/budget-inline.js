@@ -141,7 +141,7 @@ const DDD_VALIDOS = new Set(['11','12','13','14','15','16','17','18','19','21','
     function getStepsMotionTail(){
       return [
         {id:'unica_referencia',label:'Referência visual',title:REFERENCIA_VISUAL_TITLE,hint:REFERENCIA_VISUAL_HINT,type:'textarea',required:false,placeholder:'Cole links ou descreva referências...'},
-        {id:'unica_prazo',label:'Prazo ideal',title:'Qual o prazo ideal para entrega?',hint:'O prazo pode variar de acordo com a complexidade do projeto.',type:'single',required:true,options:PRAZO_OPTIONS},
+        {id:'unica_prazo',label:'Prazo ideal',title:'Qual o prazo ideal?',type:'single',required:true,options:PRAZO_OPTIONS},
         {id:'extras',label:'Observações extras',title:'Observações extras',type:'textarea',required:false,placeholder:'Algo que você queira complementar...'},
         {id:'nome',label:'Nome',title:'Qual é o seu nome?',type:'text',required:true,placeholder:'Digite seu nome'},
         {id:'whatsapp',label:'WhatsApp',title:'Qual o seu WhatsApp?',type:'phone',required:true,placeholder:'(00) 00000-0000'}
@@ -162,7 +162,7 @@ const DDD_VALIDOS = new Set(['11','12','13','14','15','16','17','18','19','21','
       return [
         {id:'rec_gravado_por_tipo',label:'Material gravado',title:'O material já está gravado?',hint:'Responda para cada serviço selecionado.',type:'yesNoByService',required:true,services:selected},
         {id:'rec_tempo_bruto_por_tipo',label:'Tempo bruto',title:'Quanto tempo de material bruto para edição?',hint:'Somente para serviços com material gravado.',type:'durationByService',required:withYes.length>0,optionalWhenEmpty:true,services:withYes},
-        {id:'rec_inicio',label:'Prazo para começar',title:'Quando você deseja começar?',type:'single',required:true,options:PRAZO_OPTIONS},
+        {id:'rec_inicio',label:'Prazo ideal',title:'Qual o prazo ideal?',type:'single',required:true,options:PRAZO_OPTIONS},
         {id:'extras',label:'Observações extras',title:'Observações extras',type:'textarea',required:false,placeholder:'Algo que você queira complementar...'},
         {id:'nome',label:'Nome',title:'Qual é o seu nome?',type:'text',required:true,placeholder:'Digite seu nome'},
         {id:'whatsapp',label:'WhatsApp',title:'Qual o seu WhatsApp?',type:'phone',required:true,placeholder:'(00) 00000-0000'}

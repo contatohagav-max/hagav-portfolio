@@ -1,8 +1,11 @@
 import { parseISO, isValid, differenceInMinutes } from 'date-fns';
 import {
   DEFAULT_PRICING_RULES as SHARED_DEFAULT_PRICING_RULES,
+  PRAZO_OPTIONS as SHARED_PRAZO_OPTIONS,
+  canonicalPrazoKey as sharedCanonicalPrazoKey,
   computeCommercialPricing,
   deriveFinalPriceMetrics,
+  normalizePrazoLabel as normalizeSharedPrazoLabel,
   normalizePricingRules as normalizeSharedPricingRules,
   parseDurationToHours as parseSharedDurationToHours,
   formatDurationCompact,
@@ -24,6 +27,26 @@ const STATUS_PERDIDO = new Set(['perdido', 'descartado']);
 const URGENCIA_OPERACIONAL = new Set(['alta', 'media']);
 
 const ORC_REVISAO = new Set(['orcamento', 'ajustando']);
+
+const COMMERCIAL_SERVICE_CATALOG = Object.freeze([
+  { key: 'reels_shorts_tiktok', label: 'Reels / Shorts / TikTok', baseKeys: ['reels_shorts_tiktok'] },
+  { key: 'criativo_trafego_pago', label: 'Criativo de tráfego pago', baseKeys: ['criativo_trafego_pago'] },
+  { key: 'corte_podcast', label: 'Corte de podcast', baseKeys: ['corte_podcast'] },
+  { key: 'video_medio', label: 'Vídeo médio', baseKeys: ['video_medio'] },
+  { key: 'depoimento', label: 'Depoimento', baseKeys: ['depoimento'] },
+  { key: 'videoaula_modulo', label: 'Videoaula / módulo', baseKeys: ['videoaula_modulo'] },
+  { key: 'youtube', label: 'YouTube', baseKeys: ['youtube'] },
+  { key: 'vsl_15', label: 'VSL até 15min', baseKeys: ['vsl_15'] },
+  { key: 'vsl_longa', label: 'VSL longa', baseKeys: ['vsl_longa'] },
+  { key: 'motion', label: 'Motion / Vinheta', baseKeys: ['motion_min', 'motion_max'] },
+]);
+
+const COMMERCIAL_SERVICE_LABELS = Object.freeze(
+  COMMERCIAL_SERVICE_CATALOG.reduce((acc, item) => {
+    acc[item.key] = item.label;
+    return acc;
+  }, {})
+);
 
 export const DEAL_STATUS = Object.freeze({
   NOVO: 'novo',
@@ -205,9 +228,67 @@ export function getDealKpiPolicy() {
 }
 
 const DEFAULT_PRICING_RULES = SHARED_DEFAULT_PRICING_RULES;
+export const PRAZO_OPTIONS = SHARED_PRAZO_OPTIONS;
 
 export function normalizePricingRules(value = {}) {
   return normalizeSharedPricingRules(value);
+}
+
+export function normalizePrazoLabel(value, fallback = '') {
+  return normalizeSharedPrazoLabel(value, fallback);
+}
+
+function getServicePresetHoursFromRules(serviceKey, pricingRules = DEFAULT_PRICING_RULES) {
+  const rules = normalizePricingRules(pricingRules);
+  const presets = rules?.serviceHours || DEFAULT_PRICING_RULES.serviceHours;
+  const fromTable = Number(presets?.[serviceKey]);
+  if (Number.isFinite(fromTable) && fromTable > 0) return fromTable;
+  const fallback = Number(presets?.default || DEFAULT_PRICING_RULES.serviceHours.default || 1.5);
+  return Number.isFinite(fallback) && fallback > 0 ? fallback : 1.5;
+}
+
+export function getCommercialServiceOptions(pricingRulesInput = DEFAULT_PRICING_RULES) {
+  const rules = normalizePricingRules(pricingRulesInput);
+  const serviceBase = rules?.serviceBase || DEFAULT_PRICING_RULES.serviceBase;
+
+  return COMMERCIAL_SERVICE_CATALOG
+    .filter((item) => item.baseKeys.some((key) => Number(serviceBase?.[key] || 0) > 0))
+    .map((item) => {
+      const presetHours = getServicePresetHoursFromRules(item.key, rules);
+      return {
+        key: item.key,
+        label: item.label,
+        presetHours,
+        presetDuration: formatDurationCompact(presetHours) || `${presetHours.toFixed(2)}h`,
+      };
+    });
+}
+
+export function getDefaultCommercialServiceLabel(pricingRulesInput = DEFAULT_PRICING_RULES) {
+  return getCommercialServiceOptions(pricingRulesInput)[0]?.label || COMMERCIAL_SERVICE_CATALOG[0].label;
+}
+
+export function getCommercialServiceLabel(serviceLabel, pricingRulesInput = DEFAULT_PRICING_RULES) {
+  const rawValue = String(serviceLabel || '').trim();
+  if (!rawValue) return getDefaultCommercialServiceLabel(pricingRulesInput);
+  const serviceKey = COMMERCIAL_SERVICE_LABELS[rawValue] ? rawValue : mapServiceCatalog(rawValue);
+  return COMMERCIAL_SERVICE_LABELS[serviceKey] || rawValue;
+}
+
+export function getCommercialServicePreset(serviceLabel, pricingRulesInput = DEFAULT_PRICING_RULES) {
+  const rules = normalizePricingRules(pricingRulesInput);
+  const serviceKey = mapServiceCatalog(serviceLabel);
+  const label = COMMERCIAL_SERVICE_LABELS[serviceKey]
+    || String(serviceLabel || '').trim()
+    || getDefaultCommercialServiceLabel(rules);
+  const presetHours = getServicePresetHoursFromRules(serviceKey, rules);
+
+  return {
+    key: serviceKey,
+    label,
+    presetHours,
+    presetDuration: formatDurationCompact(presetHours) || `${presetHours.toFixed(2)}h`,
+  };
 }
 
 export function parseDurationToHours(value, fallback = 0) {
@@ -469,16 +550,7 @@ function roundCurrency(value) {
 }
 
 function canonicalPrazoKey(rawPrazo) {
-  const prazo = normalizeServiceKey(rawPrazo);
-  if (!prazo) return '';
-  if (prazo.includes('24h')) return '24h';
-  if (prazo.includes('3 dia')) return '3 dias';
-  if (prazo.includes('essa semana')) return 'Essa semana';
-  if (prazo.includes('sem pressa')) return 'Sem pressa';
-  if (prazo.includes('imediato')) return 'Imediato';
-  if (prazo.includes('esse mes')) return 'Esse mês';
-  if (prazo.includes('estou analisando')) return 'Estou analisando';
-  return rawPrazo || '';
+  return sharedCanonicalPrazoKey(rawPrazo);
 }
 
 function mapServiceCatalog(serviceLabel) {
@@ -533,16 +605,16 @@ function getUrgencyContext(flow, prazo, serviceKey) {
   let multiplier = readUrgencyMultiplier(flowTable, key);
   let forcedManual = false;
 
-  if ((serviceKey === 'vsl_15' || serviceKey === 'vsl_longa') && key === '24h') {
+  if ((serviceKey === 'vsl_15' || serviceKey === 'vsl_longa') && key === 'Urgente') {
     multiplier = 1;
     forcedManual = true;
-  } else if ((serviceKey === 'vsl_15' || serviceKey === 'vsl_longa') && key === '3 dias') {
-    multiplier = Math.max(multiplier, readUrgencyMultiplier(vslTable, '3 dias') || 1.4);
+  } else if ((serviceKey === 'vsl_15' || serviceKey === 'vsl_longa') && key === 'Em até 7 dias') {
+    multiplier = Math.max(multiplier, readUrgencyMultiplier(vslTable, 'Em até 7 dias') || 1.4);
   }
 
-  if (flow === 'DU' && key === '24h') {
-    const allow24h = serviceKey === 'reels_shorts_tiktok' || serviceKey === 'criativo_trafego_pago';
-    if (!allow24h) forcedManual = true;
+  if (flow === 'DU' && key === 'Urgente') {
+    const allowUrgente = serviceKey === 'reels_shorts_tiktok' || serviceKey === 'criativo_trafego_pago';
+    if (!allowUrgente) forcedManual = true;
   }
 
   return {
@@ -647,7 +719,7 @@ function buildItemFromEntries(serviceLabel, qtyEntries, materialEntries, tempoEn
     quantidade: quantidade || '-',
     material_gravado: material,
     tempo_bruto: tempo,
-    prazo: normalizeText(defaults.prazo),
+    prazo: normalizePrazoLabel(defaults.prazo, ''),
     referencia: normalizeText(defaults.referencia),
   };
 }
@@ -676,7 +748,7 @@ function buildStructuredFromAnswers(flow, answers) {
     const resolvedServices = services.length > 0
       ? services
       : qtyEntries.map((entry) => entry.label).filter(Boolean);
-    const prazo = normalizeText(answers.unica_prazo);
+    const prazo = normalizePrazoLabel(answers.unica_prazo, '');
     const referencia = normalizeText(answers.unica_referencia);
 
     const items = resolvedServices
@@ -707,7 +779,7 @@ function buildStructuredFromAnswers(flow, answers) {
     ? operations
     : qtyEntries.map((entry) => entry.label).filter(Boolean);
   const fallbackOperation = normalizeText(answers.rec_tipo_operacao);
-  const prazo = normalizeText(answers.rec_inicio || answers.recorrente_prazo);
+  const prazo = normalizePrazoLabel(answers.rec_inicio || answers.recorrente_prazo, '');
   const referencia = normalizeText(answers.rec_referencia || answers.referencia);
 
   const items = (resolvedOperations.length > 0 ? resolvedOperations : [fallbackOperation])
@@ -748,7 +820,7 @@ function normalizeItemPayload(rawItem, defaults = {}) {
     horas_estimadas: normalizeText(rawItem.horas_estimadas || rawItem.horas_por_unidade || rawItem.duracao_sugerida || ''),
     horas_por_unidade: toNumber(rawItem.horas_por_unidade, 0),
     horas_totais: toNumber(rawItem.horas_totais, 0),
-    prazo: normalizeText(rawItem.prazo || defaults.prazo),
+    prazo: normalizePrazoLabel(rawItem.prazo || defaults.prazo, ''),
     referencia: normalizeText(rawItem.referencia || defaults.referencia),
     preco_base_item: toNumber(rawItem.preco_base_item, 0),
     preco_referencia_item: toNumber(rawItem.preco_referencia_item, 0),
@@ -774,7 +846,7 @@ function extractItemsFromRecordFields(record) {
   const qtyParts = splitPipeValues(record?.quantidade || record?.Quantidade || '');
   const materialParts = splitPipeValues(record?.material_gravado || record?.MaterialGravado || '');
   const tempoParts = splitPipeValues(record?.tempo_bruto || record?.TempoBruto || '');
-  const prazo = normalizeText(record?.prazo || record?.Prazo || '');
+  const prazo = normalizePrazoLabel(record?.prazo || record?.Prazo || '', '');
   const referencia = normalizeText(record?.referencia || record?.Referencia || '');
 
   if (services.length === 0) {
@@ -811,7 +883,7 @@ function extractItemsFromRecordFields(record) {
 function extractServiceItems(record) {
   const parsed = parseJsonSafe(record?.detalhes);
   const defaultData = {
-    prazo: normalizeText(record?.prazo || record?.Prazo || parsed?.prazo || ''),
+    prazo: normalizePrazoLabel(record?.prazo || record?.Prazo || parsed?.prazo || '', ''),
     referencia: normalizeText(record?.referencia || record?.Referencia || parsed?.referencia || ''),
   };
 
@@ -917,7 +989,10 @@ function applyStructuredFallback(record) {
     tempo_bruto: normalizeText(record?.tempo_bruto)
       || normalizeText(structured?.tempo_resumo)
       || summarizeItemsField(items, 'tempo_bruto', primary?.tempo_bruto || normalizeText(parsed?.tempo_bruto || parsed?.tempoBruto || record?.TempoBruto)),
-    prazo: normalizeText(record?.prazo) || normalizeText(structured?.prazo) || primary?.prazo || normalizeText(parsed?.prazo || record?.Prazo),
+    prazo: normalizePrazoLabel(
+      record?.prazo || structured?.prazo || primary?.prazo || parsed?.prazo || record?.Prazo,
+      ''
+    ),
     referencia: normalizeText(record?.referencia) || normalizeText(structured?.referencia) || primary?.referencia || normalizeText(parsed?.referencia || record?.Referencia),
     preco_base: toNumber(record?.preco_base, 0) || precoBaseParsed,
     preco_final: toNumber(record?.preco_final, 0) || precoFinalParsed,
@@ -939,11 +1014,10 @@ function inferFlow(record) {
 }
 
 export function inferUrgencia(rawPrazo) {
-  const prazo = normalizeText(rawPrazo).toLowerCase();
+  const prazo = normalizePrazoLabel(rawPrazo, '');
   if (!prazo) return 'media';
-  if (prazo.includes('24h') || prazo.includes('imediato') || prazo.includes('urgente')) return 'alta';
-  if (prazo.includes('3 dia') || prazo.includes('essa semana') || prazo.includes('semana')) return 'media';
-  if (prazo.includes('sem pressa') || prazo.includes('analisando') || prazo.includes('analisando')) return 'baixa';
+  if (prazo === 'Urgente') return 'alta';
+  if (prazo === 'Sem prazo definido') return 'baixa';
   return 'media';
 }
 
@@ -985,7 +1059,7 @@ function detectMulticamera(text) {
 export function computePricingSnapshot(record, pricingRulesInput = DEFAULT_PRICING_RULES) {
   const flow = inferFlow(record);
   const items = extractServiceItems(record);
-  const fallbackPrazo = normalizeText(record?.prazo || record?.Prazo || '');
+  const fallbackPrazo = normalizePrazoLabel(record?.prazo || record?.Prazo || '', '');
   const fallbackReferencia = normalizeText(record?.referencia || record?.Referencia || '');
   const observacoes = normalizeText(record?.observacoes || record?.Observacoes || '');
 
@@ -1139,7 +1213,9 @@ export function buildRecordFieldsFromItems(items = [], fallback = {}) {
     quantidade,
     material_gravado: materialGravado,
     tempo_bruto: tempoBruto,
-    prazo: prazoValues.length <= 1 ? (prazoValues[0] || normalizeText(fallback?.prazo)) : prazoValues.join(' | '),
+    prazo: prazoValues.length <= 1
+      ? normalizePrazoLabel(prazoValues[0] || fallback?.prazo || '', '')
+      : prazoValues.join(' | '),
     referencia: referenciaValues.length <= 1 ? (referenciaValues[0] || normalizeText(fallback?.referencia)) : referenciaValues.join(' | '),
   };
 }
@@ -1299,9 +1375,16 @@ function buildResumoComercial(record, computed) {
   const service = normalizeText(record?.servico || record?.ServicoOuOperacao || '-') || '-';
   const quantidade = normalizeText(record?.quantidade || record?.Quantidade || '-') || '-';
   const material = normalizeText(record?.material_gravado || record?.MaterialGravado || '-') || '-';
-  const prazo = normalizeText(record?.prazo || record?.Prazo || '-') || '-';
+  const prazo = normalizePrazoLabel(record?.prazo || record?.Prazo || '-', '-') || '-';
+  const score = Number.isFinite(Number(computed?.score))
+    ? Math.round(Number(computed.score))
+    : Math.round(toNumber(record?.score_lead, 0));
+  const urgencia = normalizeText(computed?.urgencia || record?.urgencia || '').toLowerCase()
+    || inferUrgencia(record?.prazo || record?.Prazo || '');
+  const prioridade = normalizeText(computed?.prioridade || record?.prioridade || '').toLowerCase()
+    || priorityByScore(score, urgencia);
 
-  return `${flow} | ${service} | Qtd: ${quantidade} | Material: ${material} | Prazo: ${prazo} | Score: ${computed.score}`;
+  return `${flow} | ${service} | Qtd: ${quantidade} | Material: ${material} | Prazo: ${prazo} | Urgencia: ${urgencia} | Prioridade: ${prioridade} | Score: ${score}`;
 }
 
 function parseDateSafe(value) {
@@ -1363,7 +1446,11 @@ export function enrichLeadRecord(record) {
     prioridade,
     temperatura,
     valor_estimado: Math.round(valorEstimado * 100) / 100,
-    resumo_comercial: normalizeText(normalizedRecord?.resumo_comercial) || buildResumoComercial(normalizedRecord, { score: computedScore }),
+    resumo_comercial: buildResumoComercial(normalizedRecord, {
+      score: computedScore,
+      urgencia,
+      prioridade,
+    }),
   };
 
   return enriched;

@@ -2,8 +2,29 @@
 
 import { useEffect } from 'react';
 import { X } from 'lucide-react';
+import useAdaptivePanelWidth from '@/components/ui/useAdaptivePanelWidth';
 
-export default function Modal({ open, onClose, title, children, width = 'max-w-lg', bodyClassName = '' }) {
+export default function Modal({
+  open,
+  onClose,
+  title,
+  children,
+  width = 'max-w-lg',
+  bodyClassName = '',
+  adaptiveWidthKey = '',
+  adaptiveWidths = null,
+  adaptiveMinWidth = 680,
+  adaptiveMaxWidth = 1680,
+  resizable = true,
+}) {
+  const adaptivePanel = useAdaptivePanelWidth({
+    storageKey: adaptiveWidthKey,
+    widths: adaptiveWidths || { base: 760, large: 920, ultrawide: 1080 },
+    minWidth: adaptiveMinWidth,
+    maxWidth: adaptiveMaxWidth,
+    resizable: Boolean(adaptiveWidthKey && resizable),
+  });
+
   useEffect(() => {
     if (!open) return;
     const handler = (e) => e.key === 'Escape' && onClose();
@@ -21,7 +42,17 @@ export default function Modal({ open, onClose, title, children, width = 'max-w-l
         onClick={onClose}
       />
       {/* Panel */}
-      <div className={`modal-panel ${width}`}>
+      <div
+        className={adaptiveWidthKey ? 'modal-panel' : `modal-panel ${width}`}
+        style={adaptiveWidthKey ? adaptivePanel.panelStyle : undefined}
+      >
+        {adaptiveWidthKey && adaptivePanel.showResizeHandle ? (
+          <div
+            className="panel-resize-handle"
+            aria-hidden="true"
+            {...adaptivePanel.resizeHandleProps}
+          />
+        ) : null}
         {/* Header */}
         <div className="modal-head">
           <h2 className="text-base font-semibold text-hagav-white">{title}</h2>

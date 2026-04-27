@@ -1,4 +1,11 @@
 export const PRICING_RULES_VERSION = 2;
+export const PRAZO_OPTIONS = Object.freeze([
+  'Urgente',
+  'Em até 7 dias',
+  'Em até 15 dias',
+  'Este mês',
+  'Sem prazo definido',
+]);
 
 const LEGACY_DEFAULT_PRICING_RULES = Object.freeze({
   serviceBase: {
@@ -89,19 +96,21 @@ export const DEFAULT_PRICING_RULES = Object.freeze({
   },
   urgencia: {
     DU: {
-      '24h': 1.3,
-      '3 dias': 1.15,
-      'Essa semana': 1,
-      'Sem pressa': 1,
+      Urgente: 1.3,
+      'Em até 7 dias': 1.15,
+      'Em até 15 dias': 1,
+      'Este mês': 1,
+      'Sem prazo definido': 1,
     },
     DR: {
-      Imediato: 1.2,
-      'Essa semana': 1,
-      'Esse mês': 1,
-      'Estou analisando': 1,
+      Urgente: 1.2,
+      'Em até 7 dias': 1,
+      'Em até 15 dias': 1,
+      'Este mês': 1,
+      'Sem prazo definido': 1,
     },
     VSL: {
-      '3 dias': 1.4,
+      'Em até 7 dias': 1.4,
     },
   },
   ajustes: {
@@ -259,6 +268,44 @@ export function normalizeServiceKey(value) {
     .trim();
 }
 
+export function normalizePrazoLabel(rawPrazo, fallback = '') {
+  const prazo = normalizeServiceKey(rawPrazo);
+  if (!prazo) return normalizeText(fallback);
+  if (
+    prazo.includes('urgente')
+    || prazo.includes('24h')
+    || prazo.includes('imediato')
+    || prazo.includes('inicio imediato')
+    || prazo.includes('até 3 dias')
+    || prazo.includes('ate 3 dias')
+  ) return 'Urgente';
+  if (
+    prazo.includes('7 dia')
+    || prazo.includes('3 dia')
+    || prazo.includes('5 dia')
+    || prazo.includes('essa semana')
+    || prazo === 'semana'
+  ) return 'Em até 7 dias';
+  if (
+    prazo.includes('15 dia')
+    || prazo.includes('10 dia')
+  ) return 'Em até 15 dias';
+  if (
+    prazo.includes('este mes')
+    || prazo.includes('esse mes')
+    || prazo.includes('cronograma mensal')
+  ) return 'Este mês';
+  if (
+    prazo.includes('sem pressa')
+    || prazo.includes('estou analisando')
+    || prazo.includes('sem prazo')
+    || prazo.includes('conforme alinhamento')
+    || prazo.includes('a combinar')
+    || prazo.includes('podemos alinhar')
+  ) return 'Sem prazo definido';
+  return normalizeText(fallback || rawPrazo);
+}
+
 export function mapServiceCatalog(serviceLabel) {
   const normalized = normalizeServiceKey(serviceLabel);
   if (/(reels|shorts|tiktok|conteudo para redes sociais)/.test(normalized)) return 'reels_shorts_tiktok';
@@ -275,16 +322,7 @@ export function mapServiceCatalog(serviceLabel) {
 }
 
 export function canonicalPrazoKey(rawPrazo) {
-  const prazo = normalizeServiceKey(rawPrazo);
-  if (!prazo) return '';
-  if (prazo.includes('24h')) return '24h';
-  if (prazo.includes('3 dia')) return '3 dias';
-  if (prazo.includes('essa semana')) return 'Essa semana';
-  if (prazo.includes('sem pressa')) return 'Sem pressa';
-  if (prazo.includes('imediato')) return 'Imediato';
-  if (prazo.includes('esse mes')) return 'Esse mês';
-  if (prazo.includes('estou analisando')) return 'Estou analisando';
-  return normalizeText(rawPrazo);
+  return normalizePrazoLabel(rawPrazo, '');
 }
 
 export function inferMaterialState(rawMaterial) {
@@ -336,6 +374,18 @@ function isLegacyComplexityTable(rules) {
 
 export function normalizePricingRules(rawRules = {}) {
   const merged = deepMerge(DEFAULT_PRICING_RULES, rawRules || {});
+  const normalizeUrgencyTable = (table = {}, fallbackTable = {}) => {
+    const next = { ...fallbackTable };
+    Object.entries(table || {}).forEach(([rawKey, rawValue]) => {
+      const prazoLabel = normalizePrazoLabel(rawKey, '');
+      if (!prazoLabel) return;
+      const parsed = Number(rawValue);
+      next[prazoLabel] = Number.isFinite(parsed) && parsed > 0
+        ? parsed
+        : Number(next[prazoLabel] || fallbackTable[prazoLabel] || 1);
+    });
+    return next;
+  };
   const normalized = {
     ...merged,
     serviceBase: { ...DEFAULT_PRICING_RULES.serviceBase, ...(merged.serviceBase || {}) },
@@ -344,9 +394,9 @@ export function normalizePricingRules(rawRules = {}) {
     urgencia: {
       ...DEFAULT_PRICING_RULES.urgencia,
       ...(merged.urgencia || {}),
-      DU: { ...DEFAULT_PRICING_RULES.urgencia.DU, ...((merged.urgencia || {}).DU || {}) },
-      DR: { ...DEFAULT_PRICING_RULES.urgencia.DR, ...((merged.urgencia || {}).DR || {}) },
-      VSL: { ...DEFAULT_PRICING_RULES.urgencia.VSL, ...((merged.urgencia || {}).VSL || {}) },
+      DU: normalizeUrgencyTable((merged.urgencia || {}).DU, DEFAULT_PRICING_RULES.urgencia.DU),
+      DR: normalizeUrgencyTable((merged.urgencia || {}).DR, DEFAULT_PRICING_RULES.urgencia.DR),
+      VSL: normalizeUrgencyTable((merged.urgencia || {}).VSL, DEFAULT_PRICING_RULES.urgencia.VSL),
     },
     ajustes: { ...DEFAULT_PRICING_RULES.ajustes, ...(merged.ajustes || {}) },
     margem: { ...DEFAULT_PRICING_RULES.margem, ...(merged.margem || {}) },
@@ -435,20 +485,20 @@ function getUrgencyContext(flow, prazo, serviceKey, pricingRules) {
   let blocked = false;
   const reasons = [];
 
-  if ((serviceKey === 'vsl_15' || serviceKey === 'vsl_longa') && key === '24h') {
+  if ((serviceKey === 'vsl_15' || serviceKey === 'vsl_longa') && key === 'Urgente') {
     multiplier = 1;
     blocked = true;
     forcedManual = true;
-    reasons.push('VSL nao aceita prazo 24h.');
-  } else if ((serviceKey === 'vsl_15' || serviceKey === 'vsl_longa') && key === '3 dias') {
-    multiplier = Math.max(multiplier, readUrgencyMultiplier(vslTable, '3 dias') || 1.4);
+    reasons.push('VSL nao aceita prazo urgente.');
+  } else if ((serviceKey === 'vsl_15' || serviceKey === 'vsl_longa') && key === 'Em até 7 dias') {
+    multiplier = Math.max(multiplier, readUrgencyMultiplier(vslTable, 'Em até 7 dias') || 1.4);
   }
 
-  if (flow === 'DU' && key === '24h') {
-    const allow24h = serviceKey === 'reels_shorts_tiktok' || serviceKey === 'criativo_trafego_pago';
-    if (!allow24h) {
+  if (flow === 'DU' && key === 'Urgente') {
+    const allowUrgente = serviceKey === 'reels_shorts_tiktok' || serviceKey === 'criativo_trafego_pago';
+    if (!allowUrgente) {
       forcedManual = true;
-      reasons.push('24h em DU requer revisao manual para este servico.');
+      reasons.push('Prazo urgente em DU requer revisao manual para este servico.');
     }
   }
 

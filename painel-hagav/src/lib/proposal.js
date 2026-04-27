@@ -1,4 +1,4 @@
-import { buildComparativeProposalPricing } from '@/lib/commercial';
+import { buildComparativeProposalPricing, normalizePrazoLabel } from '@/lib/commercial';
 import { fmtBRL } from '@/lib/utils';
 
 const DEFAULT_NEXT_STEPS = [
@@ -7,9 +7,42 @@ const DEFAULT_NEXT_STEPS = [
   '03 - Início da edição conforme prazo combinado.',
 ];
 
+function normalizePlaceholderKey(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+}
+
+function looksLikeTemplateVariable(value) {
+  const normalized = normalizePlaceholderKey(value);
+  if (!normalized) return false;
+  return /^[a-z][a-z0-9_]*$/.test(normalized);
+}
+
+function unwrapTemplateToken(value) {
+  const inner = String(value || '').trim();
+  if (!inner) return '';
+  return looksLikeTemplateVariable(inner) ? '' : inner;
+}
+
+function stripTemplateArtifacts(value) {
+  return String(value ?? '')
+    .replace(/{{\s*([^{}]+)\s*}}/g, (_, inner) => unwrapTemplateToken(inner))
+    .replace(/\[\[\s*([^[\]]+)\s*\]\]/g, (_, inner) => unwrapTemplateToken(inner))
+    .replace(/%%\s*([^%]+)\s*%%/g, (_, inner) => unwrapTemplateToken(inner))
+    .replace(/__\s*([A-Za-z0-9_.-]+)\s*__/g, (_, inner) => unwrapTemplateToken(inner));
+}
+
 function normalizeText(value) {
   if (value === null || value === undefined) return '';
-  return String(value).trim();
+  return stripTemplateArtifacts(value)
+    .replace(/\r/g, '')
+    .replace(/[^\S\n]+/g, ' ')
+    .replace(/ *\n+ */g, '\n')
+    .trim();
 }
 
 function parseQuantityNumber(value, fallback = 1) {
@@ -241,7 +274,7 @@ export function buildProposalPreviewModel({ orc, proposalMode, proposalDraft }) 
     summary: {
       service: normalizeText(draft.servico_principal),
       quantity: normalizeText(mode === 'mensal' ? (draft.quantidade_mensal || draft.quantidade) : draft.quantidade),
-      deadline: normalizeText(draft.prazo),
+      deadline: normalizePrazoLabel(draft.prazo, ''),
     },
     scope: normalizeText(mode === 'mensal' ? (draft.escopo_mensal || draft.escopo_comercial) : draft.escopo_comercial),
     investment: {

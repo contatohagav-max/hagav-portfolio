@@ -22,8 +22,10 @@ cp -r thumbnail    dist/ 2>/dev/null || true
 cp _headers        dist/ 2>/dev/null || true
 cp _redirects      dist/ 2>/dev/null || true
 
-# Templates de PDF (proposta + contrato)
-cp -r templates     dist/ 2>/dev/null || true
+# Templates de PDF (proposta + contrato) - publica apenas oficiais
+mkdir -p dist/templates
+cp templates/proposta-hagav-template.html dist/templates/ 2>/dev/null || true
+cp templates/contrato-hagav-template.html dist/templates/ 2>/dev/null || true
 
 # Manifests e favicons
 cp site.webmanifest dist/ 2>/dev/null || true

@@ -1,5 +1,6 @@
 ﻿import { authenticateRequest, getClientIp } from '../_utils/admin-auth.js';
 import { applyRateLimit } from '../_utils/rate-limit.js';
+import { normalizePrazoLabel } from '../../shared/pricing-engine.js';
 
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -1043,14 +1044,14 @@ function buildTemplateValues(row, env, runtime = {}) {
     contrato?.tipo_projeto,
     contrato?.recorrente === false ? "Pontual" : "Recorrente"
   );
-  const prazoResumo = firstNonEmptyValue(
+  const prazoResumo = normalizePrazoLabel(firstNonEmptyValue(
     contrato?.prazo_resumo,
     comercial?.prazo_resumo,
     detalhes?.prazo_resumo,
     detalhes?.prazo,
     row?.prazo,
-    "Conforme demanda e volume contratado"
-  );
+    "Sem prazo definido"
+  ), "Sem prazo definido");
   const renovacao = firstNonEmptyValue(
     contrato?.renovacao,
     contrato?.recorrente === false

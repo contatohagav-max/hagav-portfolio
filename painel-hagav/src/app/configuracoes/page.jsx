@@ -221,7 +221,7 @@ export default function ConfiguracoesPage() {
           <NumberField label="Referencia visual" value={scoreWeights.referenciaVisual} onChange={(v) => setScoreWeights((p) => ({ ...p, referenciaVisual: v }))} />
           <NumberField label="Material gravado" value={scoreWeights.materialGravado} onChange={(v) => setScoreWeights((p) => ({ ...p, materialGravado: v }))} />
           <NumberField label="Servico alto valor" value={scoreWeights.servicoAltoValor} onChange={(v) => setScoreWeights((p) => ({ ...p, servicoAltoValor: v }))} />
-          <NumberField label="Sem pressa" value={scoreWeights.semPressa} onChange={(v) => setScoreWeights((p) => ({ ...p, semPressa: v }))} step={1} min={-100} max={100} />
+          <NumberField label="Sem prazo definido" value={scoreWeights.semPressa} onChange={(v) => setScoreWeights((p) => ({ ...p, semPressa: v }))} step={1} min={-100} max={100} />
         </div>
       </Section>
 
@@ -305,10 +305,10 @@ export default function ConfiguracoesPage() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-            <NumberField label="DU 24h" value={Number(pricing?.urgencia?.DU?.['24h'] || 1)} onChange={(v) => setPricingPath(['urgencia', 'DU', '24h'], v)} step={0.01} min={0.5} />
-            <NumberField label="DU 3 dias" value={Number(pricing?.urgencia?.DU?.['3 dias'] || 1)} onChange={(v) => setPricingPath(['urgencia', 'DU', '3 dias'], v)} step={0.01} min={0.5} />
-            <NumberField label="DR Imediato" value={Number(pricing?.urgencia?.DR?.Imediato || 1)} onChange={(v) => setPricingPath(['urgencia', 'DR', 'Imediato'], v)} step={0.01} min={0.5} />
-            <NumberField label="VSL 3 dias" value={Number(pricing?.urgencia?.VSL?.['3 dias'] || 1)} onChange={(v) => setPricingPath(['urgencia', 'VSL', '3 dias'], v)} step={0.01} min={0.5} />
+            <NumberField label="DU Urgente" value={Number(pricing?.urgencia?.DU?.Urgente || 1)} onChange={(v) => setPricingPath(['urgencia', 'DU', 'Urgente'], v)} step={0.01} min={0.5} />
+            <NumberField label="DU Em até 7 dias" value={Number(pricing?.urgencia?.DU?.['Em até 7 dias'] || 1)} onChange={(v) => setPricingPath(['urgencia', 'DU', 'Em até 7 dias'], v)} step={0.01} min={0.5} />
+            <NumberField label="DR Urgente" value={Number(pricing?.urgencia?.DR?.Urgente || 1)} onChange={(v) => setPricingPath(['urgencia', 'DR', 'Urgente'], v)} step={0.01} min={0.5} />
+            <NumberField label="VSL Em até 7 dias" value={Number(pricing?.urgencia?.VSL?.['Em até 7 dias'] || 1)} onChange={(v) => setPricingPath(['urgencia', 'VSL', 'Em até 7 dias'], v)} step={0.01} min={0.5} />
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-4 gap-3">

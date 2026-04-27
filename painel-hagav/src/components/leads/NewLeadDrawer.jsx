@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { X, Save, Loader2, UserPlus } from 'lucide-react';
+import useAdaptivePanelWidth from '@/components/ui/useAdaptivePanelWidth';
+import { PRAZO_OPTIONS, normalizePrazoLabel } from '@/lib/commercial';
 import { createLead } from '@/lib/supabase';
 
 const ORIGEM_OPTIONS = [
@@ -25,9 +27,6 @@ const FLUXO_OPTIONS = [
   { value: 'DU', label: 'Projeto pontual (DU)' },
   { value: 'DR', label: 'Producao mensal (DR)' },
 ];
-
-const PRAZO_OPTIONS_DU = ['24h', '3 dias', 'Essa semana', 'Sem pressa'];
-const PRAZO_OPTIONS_DR = ['Imediato', 'Essa semana', 'Esse mes', 'Estou analisando'];
 
 const MATERIAL_OPTIONS = [
   { value: 'Sim', label: 'Sim' },
@@ -68,6 +67,12 @@ function normalizeWhatsapp(raw) {
 }
 
 export default function NewLeadDrawer({ onClose, onCreated }) {
+  const adaptivePanel = useAdaptivePanelWidth({
+    storageKey: 'hagav-drawer-lead-new',
+    widths: { base: 780, large: 920, ultrawide: 1060 },
+    minWidth: 720,
+    maxWidth: 1120,
+  });
   const [nome, setNome] = useState('');
   const [whatsapp, setWhatsapp] = useState('');
   const [empresa, setEmpresa] = useState('');
@@ -77,7 +82,7 @@ export default function NewLeadDrawer({ onClose, onCreated }) {
   const [quantidade, setQuantidade] = useState('1');
   const [materialGravado, setMaterialGravado] = useState('Sim');
   const [tempoBruto, setTempoBruto] = useState('');
-  const [prazo, setPrazo] = useState('Essa semana');
+  const [prazo, setPrazo] = useState('Em até 7 dias');
   const [referencia, setReferencia] = useState('');
   const [contextoResumo, setContextoResumo] = useState('');
   const [valorEstimado, setValorEstimado] = useState('');
@@ -92,11 +97,17 @@ export default function NewLeadDrawer({ onClose, onCreated }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
-  const prazoOptions = fluxo === 'DR' ? PRAZO_OPTIONS_DR : PRAZO_OPTIONS_DU;
+  const prazoOptions = PRAZO_OPTIONS;
 
   useEffect(() => {
-    if (!prazoOptions.includes(prazo)) {
-      setPrazo(prazoOptions[0] || '');
+    const fallbackPrazo = fluxo === 'DR' ? 'Este mês' : 'Em até 7 dias';
+    const normalizedPrazo = normalizePrazoLabel(prazo, fallbackPrazo);
+    if (!prazoOptions.includes(normalizedPrazo)) {
+      setPrazo(fallbackPrazo);
+      return;
+    }
+    if (normalizedPrazo !== prazo) {
+      setPrazo(normalizedPrazo);
     }
   }, [fluxo, prazo, prazoOptions]);
 
@@ -159,7 +170,10 @@ export default function NewLeadDrawer({ onClose, onCreated }) {
     <>
       <div className="drawer-overlay" onClick={onClose} />
 
-      <aside className="drawer-panel flex flex-col">
+      <aside className="drawer-panel flex flex-col" style={adaptivePanel.panelStyle}>
+        {adaptivePanel.showResizeHandle ? (
+          <div className="panel-resize-handle" aria-hidden="true" {...adaptivePanel.resizeHandleProps} />
+        ) : null}
         {/* Cabeçalho */}
         <div className="drawer-head">
           <div>

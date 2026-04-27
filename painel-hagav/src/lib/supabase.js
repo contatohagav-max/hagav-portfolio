@@ -17,6 +17,7 @@ import {
   mapLegacyOrcamentoStatusToDeal,
   mapDealStatusToLegacyLead,
   mapDealStatusToLegacyOrcamento,
+  normalizePrazoLabel,
   normalizePricingRules,
 } from '@/lib/commercial';
 
@@ -326,6 +327,41 @@ function normalizeLeadText(value, maxLen = 300) {
   return String(value || '').trim().slice(0, maxLen);
 }
 
+function normalizeComparableNumber(value) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return 0;
+  return Math.round(parsed * 100) / 100;
+}
+
+function buildLeadDerivedSyncPatch(record) {
+  // Prioridade e urgencia manuais sao sinais operacionais; o valor estimado
+  // continua ancorado no snapshot/preco ja salvo para nao alterar a regra comercial.
+  const derived = enrichLeadRecord({
+    ...mapDealToLeadRecord(record),
+    resumo_comercial: '',
+  });
+
+  return {
+    score_lead: Number(derived.score_lead || 0),
+    urgencia: String(derived.urgencia || '').trim().toLowerCase() || null,
+    prioridade: String(derived.prioridade || '').trim().toLowerCase() || null,
+    temperatura: String(derived.temperatura || '').trim() || null,
+    valor_estimado: normalizeComparableNumber(derived.valor_estimado || 0),
+    resumo_comercial: String(derived.resumo_comercial || '').trim() || null,
+  };
+}
+
+function leadDerivedSyncChanged(record, patch) {
+  return (
+    normalizeComparableNumber(record?.score_lead) !== normalizeComparableNumber(patch.score_lead)
+    || String(record?.urgencia || '').trim().toLowerCase() !== String(patch.urgencia || '').trim().toLowerCase()
+    || String(record?.prioridade || '').trim().toLowerCase() !== String(patch.prioridade || '').trim().toLowerCase()
+    || String(record?.temperatura || '').trim() !== String(patch.temperatura || '').trim()
+    || normalizeComparableNumber(record?.valor_estimado) !== normalizeComparableNumber(patch.valor_estimado)
+    || String(record?.resumo_comercial || '').trim() !== String(patch.resumo_comercial || '').trim()
+  );
+}
+
 function normalizeLeadFlow(value) {
   const raw = normalizeLeadText(value, 40)
     .normalize('NFD')
@@ -377,12 +413,13 @@ function buildLeadResumoOrcamento({
   prazo,
   referencia,
 }) {
+  const prazoNormalizado = normalizePrazoLabel(prazo, '') || '-';
   const parts = [
     fluxo || '-',
     `Servico: ${servicoResumo || '-'}`,
     `Quantidade: ${quantidadeResumo || '-'}`,
     `Material gravado: ${materialResumo || '-'}`,
-    `Prazo: ${prazo || '-'}`,
+    `Prazo: ${prazoNormalizado}`,
   ];
   if (referencia) parts.push(`Referencia: ${referencia}`);
   return parts.join(' | ');
@@ -475,7 +512,10 @@ export async function createLead(fields = {}) {
   const empresa = normalizeLeadText(fields.empresa, 120);
   const origem = normalizeLeadText(fields.origem, 120) || 'prospeccao_ativa';
   const flow = normalizeLeadFlow(fields.fluxo || fields.tipo_contratacao);
-  const prazo = normalizeLeadText(fields.prazo, 80) || (flow === 'DR' ? 'Esse mes' : 'Essa semana');
+  const prazo = normalizePrazoLabel(
+    normalizeLeadText(fields.prazo, 80),
+    flow === 'DR' ? 'Este mês' : 'Em até 7 dias'
+  );
   const services = splitLeadServices(fields.servico);
   const servicoResumo = services.join(' | ') || normalizeLeadText(fields.servico, 300);
   const quantidadeBase = parseLeadQuantity(fields.quantidade, 1);
@@ -534,7 +574,7 @@ export async function createLead(fields = {}) {
     ? temperaturaField
     : temperatureByScore(scoreLead);
 
-  const resumoComercial = `${flow} | Servico: ${servicoResumo || '-'} | Qtd: ${quantidadeResumo || '-'} | Material: ${materialResumo || '-'} | Prazo: ${prazo || '-'} | Score: ${scoreLead}`;
+  const resumoComercial = `${flow} | Servico: ${servicoResumo || '-'} | Qtd: ${quantidadeResumo || '-'} | Material: ${materialResumo || '-'} | Prazo: ${normalizePrazoLabel(prazo, '') || '-'} | Score: ${scoreLead}`;
   const valorEstimadoInput = Number(fields.valor_estimado);
   const valorEstimado = Number.isFinite(valorEstimadoInput) && valorEstimadoInput > 0
     ? valorEstimadoInput
@@ -625,7 +665,25 @@ export async function updateLead(id, patch) {
     .single();
 
   if (error) throw error;
-  return enrichLeadRecord(mapDealToLeadRecord(data));
+
+  let nextRecord = mapDealToLeadRecord(data);
+  const syncPatch = buildLeadDerivedSyncPatch(nextRecord);
+  if (leadDerivedSyncChanged(nextRecord, syncPatch)) {
+    const { data: syncData, error: syncError } = await client
+      .from('deals')
+      .update(syncPatch)
+      .eq('id', id)
+      .select('*')
+      .single();
+
+    if (syncError) {
+      console.warn('[Leads][DerivedSync]', syncError);
+    } else if (syncData) {
+      nextRecord = mapDealToLeadRecord(syncData);
+    }
+  }
+
+  return enrichLeadRecord(nextRecord);
 }
 
 // Orcamentos
@@ -765,6 +823,22 @@ export async function updateOrcamento(id, patch) {
         ...nextRecord,
         ...recalcPatch,
       };
+    }
+  }
+
+  const syncPatch = buildLeadDerivedSyncPatch(nextRecord);
+  if (leadDerivedSyncChanged(nextRecord, syncPatch)) {
+    const { data: syncData, error: syncError } = await client
+      .from('deals')
+      .update(syncPatch)
+      .eq('id', id)
+      .select('*')
+      .single();
+
+    if (syncError) {
+      console.warn('[Orcamentos][DerivedSync]', syncError);
+    } else if (syncData) {
+      nextRecord = enrichOrcamentoRecord(mapDealToOrcamentoRecord(syncData), pricingRules);
     }
   }
 

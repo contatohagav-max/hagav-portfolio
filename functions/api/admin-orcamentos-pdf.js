@@ -1,5 +1,6 @@
 ﻿import { authenticateRequest, getClientIp } from '../_utils/admin-auth.js';
 import { applyRateLimit } from '../_utils/rate-limit.js';
+import { normalizePrazoLabel } from '../../shared/pricing-engine.js';
 
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -167,7 +168,7 @@ function escapePdfText(value) {
 }
 
 function normalizeTemplateText(value, maxLen = 400, { allowEmpty = false } = {}) {
-  const base = String(value ?? "")
+  const base = stripTemplateArtifacts(value)
     .normalize("NFKC")
     .replace(/[\u0000-\u001F\u007F]/g, " ")
     .replace(/<[^>]*>/g, " ")
@@ -248,6 +249,26 @@ function normalizePlaceholderKey(value) {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "_")
     .replace(/^_+|_+$/g, "");
+}
+
+function looksLikeTemplateVariable(value) {
+  const normalized = normalizePlaceholderKey(value);
+  if (!normalized) return false;
+  return /^[a-z][a-z0-9_]*$/.test(normalized);
+}
+
+function unwrapTemplateToken(value) {
+  const inner = String(value || "").trim();
+  if (!inner) return "";
+  return looksLikeTemplateVariable(inner) ? "" : inner;
+}
+
+function stripTemplateArtifacts(value) {
+  return String(value ?? "")
+    .replace(/{{\s*([^{}]+)\s*}}/g, (_, inner) => unwrapTemplateToken(inner))
+    .replace(/\[\[\s*([^[\]]+)\s*\]\]/g, (_, inner) => unwrapTemplateToken(inner))
+    .replace(/%%\s*([^%]+)\s*%%/g, (_, inner) => unwrapTemplateToken(inner))
+    .replace(/__\s*([A-Za-z0-9_.-]+)\s*__/g, (_, inner) => unwrapTemplateToken(inner));
 }
 
 function escapeRegExp(value) {
@@ -1232,15 +1253,15 @@ function buildTemplateValues(row, env, options = {}) {
     row?.email
   );
 
-  const prazo = firstNonEmptyValue(
+  const prazo = normalizePrazoLabel(firstNonEmptyValue(
     comercial?.prazo,
     detalhes?.prazo,
     row?.prazo,
     respostas?.flow_prazo,
     respostas?.unica_prazo,
     respostas?.rec_inicio,
-    "A combinar"
-  );
+    "Sem prazo definido"
+  ), "Sem prazo definido");
   const referenciaRaw = firstNonEmptyValue(
     templateOverrides?.referencia_texto,
     comercial?.referencia_texto,

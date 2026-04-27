@@ -260,6 +260,13 @@
       flex-shrink: 0;
     }
     .btn-icon svg { width: 26px; height: 26px; fill: rgba(255, 202, 96, 0.98); }
+    .btn-icon img {
+      width: 28px;
+      height: 28px;
+      object-fit: contain;
+      display: block;
+      filter: drop-shadow(0 0 8px rgba(255, 191, 36, 0.16));
+    }
     .btn-icon .btn-icon-play { width: 28px; height: 28px; }
     .btn-label {
       flex: 1;
@@ -414,7 +421,7 @@
       </div>
       <div class="pane" id="pane-actions">
         <a href="./portfolio.html" class="btn">
-          <span class="btn-icon"><svg class="btn-icon-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></span>
+          <span class="btn-icon"><img src="./assets/logo-icon.png" alt="" decoding="async" /></span>
           <span class="btn-label">Ver nossos projetos</span>
           <span class="btn-arrow">→</span>
         </a>

@@ -1071,7 +1071,12 @@ export default function ClientesPage() {
         open={Boolean(selected)}
         onClose={() => setSelected(null)}
         title="Contrato do cliente"
-        width={showLiveContractPreview ? 'max-w-6xl' : 'max-w-3xl'}
+        adaptiveWidthKey={showLiveContractPreview ? 'hagav-modal-contrato-preview' : 'hagav-modal-contrato'}
+        adaptiveWidths={showLiveContractPreview
+          ? { base: 1240, large: 1440, ultrawide: 1640 }
+          : { base: 860, large: 1020, ultrawide: 1180 }}
+        adaptiveMinWidth={showLiveContractPreview ? 1080 : 760}
+        adaptiveMaxWidth={showLiveContractPreview ? 1700 : 1240}
         bodyClassName={showLiveContractPreview ? 'overflow-hidden' : ''}
       >
         {selected && (

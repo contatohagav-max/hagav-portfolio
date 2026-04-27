@@ -34,11 +34,12 @@ const DDD_VALIDOS = new Set(['11','12','13','14','15','16','17','18','19','21','
       'Outro'
     ];
     const MOTION_SERVICE_LABEL='Motion / Vinheta';
-    const MOTION_PRAZO_OPTIONS=[
-      'Até 3 dias úteis',
-      'Até 5 dias úteis',
-      'Até 10 dias úteis',
-      'Sem pressa / podemos alinhar'
+    const PRAZO_OPTIONS=[
+      'Urgente',
+      'Em até 7 dias',
+      'Em até 15 dias',
+      'Este mês',
+      'Sem prazo definido'
     ];
     const REFERENCIA_VISUAL_TITLE='Tem alguma referência visual ou estilo que você gostaria de seguir?';
     const REFERENCIA_VISUAL_HINT='(Pode ser link de vídeo, Instagram, site ou até uma explicação rápida) (Ex: vinheta, animação de logo, estilo de edição, etc.)';
@@ -140,7 +141,7 @@ const DDD_VALIDOS = new Set(['11','12','13','14','15','16','17','18','19','21','
     function getStepsMotionTail(){
       return [
         {id:'unica_referencia',label:'Referência visual',title:REFERENCIA_VISUAL_TITLE,hint:REFERENCIA_VISUAL_HINT,type:'textarea',required:false,placeholder:'Cole links ou descreva referências...'},
-        {id:'unica_prazo',label:'Prazo ideal',title:'Qual o prazo ideal para entrega?',hint:'O prazo pode variar de acordo com a complexidade do projeto.',type:'single',required:true,options:MOTION_PRAZO_OPTIONS},
+        {id:'unica_prazo',label:'Prazo ideal',title:'Qual o prazo ideal para entrega?',hint:'O prazo pode variar de acordo com a complexidade do projeto.',type:'single',required:true,options:PRAZO_OPTIONS},
         {id:'extras',label:'Observações extras',title:'Observações extras',type:'textarea',required:false,placeholder:'Algo que você queira complementar...'},
         {id:'nome',label:'Nome',title:'Qual é o seu nome?',type:'text',required:true,placeholder:'Digite seu nome'},
         {id:'whatsapp',label:'WhatsApp',title:'Qual o seu WhatsApp?',type:'phone',required:true,placeholder:'(00) 00000-0000'}
@@ -151,7 +152,7 @@ const DDD_VALIDOS = new Set(['11','12','13','14','15','16','17','18','19','21','
         {id:'unica_gravado',label:'Material gravado',title:'O material já está gravado?',hint:'Responda para cada serviço selecionado.',type:'yesNoByService',required:true,services:selected},
         {id:'unica_tempo_bruto',label:'Tempo de material bruto',title:'Quanto tempo de material bruto para edição?',hint:'Somente para serviços com material gravado.',type:'durationByService',required:withYes.length>0,optionalWhenEmpty:true,services:withYes},
         {id:'unica_referencia',label:'Referência visual',title:REFERENCIA_VISUAL_TITLE,hint:REFERENCIA_VISUAL_HINT,type:'textarea',required:false,placeholder:'Cole links ou descreva referências...'},
-        {id:'unica_prazo',label:'Prazo ideal',title:'Qual o prazo ideal?',type:'single',required:true,options:['24h','3 dias','Essa semana','Sem pressa']},
+        {id:'unica_prazo',label:'Prazo ideal',title:'Qual o prazo ideal?',type:'single',required:true,options:PRAZO_OPTIONS},
         {id:'extras',label:'Observações extras',title:'Observações extras',type:'textarea',required:false,placeholder:'Algo que você queira complementar...'},
         {id:'nome',label:'Nome',title:'Qual é o seu nome?',type:'text',required:true,placeholder:'Digite seu nome'},
         {id:'whatsapp',label:'WhatsApp',title:'Qual o seu WhatsApp?',type:'phone',required:true,placeholder:'(00) 00000-0000'}
@@ -161,7 +162,7 @@ const DDD_VALIDOS = new Set(['11','12','13','14','15','16','17','18','19','21','
       return [
         {id:'rec_gravado_por_tipo',label:'Material gravado',title:'O material já está gravado?',hint:'Responda para cada serviço selecionado.',type:'yesNoByService',required:true,services:selected},
         {id:'rec_tempo_bruto_por_tipo',label:'Tempo bruto',title:'Quanto tempo de material bruto para edição?',hint:'Somente para serviços com material gravado.',type:'durationByService',required:withYes.length>0,optionalWhenEmpty:true,services:withYes},
-        {id:'rec_inicio',label:'Prazo para começar',title:'Quando você deseja começar?',type:'single',required:true,options:['Imediato','Essa semana','Esse mês','Estou analisando']},
+        {id:'rec_inicio',label:'Prazo para começar',title:'Quando você deseja começar?',type:'single',required:true,options:PRAZO_OPTIONS},
         {id:'extras',label:'Observações extras',title:'Observações extras',type:'textarea',required:false,placeholder:'Algo que você queira complementar...'},
         {id:'nome',label:'Nome',title:'Qual é o seu nome?',type:'text',required:true,placeholder:'Digite seu nome'},
         {id:'whatsapp',label:'WhatsApp',title:'Qual o seu WhatsApp?',type:'phone',required:true,placeholder:'(00) 00000-0000'}

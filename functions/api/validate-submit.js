@@ -1,6 +1,9 @@
 import {
   DEFAULT_PRICING_RULES as SHARED_DEFAULT_PRICING_RULES,
+  PRAZO_OPTIONS,
+  canonicalPrazoKey,
   computeCommercialPricing,
+  normalizePrazoLabel,
   normalizePricingRules,
 } from '../../shared/pricing-engine.js';
 
@@ -258,6 +261,10 @@ function buildServiceMapFromSelection(selection, rawValue, keyLimit, valLimit) {
   return map;
 }
 
+function isValidPrazoOption(value) {
+  return PRAZO_OPTIONS.includes(normalizePrazoLabel(value, ""));
+}
+
 function normalizeIncomingPayload(body) {
   const answers = body?.answers && typeof body.answers === "object" ? { ...body.answers } : {};
   const tipo = normalizeTipoValue(body?.tipo, answers);
@@ -272,6 +279,8 @@ function normalizeIncomingPayload(body) {
     if (!answers.unica_quantidades && answers.flow_quantidades) answers.unica_quantidades = answers.flow_quantidades;
     if (!answers.unica_referencia && answers.flow_referencia) answers.unica_referencia = answers.flow_referencia;
     if (!answers.unica_prazo && answers.flow_prazo) answers.unica_prazo = answers.flow_prazo;
+    if (answers.flow_prazo) answers.flow_prazo = normalizePrazoLabel(answers.flow_prazo, "");
+    if (answers.unica_prazo) answers.unica_prazo = normalizePrazoLabel(answers.unica_prazo, "");
   } else if (tipo === "recorrente") {
     if (!answers.rec_operacoes && answers.flow_servicos) answers.rec_operacoes = answers.flow_servicos;
     if (!answers.rec_quantidades && answers.flow_quantidades) answers.rec_quantidades = answers.flow_quantidades;
@@ -314,6 +323,9 @@ function normalizeIncomingPayload(body) {
       answers.rec_volume = firstPositiveMapValue(answers.rec_quantidades)
         || stripDangerousText(String(answers.flow_volume || ""), 60);
     }
+    if (answers.flow_prazo) answers.flow_prazo = normalizePrazoLabel(answers.flow_prazo, "");
+    if (answers.flow_inicio) answers.flow_inicio = normalizePrazoLabel(answers.flow_inicio, "");
+    if (answers.rec_inicio) answers.rec_inicio = normalizePrazoLabel(answers.rec_inicio, "");
   }
 
   return normalized;
@@ -373,7 +385,7 @@ function validateTipoPayload(body) {
       }
     }
 
-    if (!answers.unica_prazo) {
+    if (!answers.unica_prazo || !isValidPrazoOption(answers.unica_prazo)) {
       return fail("du.prazo", "Prazo invalido");
     }
 
@@ -435,8 +447,8 @@ function validateTipoPayload(body) {
           if (!tempo) return fail("dr.tempo_bruto", "Campo recorrente invalido");
         }
       }
-      const prazo = stripDangerousText(answers.rec_inicio || "", 120);
-      if (!prazo || hasDangerousScheme(prazo)) {
+      const prazo = normalizePrazoLabel(stripDangerousText(answers.rec_inicio || "", 120), "");
+      if (!prazo || hasDangerousScheme(prazo) || !isValidPrazoOption(prazo)) {
         return fail("dr.prazo", "Campo recorrente invalido");
       }
     } else {
@@ -445,6 +457,9 @@ function validateTipoPayload(body) {
         const v = stripDangerousText(answers[field] || "", 120);
         if (!v) return fail(`dr.legacy.${field}`, "Campo recorrente invalido");
         if (hasDangerousScheme(v)) return fail(`dr.legacy.${field}.scheme`, "Campo recorrente invalido");
+      }
+      if (!isValidPrazoOption(answers.rec_inicio)) {
+        return fail("dr.legacy.rec_inicio", "Campo recorrente invalido");
       }
       const recTempoBruto = stripDangerousText(answers.rec_tempo_bruto || "", LIMITS.duration);
       const recReferencia = stripDangerousText(answers.rec_referencia || "", LIMITS.referencia);
@@ -697,7 +712,7 @@ function buildOrcamentoDetalhesSerializado(lead, pricing) {
     quantidade: row.Quantidade || "",
     materialGravado: row.MaterialGravado || "",
     tempoBruto: row.TempoBruto || "",
-    prazo: row.Prazo || "",
+    prazo: normalizePrazoLabel(row.Prazo || "", ""),
     referencia: row.Referencia || "",
     observacoes: row.Observacoes || "",
     calculoAutomatico: {
@@ -773,7 +788,7 @@ function buildResumoOrcamento(row) {
   const quantidade = formatQuantidadeResumo(fluxo, row?.Quantidade);
   const materialGravado = summarizeMaterial(row?.MaterialGravado);
   const tempoBruto = summarizeTempo(row?.TempoBruto);
-  const prazo = stripDangerousText(String(row?.Prazo || ""), 120) || "-";
+  const prazo = normalizePrazoLabel(stripDangerousText(String(row?.Prazo || ""), 120), "-") || "-";
   const referencia = stripDangerousText(String(row?.Referencia || ""), LIMITS.referencia);
   const observacoes = stripDangerousText(String(row?.Observacoes || ""), 300);
   const parts = [
@@ -792,10 +807,8 @@ function buildResumoOrcamento(row) {
 function inferUrgenciaFromPrazo(flow, prazoRaw) {
   const key = canonicalPrazoKey(prazoRaw);
   if (!key) return "media";
-  if (key === "24h" || key === "imediato") return "alta";
-  if (key === "3 dias" || key === "essa semana") return "media";
-  if (flow === "DR" && (key === "esse mês" || key === "estou analisando")) return "baixa";
-  if (key === "sem pressa") return "baixa";
+  if (key === "Urgente") return "alta";
+  if (key === "Sem prazo definido") return "baixa";
   return "media";
 }
 
@@ -881,7 +894,7 @@ function buildResumoComercial(row, pricing, score, urgencia, prioridade) {
     row?.Fluxo || "",
     `Servico: ${normalizeServicoCurto(row?.ServicoOuOperacao || "") || "-"}`,
     `Quantidade: ${row?.Quantidade || "-"}`,
-    `Prazo: ${row?.Prazo || "-"}`,
+    `Prazo: ${normalizePrazoLabel(row?.Prazo, "-") || "-"}`,
     `Urgencia: ${urgencia}`,
     `Prioridade: ${prioridade}`,
     `Score: ${score}`,
@@ -936,9 +949,10 @@ async function saveLeadToSupabase(env, lead) {
   }
 
   const row = lead?.row || {};
+  const prazoNormalizado = normalizePrazoLabel(row?.Prazo || "", "");
   const { pricingRules, scoreWeights } = await loadPricingContext(config);
   const pricing = calculateOrcamentoPricing(row, pricingRules, lead?.raw?.answers || {});
-  const urgencia = inferUrgenciaFromPrazo(row?.Fluxo, row?.Prazo);
+  const urgencia = inferUrgenciaFromPrazo(row?.Fluxo, prazoNormalizado);
   const scoreLead = estimateLeadScoreFromRow(row, pricing, scoreWeights);
   const prioridade = inferPrioridadeByScore(scoreLead, urgencia);
   const temperatura = inferTemperaturaByScore(scoreLead);
@@ -960,7 +974,7 @@ async function saveLeadToSupabase(env, lead) {
     quantidade: quantidadeInt,
     material_gravado: parseBooleanLike(row.MaterialGravado),
     tempo_bruto: row.TempoBruto || "",
-    prazo: row.Prazo || "",
+    prazo: prazoNormalizado,
     referencia: parseBooleanLike(row.Referencia),
     multicamera: Number(pricing.ajusteMulticameraPercent || 0) > 0,
     observacoes: row.Observacoes || "",
@@ -1205,19 +1219,6 @@ function getComplexidadeByMinutes(minutes, pricingRules) {
   return { nivel: "N3", multiplicador: Number(limits.N3 || 1.5) };
 }
 
-function canonicalPrazoKey(rawPrazo) {
-  const prazo = String(rawPrazo || "").toLowerCase();
-  if (!prazo) return "";
-  if (prazo.includes("24h")) return "24h";
-  if (prazo.includes("3 dia")) return "3 dias";
-  if (prazo.includes("essa semana")) return "essa semana";
-  if (prazo.includes("sem pressa")) return "sem pressa";
-  if (prazo.includes("imediato")) return "imediato";
-  if (prazo.includes("esse mês") || prazo.includes("esse mes")) return "esse mês";
-  if (prazo.includes("estou analisando")) return "estou analisando";
-  return prazo.trim();
-}
-
 function mapServiceCatalog(serviceLabel) {
   const normalized = normalizeServiceKey(serviceLabel);
   if (/(reels|shorts|tiktok|conteudo para redes sociais)/.test(normalized)) return "reels_shorts_tiktok";
@@ -1277,22 +1278,22 @@ function getUrgencyMultiplier(flow, prazoKey, serviceKey, pricingRules) {
   const reasons = [];
 
   if (serviceKey === "vsl_15" || serviceKey === "vsl_longa") {
-    if (prazoKey === "24h") {
+    if (prazoKey === "Urgente") {
       blocked = true;
       forcedManual = true;
       multiplier = 1;
-      reasons.push("VSL nao aceita prazo 24h.");
-    } else if (prazoKey === "3 dias") {
-      multiplier = Math.max(multiplier, readUrgencyMultiplier(vslTable, "3 dias") || 1.4);
-      reasons.push("Prazo 3 dias para VSL aplica adicional de 40%.");
+      reasons.push("VSL nao aceita prazo urgente.");
+    } else if (prazoKey === "Em até 7 dias") {
+      multiplier = Math.max(multiplier, readUrgencyMultiplier(vslTable, "Em até 7 dias") || 1.4);
+      reasons.push("Prazo em até 7 dias para VSL aplica adicional de 40%.");
     }
   }
 
-  if (flow === "DU" && prazoKey === "24h") {
-    const allow24h = serviceKey === "reels_shorts_tiktok" || serviceKey === "criativo_trafego_pago";
-    if (!allow24h) {
+  if (flow === "DU" && prazoKey === "Urgente") {
+    const allowUrgente = serviceKey === "reels_shorts_tiktok" || serviceKey === "criativo_trafego_pago";
+    if (!allowUrgente) {
       forcedManual = true;
-      reasons.push("24h em DU so e aplicado para Reels e Criativo.");
+      reasons.push("Prazo urgente em DU so e aplicado para Reels e Criativo.");
     }
   }
 
@@ -1462,7 +1463,7 @@ function buildStructuredDataFromAnswers(tipo, answers) {
     data.materialSummary = summarizeItemsField(items, "material_gravado", data.materialPrimary || "-");
     data.tempoPrimary = getLooseMapValue(tempoEntries, primaryService) || tempoEntries[0]?.value || "";
     data.tempoSummary = summarizeItemsField(items, "tempo_bruto", data.tempoPrimary || "-");
-    data.prazo = stripDangerousText(String(answers?.unica_prazo || ""), 60);
+    data.prazo = normalizePrazoLabel(stripDangerousText(String(answers?.unica_prazo || ""), 60), "");
     data.referencia = stripDangerousText(String(answers?.unica_referencia || ""), LIMITS.referencia);
     data.services = resolvedServices;
     data.quantities = resolvedQuantities;
@@ -1513,7 +1514,7 @@ function buildStructuredDataFromAnswers(tipo, answers) {
   data.materialSummary = summarizeItemsField(items, "material_gravado", data.materialPrimary || "-");
   data.tempoPrimary = getLooseMapValue(tempoEntries, primaryOperation) || tempoEntries[0]?.value || stripDangerousText(String(answers?.rec_tempo_bruto || ""), LIMITS.duration);
   data.tempoSummary = summarizeItemsField(items, "tempo_bruto", data.tempoPrimary || "-");
-  data.prazo = stripDangerousText(String(answers?.rec_inicio || answers?.recorrente_prazo || ""), 60);
+  data.prazo = normalizePrazoLabel(stripDangerousText(String(answers?.rec_inicio || answers?.recorrente_prazo || ""), 60), "");
   data.referencia = stripDangerousText(String(answers?.rec_referencia || answers?.referencia || ""), LIMITS.referencia);
   data.objetivo = stripDangerousText(String(answers?.rec_objetivo || answers?.objetivo || ""), 120);
   data.services = items.map((item) => item.servico);
@@ -1539,7 +1540,7 @@ function calculateOrcamentoPricing(row, pricingRules, rawAnswers) {
   const materialMap = Object.keys(structured.materialLookup).length > 0
     ? structured.materialLookup
     : parseLabeledMap(row?.MaterialGravado, 180, 40);
-  const prazoBase = structured.prazo || row?.Prazo;
+  const prazoBase = normalizePrazoLabel(structured.prazo || row?.Prazo, "");
   const referenciaBase = structured.referencia || row?.Referencia;
   const structuredItems = Array.isArray(structured.items) ? structured.items : [];
   const baseItems = structuredItems.length > 0
@@ -1550,7 +1551,7 @@ function calculateOrcamentoPricing(row, pricingRules, rawAnswers) {
       material_gravado: materialMap[normalizeServiceKey(serviceLabel)] || row?.MaterialGravado || "",
       tempo_bruto: tempoMap[normalizeServiceKey(serviceLabel)] || row?.TempoBruto || "",
       referencia: referenciaBase || row?.Referencia || "",
-      prazo: prazoBase || row?.Prazo || ""
+      prazo: normalizePrazoLabel(item?.prazo || prazoBase || row?.Prazo || "", "")
     }));
 
   const items = baseItems
@@ -1570,13 +1571,13 @@ function calculateOrcamentoPricing(row, pricingRules, rawAnswers) {
         LIMITS.duration
       ),
       referencia: stripDangerousText(String(item?.referencia || referenciaBase || row?.Referencia || ""), LIMITS.referencia),
-      prazo: stripDangerousText(String(item?.prazo || prazoBase || row?.Prazo || ""), 60)
+      prazo: normalizePrazoLabel(stripDangerousText(String(item?.prazo || prazoBase || row?.Prazo || ""), 60), "")
     }))
     .filter((item) => Boolean(item.servico));
 
   const pricing = computeCommercialPricing({
     flow,
-    prazo: stripDangerousText(String(prazoBase || row?.Prazo || ""), 60),
+    prazo: normalizePrazoLabel(stripDangerousText(String(prazoBase || row?.Prazo || ""), 60), ""),
     referencia: stripDangerousText(String(referenciaBase || row?.Referencia || ""), LIMITS.referencia),
     observacoes: stripDangerousText(String(row?.Observacoes || ""), LIMITS.extras),
     items: items.length > 0 ? items : [{
@@ -1585,7 +1586,7 @@ function calculateOrcamentoPricing(row, pricingRules, rawAnswers) {
       material_gravado: stripDangerousText(String(row?.MaterialGravado || ""), 40),
       tempo_bruto: stripDangerousText(String(row?.TempoBruto || ""), LIMITS.duration),
       referencia: stripDangerousText(String(referenciaBase || row?.Referencia || ""), LIMITS.referencia),
-      prazo: stripDangerousText(String(prazoBase || row?.Prazo || ""), 60)
+      prazo: normalizePrazoLabel(stripDangerousText(String(prazoBase || row?.Prazo || ""), 60), "")
     }]
   }, pricingRules);
 
@@ -1618,7 +1619,7 @@ function buildLeadRow(body, request, ip, nowIso) {
     Quantidade: stripDangerousText(structured.quantitySummary || structured.quantityPrimary, 600),
     MaterialGravado: stripDangerousText(structured.materialSummary || structured.materialPrimary, 600),
     TempoBruto: stripDangerousText(structured.tempoSummary || structured.tempoPrimary, 600),
-    Prazo: stripDangerousText(structured.prazo, 120),
+    Prazo: normalizePrazoLabel(stripDangerousText(structured.prazo, 120), ""),
     Referencia: stripDangerousText(structured.referencia, LIMITS.referencia),
     Objetivo: stripDangerousText(structured.objetivo, 300),
     Observacoes: stripDangerousText(String(answers?.extras || ""), LIMITS.extras),

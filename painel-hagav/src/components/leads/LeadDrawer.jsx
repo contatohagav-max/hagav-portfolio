@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { X, MessageCircle, ExternalLink, Save, Loader2, FilePlus2, Ban } from 'lucide-react';
 import {
   LeadStatusBadge,
@@ -9,7 +9,9 @@ import {
   TemperaturaBadge,
 } from '@/components/ui/StatusBadge';
 import EduTooltip from '@/components/ui/EduTooltip';
+import useAdaptivePanelWidth from '@/components/ui/useAdaptivePanelWidth';
 import { updateLead } from '@/lib/supabase';
+import { enrichLeadRecord } from '@/lib/commercial';
 import { fmtDateTime, whatsappLink, LEAD_STATUS_LABELS, fmtBRL } from '@/lib/utils';
 
 const LEAD_STATUSES = ['novo', 'contatado', 'qualificado', 'descartado'];
@@ -46,6 +48,12 @@ function InfoCard({ label, value }) {
 }
 
 export default function LeadDrawer({ lead, onClose, onUpdated }) {
+  const adaptivePanel = useAdaptivePanelWidth({
+    storageKey: 'hagav-drawer-lead-detail',
+    widths: { base: 760, large: 900, ultrawide: 1020 },
+    minWidth: 700,
+    maxWidth: 1100,
+  });
   const [status, setStatus] = useState(lead?.status ?? 'novo');
   const [obs, setObs] = useState(lead?.observacoes ?? '');
   const [proximaAcao, setProximaAcao] = useState(lead?.proxima_acao ?? '');
@@ -130,16 +138,28 @@ export default function LeadDrawer({ lead, onClose, onUpdated }) {
     status || 'novo',
   ]));
   const canGenerateOrcamento = String(status || '').toLowerCase() === 'qualificado';
+  const liveLead = useMemo(() => enrichLeadRecord({
+    ...lead,
+    status,
+    observacoes: obs,
+    proxima_acao: proximaAcao,
+    prioridade,
+    urgencia,
+    ultimo_contato_em: fromDateTimeLocal(ultimoContato),
+  }), [lead, obs, prioridade, proximaAcao, status, ultimoContato, urgencia]);
 
-  const waLink = lead.whatsapp
-    ? whatsappLink(lead.whatsapp, `Ola ${lead.nome || ''}, aqui e a HAGAV Studio!`)
+  const waLink = liveLead.whatsapp
+    ? whatsappLink(liveLead.whatsapp, `Ola ${liveLead.nome || ''}, aqui e a HAGAV Studio!`)
     : '';
 
   return (
     <>
       <div className="drawer-overlay" onClick={onClose} />
 
-      <aside className="drawer-panel flex flex-col">
+      <aside className="drawer-panel flex flex-col" style={adaptivePanel.panelStyle}>
+        {adaptivePanel.showResizeHandle ? (
+          <div className="panel-resize-handle" aria-hidden="true" {...adaptivePanel.resizeHandleProps} />
+        ) : null}
         <div className="drawer-head">
           <div>
             <p className="text-xs text-hagav-gray uppercase tracking-wider mb-1">Lead #{lead.id}</p>
@@ -153,25 +173,25 @@ export default function LeadDrawer({ lead, onClose, onUpdated }) {
 
         <div className="drawer-body">
           <div className="grid grid-cols-2 gap-2">
-            <InfoCard label="WhatsApp" value={lead.whatsapp} />
-            <InfoCard label="Pagina" value={lead.pagina} />
-            <InfoCard label="Servico" value={lead.servico} />
-            <InfoCard label="Valor estimado" value={fmtBRL(lead.valor_estimado)} />
-            <InfoCard label="Criado em" value={fmtDateTime(lead.created_at)} />
-            <InfoCard label="Ultimo contato" value={lead.ultimo_contato_em ? fmtDateTime(lead.ultimo_contato_em) : 'Sem contato'} />
+            <InfoCard label="WhatsApp" value={liveLead.whatsapp} />
+            <InfoCard label="Pagina" value={liveLead.pagina} />
+            <InfoCard label="Servico" value={liveLead.servico} />
+            <InfoCard label="Valor estimado" value={fmtBRL(liveLead.valor_estimado)} />
+            <InfoCard label="Criado em" value={fmtDateTime(liveLead.created_at)} />
+            <InfoCard label="Ultimo contato" value={liveLead.ultimo_contato_em ? fmtDateTime(liveLead.ultimo_contato_em) : 'Sem contato'} />
           </div>
 
           <div className="flex flex-wrap gap-2">
-            <LeadStatusBadge status={lead.status} />
-            <PrioridadeBadge prioridade={lead.prioridade} />
-            <UrgenciaBadge urgencia={lead.urgencia} />
-            <TemperaturaBadge temperatura={lead.temperatura} />
-            <span className="badge bg-hagav-gold/15 text-hagav-gold border-hagav-gold/30">Score {lead.score_lead ?? 0}</span>
+            <LeadStatusBadge status={liveLead.status} />
+            <PrioridadeBadge prioridade={liveLead.prioridade} />
+            <UrgenciaBadge urgencia={liveLead.urgencia} />
+            <TemperaturaBadge temperatura={liveLead.temperatura} />
+            <span className="badge bg-hagav-gold/15 text-hagav-gold border-hagav-gold/30">Score {liveLead.score_lead ?? 0}</span>
           </div>
 
           <div className="bg-hagav-surface border border-hagav-border rounded-lg p-3">
             <p className="text-[10px] text-hagav-gray uppercase tracking-wider mb-1">Resumo comercial</p>
-            <p className="text-sm text-hagav-light whitespace-pre-wrap">{lead.resumo_comercial || 'Sem resumo.'}</p>
+            <p className="text-sm text-hagav-light whitespace-pre-wrap">{liveLead.resumo_comercial || 'Sem resumo.'}</p>
           </div>
 
           <div className="gold-line" />

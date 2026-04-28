@@ -180,6 +180,20 @@ const AUTO_SYNC_PROPOSAL_FIELDS = [
   'texto_comparativo',
 ];
 
+// Campos da proposta que derivam da quantidade e devem ser recalculados pelo auto-sync
+// quando a quantidade operacional mudar
+const QUANTITY_DERIVED_PROPOSAL_FIELDS = [
+  'valor_total_moeda',
+  'valor_mensal_moeda',
+  'valor_personalizado_moeda',
+  'escopo_comercial',
+  'escopo_mensal',
+  'opcao1_qtd', 'opcao1_preco', 'opcao1_unitario', 'opcao1_desc', 'opcao1_desconto',
+  'opcao2_qtd', 'opcao2_preco', 'opcao2_unitario', 'opcao2_desc', 'opcao2_desconto',
+  'opcao3_qtd', 'opcao3_preco', 'opcao3_unitario', 'opcao3_desc', 'opcao3_desconto',
+  'texto_comparativo',
+];
+
 function InfoRow({ label, value }) {
   return (
     <div className="bg-hagav-surface border border-hagav-border rounded-lg p-3">

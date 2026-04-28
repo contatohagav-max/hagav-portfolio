@@ -1070,6 +1070,29 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
         [field]: value,
       };
     }));
+    // Limpar dirty flags para deixar auto-sync atualizar os campos derivados
+    if (field === 'quantidade') {
+      setProposalDirtyFields((prev) => {
+        const next = { ...prev };
+        delete next.quantidade;
+        QUANTITY_DERIVED_PROPOSAL_FIELDS.forEach((f) => delete next[f]);
+        return next;
+      });
+    } else if (field === 'servico') {
+      setProposalDirtyFields((prev) => {
+        const next = { ...prev };
+        delete next.servico_principal;
+        delete next.escopo_comercial;
+        delete next.escopo_mensal;
+        return next;
+      });
+    } else if (field === 'prazo') {
+      setProposalDirtyFields((prev) => {
+        const next = { ...prev };
+        delete next.prazo;
+        return next;
+      });
+    }
   }
 
   function addPricingItem() {
@@ -1123,6 +1146,38 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
       }
       return nextDraft;
     });
+    // Sincronização bidirecional: proposta → motor de preços (só para orçamento com 1 item)
+    if (pricingItems.length === 1) {
+      if (field === 'quantidade') {
+        const qty = parseQuantityNumber(value, null);
+        if (qty !== null) {
+          setPricingItems((prev) => prev.map((item, idx) =>
+            idx === 0 ? { ...item, quantidade: String(qty) } : item
+          ));
+          // Marcar quantidade como dirty mas limpar campos derivados para auto-sync recalcular
+          setProposalDirtyFields((prev) => {
+            const next = { ...prev, quantidade: true };
+            QUANTITY_DERIVED_PROPOSAL_FIELDS.forEach((f) => delete next[f]);
+            return next;
+          });
+        }
+      } else if (field === 'servico_principal') {
+        setPricingItems((prev) => prev.map((item, idx) =>
+          idx === 0 ? { ...item, servico: value } : item
+        ));
+        setProposalDirtyFields((prev) => {
+          const next = { ...prev, servico_principal: true };
+          delete next.escopo_comercial;
+          delete next.escopo_mensal;
+          return next;
+        });
+      } else if (field === 'prazo') {
+        const normalizedPrazo = normalizePrazoLabel(value, 'Sem prazo definido');
+        setPricingItems((prev) => prev.map((item, idx) =>
+          idx === 0 ? { ...item, prazo: normalizedPrazo } : item
+        ));
+      }
+    }
   }
 
   function hydrateProposalDraft() {

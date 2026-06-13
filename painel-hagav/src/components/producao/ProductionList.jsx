@@ -7,7 +7,6 @@ import {
   FolderOpen,
   HardDrive,
   Link2,
-  MonitorCog,
   UserRound,
 } from 'lucide-react';
 import {
@@ -115,7 +114,7 @@ function DetailPanel({ job, onEdit }) {
   if (!job) {
     return (
       <aside className="hcard p-5 flex flex-col items-center justify-center text-center min-h-[280px]">
-        <MonitorCog size={28} className="text-hagav-muted" />
+        <FolderOpen size={28} className="text-hagav-muted" />
         <p className="text-sm font-semibold text-hagav-light mt-3">Selecione uma demanda</p>
         <p className="text-xs text-hagav-gray mt-1 max-w-xs">
           Clique em uma linha para ver ClickUp, pastas locais, Premiere, export e proximas acoes.
@@ -189,7 +188,7 @@ function DetailPanel({ job, onEdit }) {
         <PathAction label="Pasta do projeto" value={job.pasta_local} icon={HardDrive} />
         <PathAction label="Materiais" value={job.pasta_materiais} />
         <PathAction label="Export / entrega" value={job.pasta_entrega} />
-        <PathAction label="Projeto Premiere" value={job.projeto_premiere} icon={MonitorCog} />
+        <PathAction label="Projeto Premiere" value={job.projeto_premiere} icon={HardDrive} />
       </div>
 
       {(job.motivo_bloqueio || job.observacoes) && (

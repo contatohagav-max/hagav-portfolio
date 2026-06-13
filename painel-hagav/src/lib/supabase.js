@@ -1,4 +1,4 @@
-﻿import { createClient } from '@supabase/supabase-js';
+import { createClient } from '@supabase/supabase-js';
 import {
   buildDashboardInsights,
   deriveFinancialMetricsFromFinalPrice,
@@ -1199,3 +1199,135 @@ export async function fetchDashboardMetrics() {
   return buildDashboardInsights(leads, orcamentos);
 }
 
+// Producao
+
+export async function fetchProductionJobs({ status, search, limit = 1000 } = {}) {
+  const client = getSupabase();
+  if (!client) return [];
+
+  let query = client
+    .from('production_jobs')
+    .select('*')
+    .order('prazo_em', { ascending: true, nullsFirst: false })
+    .order('created_at', { ascending: false })
+    .limit(limit);
+
+  if (status) query = query.eq('status', status);
+  if (search) {
+    query = query.or(`titulo.ilike.%${search}%,cliente_nome.ilike.%${search}%,servico.ilike.%${search}%,responsavel.ilike.%${search}%`);
+  }
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return data || [];
+}
+
+export async function updateProductionJob(id, patch) {
+  const client = getSupabase();
+  if (!client) throw new Error('Supabase nao configurado');
+
+  const payload = { ...(patch || {}) };
+  if (payload.status === 'entregue' && !payload.entregue_em) {
+    payload.entregue_em = new Date().toISOString();
+  }
+  if (payload.status === 'arquivado' && !payload.arquivado_em) {
+    payload.arquivado_em = new Date().toISOString();
+  }
+
+  const { data, error } = await client
+    .from('production_jobs')
+    .update(payload)
+    .eq('id', id)
+    .select('*')
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+// Financeiro operacional
+
+export async function fetchFinancialEntries({
+  tipo,
+  status,
+  search,
+  dueFrom,
+  dueTo,
+  limit = 1500,
+} = {}) {
+  const client = getSupabase();
+  if (!client) return [];
+
+  let query = client
+    .from('financial_entries')
+    .select('*')
+    .order('vencimento', { ascending: true, nullsFirst: false })
+    .order('created_at', { ascending: false })
+    .limit(limit);
+
+  if (tipo) query = query.eq('tipo', tipo);
+  if (status) query = query.eq('status', status);
+  if (dueFrom) query = query.gte('vencimento', dueFrom);
+  if (dueTo) query = query.lte('vencimento', dueTo);
+  if (search) {
+    query = query.or(`descricao.ilike.%${search}%,cliente_fornecedor.ilike.%${search}%,categoria.ilike.%${search}%`);
+  }
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return data || [];
+}
+
+export async function createFinancialEntry(fields) {
+  const client = getSupabase();
+  if (!client) throw new Error('Supabase nao configurado');
+
+  const payload = {
+    tipo: fields?.tipo === 'pagar' ? 'pagar' : 'receber',
+    categoria: String(fields?.categoria || 'projeto').trim(),
+    descricao: String(fields?.descricao || '').trim(),
+    cliente_fornecedor: String(fields?.cliente_fornecedor || '').trim() || null,
+    valor: Math.max(0, Number(fields?.valor || 0)),
+    valor_pago: Math.max(0, Number(fields?.valor_pago || 0)),
+    status: String(fields?.status || 'pendente'),
+    vencimento: fields?.vencimento || null,
+    pago_em: fields?.status === 'pago' ? new Date().toISOString() : null,
+    forma_pagamento: String(fields?.forma_pagamento || '').trim() || null,
+    observacoes: String(fields?.observacoes || '').trim() || null,
+  };
+
+  const { data, error } = await client
+    .from('financial_entries')
+    .insert(payload)
+    .select('*')
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+export async function updateFinancialEntry(id, patch) {
+  const client = getSupabase();
+  if (!client) throw new Error('Supabase nao configurado');
+
+  const payload = { ...(patch || {}) };
+  if (payload.status === 'pago') {
+    payload.pago_em = payload.pago_em || new Date().toISOString();
+    if (payload.valor !== undefined && payload.valor_pago === undefined) {
+      payload.valor_pago = Number(payload.valor || 0);
+    }
+  }
+  if (payload.status !== 'pago' && payload.pago_em === undefined) {
+    payload.pago_em = null;
+  }
+
+  const { data, error } = await client
+    .from('financial_entries')
+    .update(payload)
+    .eq('id', id)
+    .select('*')
+    .single();
+
+  if (error) throw error;
+  return data;
+}

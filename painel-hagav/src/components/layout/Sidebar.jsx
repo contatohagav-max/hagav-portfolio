@@ -1,8 +1,8 @@
-﻿'use client';
+'use client';
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { FileText, Kanban, LayoutDashboard, Settings, Users, X } from 'lucide-react';
+import { Clapperboard, FileText, Kanban, Landmark, LayoutDashboard, Settings, Users, X } from 'lucide-react';
 import EduTooltip from '@/components/ui/EduTooltip';
 import { useAuth } from '@/context/AuthContext';
 import { classNames } from '@/lib/utils';
@@ -14,6 +14,8 @@ const NAV = [
   { href: '/orcamentos', label: 'Orcamentos', icon: FileText, permission: 'readOrcamentos' },
   { href: '/clientes', label: 'Clientes', icon: Users, permission: 'readClientes' },
   { href: '/pipeline', label: 'Pipeline', icon: Kanban, permission: 'readPipeline' },
+  { href: '/producao', label: 'Producao', icon: Clapperboard, permission: 'readProducao' },
+  { href: '/financeiro', label: 'Financeiro', icon: Landmark, permission: 'readFinanceiro' },
   { href: '/configuracoes', label: 'Configuracoes', icon: Settings, permission: 'manageSettings' },
 ];
 
@@ -47,6 +49,18 @@ const NAV_TOOLTIPS = {
     whatIs: 'Quadro visual das etapas do processo comercial.',
     purpose: 'Mover oportunidades com clareza de status.',
     observe: 'Evite acumulo em Novo, Contatado e Qualificado.',
+  },
+  '/producao': {
+    title: 'Producao',
+    whatIs: 'Kanban das demandas aprovadas e em execucao.',
+    purpose: 'Controlar materiais, edicao, revisao, render e entrega.',
+    observe: 'Toda demanda deve ter responsavel, prazo e proxima acao.',
+  },
+  '/financeiro': {
+    title: 'Financeiro',
+    whatIs: 'Caixa operacional ligado aos projetos aprovados.',
+    purpose: 'Acompanhar recebimentos, custos, vencimentos e margem.',
+    observe: 'Priorize contas atrasadas e atualize pagamentos realizados.',
   },
 };
 

@@ -1,8 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, Boxes, Clock3, RefreshCw, Search, TimerReset } from 'lucide-react';
-import ProductionKanban from '@/components/producao/ProductionKanban';
+import { AlertTriangle, Boxes, Clock3, Link2, RefreshCw, Search } from 'lucide-react';
+import ProductionList from '@/components/producao/ProductionList';
 import Modal from '@/components/ui/Modal';
 import EmptyState from '@/components/ui/EmptyState';
 import { fetchProductionJobs, updateProductionJob } from '@/lib/supabase';
@@ -31,8 +31,12 @@ function ProductionEditor({ job, onClose, onSaved }) {
       prazo_em: toLocalDateTime(job?.prazo_em),
       horas_estimadas: String(job?.horas_estimadas || 0),
       horas_realizadas: String(job?.horas_realizadas || 0),
+      clickup_url: job?.clickup_url || '',
+      clickup_task_id: job?.clickup_task_id || '',
       pasta_local: job?.pasta_local || '',
+      pasta_materiais: job?.pasta_materiais || '',
       pasta_entrega: job?.pasta_entrega || '',
+      projeto_premiere: job?.projeto_premiere || '',
       motivo_bloqueio: job?.motivo_bloqueio || '',
       observacoes: job?.observacoes || '',
     });
@@ -49,6 +53,12 @@ function ProductionEditor({ job, onClose, onSaved }) {
     try {
       const updated = await updateProductionJob(job.id, {
         ...form,
+        clickup_url: String(form.clickup_url || '').trim() || null,
+        clickup_task_id: String(form.clickup_task_id || '').trim() || null,
+        pasta_local: String(form.pasta_local || '').trim() || null,
+        pasta_materiais: String(form.pasta_materiais || '').trim() || null,
+        pasta_entrega: String(form.pasta_entrega || '').trim() || null,
+        projeto_premiere: String(form.projeto_premiere || '').trim() || null,
         prazo_em: form.prazo_em ? new Date(form.prazo_em).toISOString() : null,
         horas_estimadas: Math.max(0, Number(form.horas_estimadas || 0)),
         horas_realizadas: Math.max(0, Number(form.horas_realizadas || 0)),
@@ -107,6 +117,14 @@ function ProductionEditor({ job, onClose, onSaved }) {
             <input value={form.proxima_acao || ''} onChange={(e) => field('proxima_acao', e.target.value)} className="hinput w-full mt-1.5" />
           </label>
           <label className="text-xs text-hagav-gray">
+            Link ClickUp
+            <input value={form.clickup_url || ''} onChange={(e) => field('clickup_url', e.target.value)} placeholder="https://app.clickup.com/t/..." className="hinput w-full mt-1.5" />
+          </label>
+          <label className="text-xs text-hagav-gray">
+            ID da tarefa ClickUp
+            <input value={form.clickup_task_id || ''} onChange={(e) => field('clickup_task_id', e.target.value)} className="hinput w-full mt-1.5" />
+          </label>
+          <label className="text-xs text-hagav-gray">
             Prazo
             <input type="datetime-local" value={form.prazo_em || ''} onChange={(e) => field('prazo_em', e.target.value)} className="hinput w-full mt-1.5" />
           </label>
@@ -121,12 +139,20 @@ function ProductionEditor({ job, onClose, onSaved }) {
             </label>
           </div>
           <label className="text-xs text-hagav-gray">
-            Pasta local
+            Pasta do projeto
             <input value={form.pasta_local || ''} onChange={(e) => field('pasta_local', e.target.value)} className="hinput w-full mt-1.5" />
           </label>
           <label className="text-xs text-hagav-gray">
-            Pasta de entrega
+            Pasta de materiais
+            <input value={form.pasta_materiais || ''} onChange={(e) => field('pasta_materiais', e.target.value)} className="hinput w-full mt-1.5" />
+          </label>
+          <label className="text-xs text-hagav-gray">
+            Pasta export / entrega
             <input value={form.pasta_entrega || ''} onChange={(e) => field('pasta_entrega', e.target.value)} className="hinput w-full mt-1.5" />
+          </label>
+          <label className="text-xs text-hagav-gray">
+            Projeto Premiere
+            <input value={form.projeto_premiere || ''} onChange={(e) => field('projeto_premiere', e.target.value)} className="hinput w-full mt-1.5" />
           </label>
           {form.status === 'bloqueado' && (
             <label className="text-xs text-red-300 md:col-span-2">
@@ -157,9 +183,14 @@ export default function ProducaoPage() {
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
+  const [priorityFilter, setPriorityFilter] = useState('');
+  const [materialFilter, setMaterialFilter] = useState('');
+  const [ownerFilter, setOwnerFilter] = useState('');
   const [feedback, setFeedback] = useState('');
   const [loadError, setLoadError] = useState('');
   const [selected, setSelected] = useState(null);
+  const [editing, setEditing] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -183,17 +214,51 @@ export default function ProducaoPage() {
     const active = jobs.filter((job) => !['entregue', 'arquivado'].includes(job.status)).length;
     const blocked = jobs.filter((job) => job.status === 'bloqueado').length;
     const withoutAction = jobs.filter((job) => !String(job.proxima_acao || '').trim()).length;
-    const hours = jobs.reduce((sum, job) => sum + Number(job.horas_estimadas || 0), 0);
-    return { active, blocked, withoutAction, hours };
+    const withoutClickUp = jobs.filter((job) => !String(job.clickup_url || '').trim()).length;
+    return { active, blocked, withoutAction, withoutClickUp };
   }, [jobs]);
 
-  async function move(job, status) {
+  const owners = useMemo(() => {
+    return Array.from(new Set(
+      jobs
+        .map((job) => String(job.responsavel || '').trim())
+        .filter(Boolean)
+    )).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  }, [jobs]);
+
+  const filteredJobs = useMemo(() => {
+    return jobs.filter((job) => {
+      if (statusFilter && job.status !== statusFilter) return false;
+      if (priorityFilter && job.prioridade !== priorityFilter) return false;
+      if (materialFilter && job.materiais_status !== materialFilter) return false;
+      if (ownerFilter && String(job.responsavel || '').trim() !== ownerFilter) return false;
+      return true;
+    });
+  }, [jobs, materialFilter, ownerFilter, priorityFilter, statusFilter]);
+
+  const selectedJob = selected
+    ? filteredJobs.find((job) => String(job.id) === String(selected.id)) || selected
+    : filteredJobs[0] || null;
+
+  useEffect(() => {
+    if (filteredJobs.length === 0) {
+      setSelected(null);
+      return;
+    }
+    if (!selected || !filteredJobs.some((job) => String(job.id) === String(selected.id))) {
+      setSelected(filteredJobs[0]);
+    }
+  }, [filteredJobs, selected]);
+
+  async function changeStatus(job, status) {
     const previous = jobs;
     setJobs((current) => current.map((item) => item.id === job.id ? { ...item, status } : item));
+    setSelected((current) => current?.id === job.id ? { ...current, status } : current);
     try {
       const updated = await updateProductionJob(job.id, { status });
       setJobs((current) => current.map((item) => item.id === updated.id ? updated : item));
-      setFeedback('Etapa atualizada.');
+      setSelected((current) => current?.id === updated.id ? updated : current);
+      setFeedback('Etapa atualizada. ClickUp continua sendo a fonte da operacao.');
       setTimeout(() => setFeedback(''), 2200);
     } catch (err) {
       console.error('[Producao][Mover]', err);
@@ -204,6 +269,7 @@ export default function ProducaoPage() {
 
   function saveLocal(updated) {
     setJobs((current) => current.map((item) => item.id === updated.id ? updated : item));
+    setSelected(updated);
     setFeedback('Demanda salva.');
     setTimeout(() => setFeedback(''), 2200);
   }
@@ -213,7 +279,7 @@ export default function ProducaoPage() {
       <div className="flex flex-wrap items-start justify-between gap-3 shrink-0">
         <div>
           <h1 className="page-title">Producao</h1>
-          <p className="page-subtitle">Do material recebido ate entrega e arquivo.</p>
+          <p className="page-subtitle">Central visual da operacao. ClickUp manda; o admin organiza o mapa.</p>
         </div>
         <button type="button" onClick={load} disabled={loading} className="btn-ghost btn-sm">
           <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
@@ -226,7 +292,7 @@ export default function ProducaoPage() {
           { label: 'Demandas ativas', value: metrics.active, icon: Boxes },
           { label: 'Bloqueadas', value: metrics.blocked, icon: AlertTriangle },
           { label: 'Sem proxima acao', value: metrics.withoutAction, icon: Clock3 },
-          { label: 'Horas previstas', value: metrics.hours.toFixed(1), icon: TimerReset },
+          { label: 'Sem ClickUp', value: metrics.withoutClickUp, icon: Link2 },
         ].map(({ label, value, icon: Icon }) => (
           <div key={label} className="hcard p-4">
             <p className="text-xs uppercase tracking-wider text-hagav-gray flex items-center gap-2">
@@ -237,10 +303,36 @@ export default function ProducaoPage() {
         ))}
       </div>
 
-      <div className="hcard p-3 shrink-0">
+      <div className="hcard p-3 shrink-0 space-y-3">
         <div className="relative">
           <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-hagav-gray" />
-          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar cliente, servico ou responsavel..." className="hinput w-full pl-8" />
+          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar cliente, servico, responsavel, ClickUp ou pasta..." className="hinput w-full pl-8" />
+        </div>
+        <div className="grid grid-cols-2 xl:grid-cols-4 gap-2">
+          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="hselect">
+            <option value="">Todas as etapas</option>
+            {PRODUCTION_STAGES.map((stage) => (
+              <option key={stage.id} value={stage.id}>{stage.label}</option>
+            ))}
+          </select>
+          <select value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value)} className="hselect">
+            <option value="">Todas prioridades</option>
+            <option value="alta">Alta</option>
+            <option value="media">Media</option>
+            <option value="baixa">Baixa</option>
+          </select>
+          <select value={materialFilter} onChange={(e) => setMaterialFilter(e.target.value)} className="hselect">
+            <option value="">Todos materiais</option>
+            {Object.entries(MATERIAL_STATUS_LABELS).map(([value, label]) => (
+              <option key={value} value={value}>{label}</option>
+            ))}
+          </select>
+          <select value={ownerFilter} onChange={(e) => setOwnerFilter(e.target.value)} className="hselect">
+            <option value="">Todos responsaveis</option>
+            {owners.map((owner) => (
+              <option key={owner} value={owner}>{owner}</option>
+            ))}
+          </select>
         </div>
       </div>
 
@@ -251,14 +343,22 @@ export default function ProducaoPage() {
         <div className="flex-1 flex items-center justify-center"><RefreshCw className="animate-spin text-hagav-gold" /></div>
       ) : jobs.length === 0 ? (
         <EmptyState icon={Boxes} title="Nenhuma demanda em producao" description="Ao aprovar um orcamento, a demanda aparecera automaticamente aqui." className="flex-1" />
+      ) : filteredJobs.length === 0 ? (
+        <EmptyState icon={Boxes} title="Nada encontrado nos filtros" description="Ajuste busca, etapa, prioridade, materiais ou responsavel para voltar ao mapa da producao." className="flex-1" />
       ) : (
-        <div className="flex-1 overflow-hidden">
-          <ProductionKanban jobs={jobs} onMove={move} onSelect={setSelected} />
+        <div className="flex-1 min-h-0 overflow-y-auto pr-1">
+          <ProductionList
+            jobs={filteredJobs}
+            selectedId={selectedJob?.id}
+            onSelect={setSelected}
+            onEdit={setEditing}
+            onStatusChange={changeStatus}
+          />
         </div>
       )}
 
-      {selected && (
-        <ProductionEditor job={selected} onClose={() => setSelected(null)} onSaved={saveLocal} />
+      {editing && (
+        <ProductionEditor job={editing} onClose={() => setEditing(null)} onSaved={saveLocal} />
       )}
     </div>
   );

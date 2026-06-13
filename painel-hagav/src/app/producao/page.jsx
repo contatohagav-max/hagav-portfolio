@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, Boxes, Clock3, Link2, RefreshCw, Search } from 'lucide-react';
 import ProductionList from '@/components/producao/ProductionList';
 import Modal from '@/components/ui/Modal';
-import EmptyState from '@/components/ui/EmptyState';
 import { fetchProductionJobs, updateProductionJob } from '@/lib/supabase';
 import { MATERIAL_STATUS_LABELS, PRODUCTION_STAGES } from '@/lib/operations';
 
@@ -14,6 +13,26 @@ function toLocalDateTime(value) {
   if (Number.isNaN(date.getTime())) return '';
   const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
   return local.toISOString().slice(0, 16);
+}
+
+function normalizeSearch(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+}
+
+function ProductionEmptyState({ title, description }) {
+  return (
+    <div className="flex-1 flex flex-col items-center justify-center py-20 text-center">
+      <div className="w-12 h-12 rounded-xl bg-hagav-muted/30 border border-hagav-border flex items-center justify-center mb-4">
+        <Boxes size={22} className="text-hagav-gray" />
+      </div>
+      <p className="text-sm font-medium text-hagav-light mb-1">{title}</p>
+      <p className="text-xs text-hagav-gray max-w-xs">{description}</p>
+    </div>
+  );
 }
 
 function ProductionEditor({ job, onClose, onSaved }) {
@@ -196,18 +215,17 @@ export default function ProducaoPage() {
     setLoading(true);
     setLoadError('');
     try {
-      setJobs(await fetchProductionJobs({ search: search || undefined }));
+      setJobs(await fetchProductionJobs());
     } catch (err) {
       console.error('[Producao]', err);
       setLoadError('Nao foi possivel carregar a producao. A migracao do banco pode estar pendente.');
     } finally {
       setLoading(false);
     }
-  }, [search]);
+  }, []);
 
   useEffect(() => {
-    const timer = setTimeout(load, 220);
-    return () => clearTimeout(timer);
+    load();
   }, [load]);
 
   const metrics = useMemo(() => {
@@ -227,14 +245,30 @@ export default function ProducaoPage() {
   }, [jobs]);
 
   const filteredJobs = useMemo(() => {
+    const term = normalizeSearch(search);
     return jobs.filter((job) => {
+      if (term) {
+        const searchable = normalizeSearch([
+          job.titulo,
+          job.cliente_nome,
+          job.servico,
+          job.responsavel,
+          job.clickup_url,
+          job.clickup_task_id,
+          job.pasta_local,
+          job.pasta_materiais,
+          job.pasta_entrega,
+          job.projeto_premiere,
+        ].join(' '));
+        if (!searchable.includes(term)) return false;
+      }
       if (statusFilter && job.status !== statusFilter) return false;
       if (priorityFilter && job.prioridade !== priorityFilter) return false;
       if (materialFilter && job.materiais_status !== materialFilter) return false;
       if (ownerFilter && String(job.responsavel || '').trim() !== ownerFilter) return false;
       return true;
     });
-  }, [jobs, materialFilter, ownerFilter, priorityFilter, statusFilter]);
+  }, [jobs, materialFilter, ownerFilter, priorityFilter, search, statusFilter]);
 
   const selectedJob = selected
     ? filteredJobs.find((job) => String(job.id) === String(selected.id)) || selected
@@ -342,9 +376,9 @@ export default function ProducaoPage() {
       {loading ? (
         <div className="flex-1 flex items-center justify-center"><RefreshCw className="animate-spin text-hagav-gold" /></div>
       ) : jobs.length === 0 ? (
-        <EmptyState icon={Boxes} title="Nenhuma demanda em producao" description="Ao aprovar um orcamento, a demanda aparecera automaticamente aqui." className="flex-1" />
+        <ProductionEmptyState title="Nenhuma demanda em producao" description="Ao aprovar um orcamento, a demanda aparecera automaticamente aqui." />
       ) : filteredJobs.length === 0 ? (
-        <EmptyState icon={Boxes} title="Nada encontrado nos filtros" description="Ajuste busca, etapa, prioridade, materiais ou responsavel para voltar ao mapa da producao." className="flex-1" />
+        <ProductionEmptyState title="Nada encontrado nos filtros" description="Ajuste busca, etapa, prioridade, materiais ou responsavel para voltar ao mapa da producao." />
       ) : (
         <div className="flex-1 min-h-0 overflow-y-auto pr-1">
           <ProductionList

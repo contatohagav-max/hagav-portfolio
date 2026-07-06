@@ -103,14 +103,14 @@ function inferUnitLabels(orc = {}) {
 
   if (/videoaula|modulo/.test(serviceKey)) {
     return {
-      singular: 'modulo',
-      plural: 'modulos',
+      singular: 'módulo',
+      plural: 'módulos',
     };
   }
 
   return {
-    singular: 'video',
-    plural: 'videos',
+    singular: 'vídeo',
+    plural: 'vídeos',
   };
 }
 
@@ -141,7 +141,7 @@ export function buildCommercialScopeText(orc = {}, revisoesText = '') {
 
   if (items.length <= 1) {
     const single = items[0] || {
-      servico: normalizeText(orc?.servico) || 'conteudo audiovisual',
+      servico: normalizeText(orc?.servico) || 'conteúdo audiovisual',
       quantidade: parseQuantityNumber(orc?.quantidade, 1),
     };
     const quantity = parseQuantityNumber(single?.quantidade, 1);
@@ -149,7 +149,7 @@ export function buildCommercialScopeText(orc = {}, revisoesText = '') {
     const unit = quantity === 1 ? unitLabels.singular : unitLabels.plural;
 
     return [
-      `Edição e finalização de ${quantity} ${unit} de ${single?.servico || 'conteudo audiovisual'} conforme briefing aprovado.`,
+      `Edição e finalização de ${quantity} ${unit} de ${single?.servico || 'conteúdo audiovisual'} conforme briefing aprovado.`,
       'Inclui organização do material, cortes, ritmo, acabamento visual e exportação final em MP4.',
       `O projeto contempla ${revisoes.toLowerCase()}`,
     ].join(' ');
@@ -219,7 +219,7 @@ export function buildAutoOptionDraft({ orc, quantityText, totalText, pricingRule
     opcao2_unitario: formatUnitPrice(maisVolume),
     opcao2_desc: buildDescription(maisVolume, 'Sem desconto aplicado'),
     opcao2_desconto: Number(maisVolume?.discountPercent || 0) > 0 ? `-${maisVolume.discountPercent}%` : '',
-    opcao3_titulo: melhorCustoBeneficio?.title || 'Melhor custo-beneficio',
+    opcao3_titulo: melhorCustoBeneficio?.title || 'Melhor custo-benefício',
     opcao3_qtd: formatQuantityLabel(melhorCustoBeneficio),
     opcao3_preco: fmtBRL(Number(melhorCustoBeneficio?.total || 0)),
     opcao3_unitario: formatUnitPrice(melhorCustoBeneficio),

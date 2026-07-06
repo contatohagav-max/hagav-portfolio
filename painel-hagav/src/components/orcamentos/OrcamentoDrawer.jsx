@@ -47,26 +47,26 @@ const PROPOSAL_MODE_OPTIONS = [
 ];
 
 const DEFAULT_CONDICOES_COMERCIAIS = [
-  'Forma de pagamento: PIX / Transferencia / Conforme combinado.',
-  'Proposta valida ate [data].',
-  'O projeto inicia apos aprovacao e envio dos materiais.',
-  'Inclui 1 rodada de ajustes por entrega. Alteracoes de estrutura, roteiro, estilo ou escopo podem gerar novo orcamento.',
+  'Forma de pagamento: PIX / Transferência / Conforme combinado.',
+  'Proposta válida até [data].',
+  'O projeto inicia após aprovação e envio dos materiais.',
+  'Inclui 1 rodada de ajustes por entrega. Alterações de estrutura, roteiro, estilo ou escopo podem gerar novo orçamento.',
 ].join('\n');
 
 const PROPOSAL_MODE_PRESETS = {
   direta: {
-    servico_principal: 'Conteudo para redes sociais',
-    quantidade: '10 videos',
+    servico_principal: 'Conteúdo para redes sociais',
+    quantidade: '10 vídeos',
     prazo: 'Urgente',
-    escopo_comercial: 'Edicao estrategica com acabamento profissional, ritmo otimizado para retencao e entrega pronta para publicacao em MP4. Inclui 1 rodada de ajustes.',
+    escopo_comercial: 'Edição estratégica com acabamento profissional, ritmo otimizado para retenção e entrega pronta para publicação em MP4. Inclui 1 rodada de ajustes.',
     quantidade_mensal: '',
     duracao_contrato_meses: '',
     valor_mensal_moeda: '',
     valor_personalizado_moeda: '',
   },
   opcoes: {
-    servico_principal: 'Conteudo para redes sociais',
-    quantidade: '10 videos',
+    servico_principal: 'Conteúdo para redes sociais',
+    quantidade: '10 vídeos',
     prazo: 'Urgente',
     escopo_comercial: 'Comparativo comercial com pedido atual e duas opcoes de maior volume para reduzir custo medio por entrega.',
     quantidade_mensal: '',
@@ -75,11 +75,11 @@ const PROPOSAL_MODE_PRESETS = {
     valor_personalizado_moeda: '',
   },
   mensal: {
-    servico_principal: 'Plano mensal de conteudo',
-    quantidade: '12 videos mensais',
+    servico_principal: 'Plano mensal de conteúdo',
+    quantidade: '12 vídeos mensais',
     prazo: 'Este mês',
-    escopo_comercial: 'Operacao mensal de edicao com padrao visual consistente, organizacao de entregas e acompanhamento por cronograma aprovado.',
-    quantidade_mensal: '12 videos por mes',
+    escopo_comercial: 'Operação mensal de edicao com padrão visual consistente, organizacao de entregas e acompanhamento por cronograma aprovado.',
+    quantidade_mensal: '12 vídeos por mês',
     duracao_contrato_meses: '3',
     valor_mensal_moeda: '',
     valor_personalizado_moeda: '',
@@ -88,7 +88,7 @@ const PROPOSAL_MODE_PRESETS = {
     servico_principal: 'Proposta personalizada',
     quantidade: 'Escopo sob medida',
     prazo: 'Sem prazo definido',
-    escopo_comercial: 'Estrutura personalizada para atender necessidades especificas, com planejamento de escopo, organizacao de materiais e execucao premium.',
+    escopo_comercial: 'Estrutura personalizada para atender necessidades específicas, com planejamento de escopo, organização de materiais e execucao premium.',
     quantidade_mensal: '',
     duracao_contrato_meses: '',
     valor_mensal_moeda: '',
@@ -898,7 +898,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
     ? (
       itensServico.length === 1
         ? normalizeText(itensServico[0]?.quantidade || '-')
-        : itensServico.map((item) => `${item?.servico || 'Servico'}: ${item?.quantidade || '-'}`).join(' | ')
+        : itensServico.map((item) => `${item?.servico || 'Serviço'}: ${item?.quantidade || '-'}`).join(' | ')
     )
     : cleanSingleServiceField(proposalRecord.quantidade || orc.quantidade || '');
   const materialResumo = itensServico.length > 0
@@ -1241,7 +1241,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
       ajuste_multicamera_percent: Number(autoPricing.ajusteMulticameraPercent || 0),
       revisao_manual: Boolean(autoPricing.revisaoManual),
       alerta_capacidade: Boolean(autoPricing.alertaCapacidade),
-      operacao_especial: Boolean(autoPricing.operacaoEspecial),
+      operação_especial: Boolean(autoPricing.operaçãoEspecial),
       pacote_sugerido: String(autoPricing.pacoteSugerido || ''),
       motivo_calculo: String(autoPricing.motivoCalculo || ''),
       detalhes: {
@@ -1712,7 +1712,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
             <div className="px-4 py-5 space-y-5 md:px-6">
           <div className="grid grid-cols-2 gap-3">
             <div className="bg-hagav-surface border border-hagav-border rounded-xl p-4 text-center">
-              <p className="text-[10px] text-hagav-gray uppercase tracking-wider mb-1">Preco base</p>
+              <p className="text-[10px] text-hagav-gray uppercase tracking-wider mb-1">Preço base</p>
               <p className="text-2xl font-bold text-hagav-white">{fmtBRL(autoPricing.precoBase || orc.preco_base || 0)}</p>
             </div>
             <div className="bg-hagav-gold/5 border border-hagav-gold/20 rounded-xl p-4 text-center relative overflow-hidden">
@@ -1723,7 +1723,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-            <InfoRow label="Preco final editavel" value={fmtBRL(financialMetrics.preco_final || 0)} />
+            <InfoRow label="Preço final editável" value={fmtBRL(financialMetrics.preco_final || 0)} />
             <InfoRow label="Margem automatica (motor)" value={`${Number(autoPricing.margemEstimada ?? orc.margem_automatica ?? orc.margem_estimada ?? 0).toFixed(1)}%`} />
             <InfoRow label="Margem comercial (preco final)" value={`${Number(financialMetrics.margem_percentual || 0).toFixed(1)}%`} />
             <InfoRow label="Lucro estimado" value={fmtBRL(financialMetrics.lucro_estimado || 0)} />
@@ -1782,7 +1782,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
           <div>
             <div className="flex items-center justify-between gap-2 mb-2">
               <div>
-                <p className="text-xs text-hagav-gray uppercase tracking-wider">Dados para operacao</p>
+                <p className="text-xs text-hagav-gray uppercase tracking-wider">Dados para operação</p>
                 <p className="text-[11px] text-hagav-gray">Edite quantidade, prazo, referencia e tempo real por item.</p>
               </div>
               <button type="button" onClick={addPricingItem} className="btn-ghost btn-sm">
@@ -1877,7 +1877,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
 
                     <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_220px] gap-2">
                       <div>
-                        <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Referencia do item</label>
+                        <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Referência do item</label>
                         <textarea
                           value={item?.referencia || ''}
                           onChange={(e) => updatePricingItem(idx, 'referencia', e.target.value)}
@@ -1905,7 +1905,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
             </div>
 
             <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mt-3">
-              <InfoRow label="Servico/Operacao" value={servicoResumo} />
+              <InfoRow label="Serviço/Operação" value={servicoResumo} />
               <InfoRow label="Quantidade" value={quantidadeResumo} />
               <InfoRow label="Material gravado" value={materialResumo} />
               <InfoRow label="Tempo estimado" value={tempoResumo} />
@@ -1913,7 +1913,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
               <div className="bg-hagav-surface border border-hagav-border rounded-lg p-3 md:col-span-2">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
-                    <p className="text-[10px] text-hagav-gray uppercase tracking-wider mb-0.5">Referencia</p>
+                    <p className="text-[10px] text-hagav-gray uppercase tracking-wider mb-0.5">Referência</p>
                     <p className="text-sm text-hagav-light font-medium break-all whitespace-pre-wrap">{referencePreview}</p>
                   </div>
                   {canExpandReference && (
@@ -1951,7 +1951,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
 
           {observacoesText && (
             <div>
-              <p className="text-xs text-hagav-gray uppercase tracking-wider mb-2">Observacoes do cliente</p>
+              <p className="text-xs text-hagav-gray uppercase tracking-wider mb-2">Observações do cliente</p>
               <div className="bg-hagav-surface border border-hagav-border rounded-lg p-3 text-sm text-hagav-light whitespace-pre-wrap">
                 {observacoesPreview}
                 {canExpandObs && (
@@ -2119,7 +2119,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
                   value={proposalDraft.quantidade || ''}
                   onChange={(e) => updateProposalDraftField('quantidade', e.target.value)}
                   className="hinput w-full"
-                  placeholder="Ex.: 10 videos"
+                  placeholder="Ex.: 10 vídeos"
                 />
               </div>
               <div>
@@ -2155,7 +2155,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
                         value={proposalDraft.quantidade_mensal || ''}
                         onChange={(e) => updateProposalDraftField('quantidade_mensal', e.target.value)}
                         className="hinput w-full"
-                        placeholder="Ex.: 12 videos por mes"
+                        placeholder="Ex.: 12 vídeos por mês"
                       />
                     </div>
                     <div>
@@ -2387,10 +2387,10 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
                 </select>
               </div>
               <div>
-                <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Urgencia</label>
+                <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Urgência</label>
                 <select value={urgencia} onChange={(e) => setUrgencia(e.target.value)} className="hselect w-full">
                   <option value="alta">Alta</option>
-                  <option value="media">Media</option>
+                  <option value="media">Média</option>
                   <option value="baixa">Baixa</option>
                 </select>
               </div>
@@ -2398,7 +2398,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
                 <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Prioridade</label>
                 <select value={prioridade} onChange={(e) => setPrioridade(e.target.value)} className="hselect w-full">
                   <option value="alta">Alta</option>
-                  <option value="media">Media</option>
+                  <option value="media">Média</option>
                   <option value="baixa">Baixa</option>
                 </select>
               </div>
@@ -2421,7 +2421,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
             </div>
 
             <div>
-              <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Proxima acao</label>
+              <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Próxima ação</label>
               <input
                 type="text"
                 value={proximaAcao}
@@ -2433,7 +2433,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
               <div>
-                <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Responsavel</label>
+                <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Responsável</label>
                 <input
                   type="text"
                   value={responsavel}
@@ -2454,7 +2454,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
             </div>
 
             <div>
-              <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Observacoes internas</label>
+              <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Observações internas</label>
               <textarea
                 value={obsInternas}
                 onChange={(e) => setObsInternas(e.target.value)}

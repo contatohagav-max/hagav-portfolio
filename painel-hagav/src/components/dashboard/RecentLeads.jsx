@@ -4,7 +4,7 @@ import { LeadStatusBadge, OrcStatusBadge, PrioridadeBadge } from '@/components/u
 import { fmtRelative, fmtBRL } from '@/lib/utils';
 
 function getEntryTypeLabel(entry) {
-  if (entry?.entryType === 'orcamento' || entry?.status_orcamento) return 'Orcamento';
+  if (entry?.entryType === 'orcamento' || entry?.status_orcamento) return 'Orçamento';
   return 'Lead';
 }
 
@@ -47,7 +47,7 @@ export default function RecentLeads({ entries = [], leads = [] }) {
             {rows.map((entry) => {
               const isOrcamento = entry?.entryType === 'orcamento' || Boolean(entry?.status_orcamento);
               const typeLabel = getEntryTypeLabel(entry);
-              const tipo = entry?.tipo || (isOrcamento ? 'Orcamento' : 'Lead');
+              const tipo = entry?.tipo || (isOrcamento ? 'Orçamento' : 'Lead');
               const valor = fmtBRL(entry?.valor_estimado || 0);
               const tempo = fmtRelative(entry?.created_at);
               const href = getEntryHref(entry);

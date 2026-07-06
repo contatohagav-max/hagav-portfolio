@@ -37,7 +37,7 @@ export default function ProposalPreview({ preview }) {
         <div className="mb-4 flex items-start justify-between gap-3">
           <div>
             <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.32em] text-[#f4dd9c]">
-              HAGAV Studio de Edicao
+              HAGAV Studio de Edição
             </p>
             <h3 className="text-[26px] font-black tracking-[-0.02em]">{preview.title}</h3>
             <p className="mt-2 max-w-md text-sm leading-6 text-[#dbd7cb]">{preview.subtitle}</p>
@@ -75,7 +75,7 @@ export default function ProposalPreview({ preview }) {
 
         <PreviewSection title="Resumo da Demanda">
           <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
-            <PreviewField label="Servico" value={preview.summary?.service} soft />
+            <PreviewField label="Serviço" value={preview.summary?.service} soft />
             <PreviewField label="Quantidade" value={preview.summary?.quantity} soft />
             <PreviewField label="Prazo" value={preview.summary?.deadline} soft />
           </div>
@@ -83,11 +83,11 @@ export default function ProposalPreview({ preview }) {
 
         <PreviewSection title="Escopo">
           <div className="rounded-2xl border border-[#e1d6ba] bg-[#fff9ea] px-4 py-3">
-            <p className="text-sm leading-6 text-[#242424]">{preview.scope || 'Escopo nao informado.'}</p>
+            <p className="text-sm leading-6 text-[#242424]">{preview.scope || 'Escopo não informado.'}</p>
           </div>
         </PreviewSection>
 
-        <PreviewSection title="Opcoes de Investimento" hidden={!preview.options?.visible}>
+        <PreviewSection title="Opções de Investimento" hidden={!preview.options?.visible}>
           <div className="space-y-2.5">
             {(preview.options?.items || []).map((option) => (
               <article
@@ -99,7 +99,7 @@ export default function ProposalPreview({ preview }) {
                     {option.discount}
                   </span>
                 ) : null}
-                <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#75663d]">{option.title || 'Opcao'}</p>
+                <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#75663d]">{option.title || 'Opção'}</p>
                 <p className="mt-2 text-[26px] font-black leading-none tracking-[-0.02em] text-[#161616]">{option.total || '-'}</p>
                 <div className="mt-3 space-y-1">
                   <p className="text-sm font-medium text-[#464646]">{option.quantity || '-'}</p>
@@ -141,7 +141,7 @@ export default function ProposalPreview({ preview }) {
           <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
             <PreviewField label="Quantidade mensal" value={preview.monthly?.quantity} soft />
             <PreviewField
-              label="Duracao do contrato"
+              label="Duração do contrato"
               value={preview.monthly?.duration ? `${preview.monthly.duration} meses` : ''}
               soft
             />
@@ -164,11 +164,11 @@ export default function ProposalPreview({ preview }) {
           </div>
         </PreviewSection>
 
-        <PreviewSection title="Referencia" hidden={!preview.reference}>
+        <PreviewSection title="Referência" hidden={!preview.reference}>
           <p className="text-sm leading-6 text-[#272727] break-words">{preview.reference}</p>
         </PreviewSection>
 
-        <PreviewSection title="Observacao Adicional" hidden={!preview.observation}>
+        <PreviewSection title="Observação Adicional" hidden={!preview.observation}>
           <p className="text-sm leading-6 text-[#272727]">{preview.observation}</p>
         </PreviewSection>
 

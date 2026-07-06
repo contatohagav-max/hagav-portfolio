@@ -99,7 +99,7 @@ function ProductionEditor({ job, onClose, onSaved }) {
         <div>
           <p className="text-xs text-hagav-gray uppercase tracking-wider">Projeto</p>
           <p className="text-sm text-hagav-white mt-1">{job?.titulo}</p>
-          <p className="text-xs text-hagav-gray">{job?.servico || 'Servico nao informado'}</p>
+          <p className="text-xs text-hagav-gray">{job?.servico || 'Serviço não informado'}</p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -115,7 +115,7 @@ function ProductionEditor({ job, onClose, onSaved }) {
             Prioridade
             <select value={form.prioridade || ''} onChange={(e) => field('prioridade', e.target.value)} className="hselect w-full mt-1.5">
               <option value="baixa">Baixa</option>
-              <option value="media">Media</option>
+              <option value="media">Média</option>
               <option value="alta">Alta</option>
             </select>
           </label>
@@ -128,11 +128,11 @@ function ProductionEditor({ job, onClose, onSaved }) {
             </select>
           </label>
           <label className="text-xs text-hagav-gray">
-            Responsavel
+            Responsável
             <input value={form.responsavel || ''} onChange={(e) => field('responsavel', e.target.value)} className="hinput w-full mt-1.5" />
           </label>
           <label className="text-xs text-hagav-gray md:col-span-2">
-            Proxima acao
+            Próxima ação
             <input value={form.proxima_acao || ''} onChange={(e) => field('proxima_acao', e.target.value)} className="hinput w-full mt-1.5" />
           </label>
           <label className="text-xs text-hagav-gray">
@@ -180,7 +180,7 @@ function ProductionEditor({ job, onClose, onSaved }) {
             </label>
           )}
           <label className="text-xs text-hagav-gray md:col-span-2">
-            Observacoes
+            Observações
             <textarea rows={3} value={form.observacoes || ''} onChange={(e) => field('observacoes', e.target.value)} className="hinput w-full mt-1.5 resize-none" />
           </label>
         </div>
@@ -218,7 +218,7 @@ export default function ProducaoPage() {
       setJobs(await fetchProductionJobs());
     } catch (err) {
       console.error('[Producao]', err);
-      setLoadError('Nao foi possivel carregar a producao. A migracao do banco pode estar pendente.');
+      setLoadError('Não foi possível carregar a produção. A migração do banco pode estar pendente.');
     } finally {
       setLoading(false);
     }
@@ -292,7 +292,7 @@ export default function ProducaoPage() {
       const updated = await updateProductionJob(job.id, { status });
       setJobs((current) => current.map((item) => item.id === updated.id ? updated : item));
       setSelected((current) => current?.id === updated.id ? updated : current);
-      setFeedback('Etapa atualizada. ClickUp continua sendo a fonte da operacao.');
+      setFeedback('Etapa atualizada. ClickUp continua sendo a fonte da operação.');
       setTimeout(() => setFeedback(''), 2200);
     } catch (err) {
       console.error('[Producao][Mover]', err);
@@ -312,8 +312,8 @@ export default function ProducaoPage() {
     <div className="space-y-5 animate-fade-in h-full flex flex-col">
       <div className="flex flex-wrap items-start justify-between gap-3 shrink-0">
         <div>
-          <h1 className="page-title">Producao</h1>
-          <p className="page-subtitle">Central visual da operacao. ClickUp manda; o admin organiza o mapa.</p>
+          <h1 className="page-title">Produção</h1>
+          <p className="page-subtitle">Central visual da operação. ClickUp manda; o admin organiza o mapa.</p>
         </div>
         <button type="button" onClick={load} disabled={loading} className="btn-ghost btn-sm">
           <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
@@ -352,7 +352,7 @@ export default function ProducaoPage() {
           <select value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value)} className="hselect">
             <option value="">Todas prioridades</option>
             <option value="alta">Alta</option>
-            <option value="media">Media</option>
+            <option value="media">Média</option>
             <option value="baixa">Baixa</option>
           </select>
           <select value={materialFilter} onChange={(e) => setMaterialFilter(e.target.value)} className="hselect">
@@ -376,9 +376,9 @@ export default function ProducaoPage() {
       {loading ? (
         <div className="flex-1 flex items-center justify-center"><RefreshCw className="animate-spin text-hagav-gold" /></div>
       ) : jobs.length === 0 ? (
-        <ProductionEmptyState title="Nenhuma demanda em producao" description="Ao aprovar um orcamento, a demanda aparecera automaticamente aqui." />
+        <ProductionEmptyState title="Nenhuma demanda em produção" description="Ao aprovar um orçamento, a demanda aparecerá automaticamente aqui." />
       ) : filteredJobs.length === 0 ? (
-        <ProductionEmptyState title="Nada encontrado nos filtros" description="Ajuste busca, etapa, prioridade, materiais ou responsavel para voltar ao mapa da producao." />
+        <ProductionEmptyState title="Nada encontrado nos filtros" description="Ajuste busca, etapa, prioridade, materiais ou responsável para voltar ao mapa da produção." />
       ) : (
         <div className="flex-1 min-h-0 overflow-y-auto pr-1">
           <ProductionList

@@ -550,7 +550,7 @@ function getMarginHealth(marginPercent, profitValue, pricingRules) {
     return {
       tone: 'yellow',
       label: 'Margem abaixo da meta',
-      description: 'Ajuste o preco ou reduza desconto para proteger a operacao.',
+      description: 'Ajuste o preco ou reduza desconto para proteger a operação.',
     };
   }
   return {
@@ -614,7 +614,7 @@ export function computeCommercialPricing(input = {}, pricingRulesInput = DEFAULT
   const itemsInput = Array.isArray(input?.items) && input.items.length > 0
     ? input.items
     : [{
-      servico: normalizeText(input?.servico) || 'Servico',
+      servico: normalizeText(input?.servico) || 'Serviço',
       quantidade: normalizeText(input?.quantidade) || '1',
       material_gravado: normalizeText(input?.material_gravado),
       tempo_bruto: normalizeText(input?.tempo_bruto),
@@ -642,7 +642,7 @@ export function computeCommercialPricing(input = {}, pricingRulesInput = DEFAULT
   const itensServico = [];
 
   for (const rawItem of itemsInput) {
-    const servico = normalizeText(rawItem?.servico) || 'Servico';
+    const servico = normalizeText(rawItem?.servico) || 'Serviço';
     const serviceKey = mapServiceCatalog(servico);
     const quantidade = toItemQuantity(rawItem?.quantidade);
     const materialGravado = normalizeText(rawItem?.material_gravado);

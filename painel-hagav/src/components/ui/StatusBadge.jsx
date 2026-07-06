@@ -34,14 +34,14 @@ export function OrcStatusBadge({ status }) {
 
 export function UrgenciaBadge({ urgencia }) {
   const key = String(urgencia || '').toLowerCase();
-  const label = URGENCIA_LABELS[key] ?? 'Media';
+  const label = URGENCIA_LABELS[key] ?? 'Média';
   const color = URGENCIA_COLORS[key] ?? URGENCIA_COLORS.media;
   return <Badge label={label} color={color} />;
 }
 
 export function PrioridadeBadge({ prioridade }) {
   const key = String(prioridade || '').toLowerCase();
-  const label = PRIORIDADE_LABELS[key] ?? 'Media';
+  const label = PRIORIDADE_LABELS[key] ?? 'Média';
   const color = PRIORIDADE_COLORS[key] ?? PRIORIDADE_COLORS.media;
   return <Badge label={label} color={color} />;
 }

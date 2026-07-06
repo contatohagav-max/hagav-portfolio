@@ -154,7 +154,7 @@ function FinancialEditor({ entry, createMode, onClose, onSaved }) {
             <input value={form.forma_pagamento} onChange={(e) => field('forma_pagamento', e.target.value)} className="hinput w-full mt-1.5" />
           </label>
           <label className="text-xs text-hagav-gray md:col-span-2">
-            Observacoes
+            Observações
             <textarea rows={3} value={form.observacoes} onChange={(e) => field('observacoes', e.target.value)} className="hinput w-full mt-1.5 resize-none" />
           </label>
         </div>

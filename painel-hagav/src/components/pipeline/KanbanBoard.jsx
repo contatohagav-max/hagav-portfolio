@@ -25,7 +25,7 @@ const PIPELINE_STAGE_TOOLTIPS = {
   novo: {
     title: 'Novo',
     whatIs: 'Lead recem-entrado, ainda sem atendimento completo.',
-    purpose: 'Dar inicio rapido ao primeiro contato.',
+    purpose: 'Dar início rápido ao primeiro contato.',
     observe: 'Tempo alto aqui reduz chance de conversao.',
   },
   contatado: {

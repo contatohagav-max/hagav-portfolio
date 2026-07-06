@@ -103,7 +103,7 @@ export default function OrcamentosPage() {
     <div className="space-y-4 md:space-y-5 animate-fade-in">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
-          <h1 className="page-title">Orcamentos</h1>
+          <h1 className="page-title">Orçamentos</h1>
           <p className="page-subtitle">
             {loading ? 'Carregando...' : `${orcamentos.length} orcamento${orcamentos.length !== 1 ? 's' : ''}`}
           </p>
@@ -119,11 +119,11 @@ export default function OrcamentosPage() {
       {!loading && orcamentos.length > 0 && (
         <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-2.5">
           {[
-            { label: 'Preco base', value: fmtBRL(totalBase) },
-            { label: 'Preco final', value: fmtBRL(totalFinal), accent: true },
+            { label: 'Preço base', value: fmtBRL(totalBase) },
+            { label: 'Preço final', value: fmtBRL(totalFinal), accent: true },
             { label: 'Potencial total', value: fmtBRL(totalPotencial) },
             { label: 'Urgentes', value: urgentes },
-            { label: 'Sem revisao', value: semRevisao },
+            { label: 'Sem revisão', value: semRevisao },
             { label: 'Incompletos', value: incompletos },
           ].map((card) => (
             <div key={card.label} className={`hcard p-3.5 md:p-4 text-center ${card.accent ? 'border-hagav-gold/30' : ''}`}>
@@ -155,16 +155,16 @@ export default function OrcamentosPage() {
           </select>
 
           <select value={urgencia} onChange={(e) => setUrgencia(e.target.value)} className="hselect">
-            <option value="">Urgencia</option>
+            <option value="">Urgência</option>
             <option value="alta">Alta</option>
-            <option value="media">Media</option>
+            <option value="media">Média</option>
             <option value="baixa">Baixa</option>
           </select>
 
           <select value={prioridade} onChange={(e) => setPrioridade(e.target.value)} className="hselect">
             <option value="">Prioridade</option>
             <option value="alta">Alta</option>
-            <option value="media">Media</option>
+            <option value="media">Média</option>
             <option value="baixa">Baixa</option>
           </select>
         </div>
@@ -218,10 +218,10 @@ export default function OrcamentosPage() {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-xs">
             <div className="bg-hagav-surface border border-red-500/20 rounded-lg px-3 py-2 text-red-300">
-              Orcamentos urgentes: {urgentes}
+              Orçamentos urgentes: {urgentes}
             </div>
             <div className="bg-hagav-surface border border-yellow-500/20 rounded-lg px-3 py-2 text-yellow-300">
-              Sem revisao: {semRevisao}
+              Sem revisão: {semRevisao}
             </div>
             <div className="bg-hagav-surface border border-hagav-border rounded-lg px-3 py-2 text-hagav-light">
               Campos incompletos: {incompletos}

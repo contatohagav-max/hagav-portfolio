@@ -99,7 +99,7 @@ export const ORC_STATUS_COLORS = {
 
 export const URGENCIA_LABELS = {
   alta: 'Alta',
-  media: 'Media',
+  media: 'Média',
   baixa: 'Baixa',
 };
 
@@ -111,7 +111,7 @@ export const URGENCIA_COLORS = {
 
 export const PRIORIDADE_LABELS = {
   alta: 'Alta',
-  media: 'Media',
+  media: 'Média',
   baixa: 'Baixa',
 };
 

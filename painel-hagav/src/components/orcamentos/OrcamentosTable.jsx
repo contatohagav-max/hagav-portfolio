@@ -17,14 +17,14 @@ export default function OrcamentosTable({ orcamentos, onSelect }) {
           <tr>
             <th>Cliente</th>
             <th>Fluxo</th>
-            <th>Servico / Operacao</th>
+            <th>Serviço / Operação</th>
             <th>Potencial</th>
-            <th>Preco final</th>
+            <th>Preço final</th>
             <th>Margem (Auto/Com.)</th>
             <th>Revisao</th>
             <th>Status</th>
-            <th>Urgencia</th>
-            <th>Proxima acao</th>
+            <th>Urgência</th>
+            <th>Próxima ação</th>
             <th>Entrada</th>
           </tr>
         </thead>
@@ -78,7 +78,7 @@ export default function OrcamentosTable({ orcamentos, onSelect }) {
                 </div>
               </td>
               <td className="text-xs text-hagav-light max-w-[200px]" title={orc.proxima_acao || ''}>
-                {truncate(orc.proxima_acao || 'Sem acao definida', 52)}
+                {truncate(orc.proxima_acao || 'Sem ação definida', 52)}
               </td>
               <td className="text-hagav-gray text-xs">{fmtRelative(orc.created_at)}</td>
             </tr>

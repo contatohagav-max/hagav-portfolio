@@ -258,9 +258,24 @@ export default function DashboardPage() {
     load();
   }, [load]);
 
-  const m = insights.metrics;
-  const charts = insights.charts;
-  const lists = insights.lists;
+ const safeInsights = {
+  metrics: {
+    ...EMPTY_INSIGHTS.metrics,
+    ...(insights?.metrics || {}),
+  },
+  charts: {
+    ...EMPTY_INSIGHTS.charts,
+    ...(insights?.charts || {}),
+  },
+  lists: {
+    ...EMPTY_INSIGHTS.lists,
+    ...(insights?.lists || {}),
+  },
+};
+
+const m = safeInsights.metrics;
+const charts = safeInsights.charts;
+const lists = safeInsights.lists;
   const lastRefreshLabel = lastRefresh
     ? lastRefresh.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
     : null;
@@ -564,4 +579,5 @@ export default function DashboardPage() {
     </div>
   );
 }
+
 

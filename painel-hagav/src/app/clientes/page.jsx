@@ -767,7 +767,7 @@ export default function ClientesPage() {
     const observacoesSafe = String(obsContrato || '').trim();
 
     if (!inicioSafe || !vencimentoSafe) {
-      setFeedback('Preencha inicio e vencimento para salvar o contrato.');
+      setFeedback('Preencha início e vencimento para salvar o contrato.');
       return;
     }
 
@@ -891,7 +891,7 @@ export default function ClientesPage() {
 
       setRows((prev) => prev.filter((item) => item.id !== selected.id));
       setSelected(null);
-      setFeedback('Negociacao reaberta: deal movido para Orcamentos.');
+      setFeedback('Negociação reaberta: deal movido para Orçamentos.');
       setTimeout(() => setFeedback(''), 3200);
     } catch (err) {
       console.error('[Clientes][Reabrir]', err);
@@ -1006,13 +1006,13 @@ export default function ClientesPage() {
             <thead>
               <tr>
                 <th>Cliente</th>
-                <th>Servico/Plano</th>
+                <th>Serviço/Plano</th>
                 <th>Valor</th>
-                <th>Inicio</th>
+                <th>Início</th>
                 <th>Vencimento</th>
                 <th>Recorrente</th>
                 <th>Status contrato</th>
-                <th>Responsavel</th>
+                <th>Responsável</th>
                 <th>Renovacao</th>
                 <th>Acoes</th>
               </tr>
@@ -1125,7 +1125,7 @@ export default function ClientesPage() {
                 </div>
 
                 <div className="md:col-span-2 mt-1">
-                  <p className="text-[10px] text-hagav-gray uppercase tracking-wider">Servico</p>
+                  <p className="text-[10px] text-hagav-gray uppercase tracking-wider">Serviço</p>
                 </div>
                 <div className="md:col-span-2">
                   <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Resumo do servico</label>
@@ -1136,7 +1136,7 @@ export default function ClientesPage() {
                   <input type="number" min="0" step="0.01" value={valorFinal} onChange={(e) => setValorFinal(e.target.value)} className="hinput w-full" />
                 </div>
                 <div>
-                  <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Duracao (meses)</label>
+                  <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Duração (meses)</label>
                   <input type="number" min="1" step="1" value={duracaoMeses} onChange={(e) => setDuracaoMeses(e.target.value)} className="hinput w-full" />
                 </div>
 
@@ -1156,7 +1156,7 @@ export default function ClientesPage() {
                   <p className="text-[10px] text-hagav-gray uppercase tracking-wider">Contrato</p>
                 </div>
                 <div>
-                  <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Data inicio</label>
+                  <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Data início</label>
                   <input type="date" value={dataInicio} onChange={(e) => setDataInicio(e.target.value)} className="hinput w-full" />
                 </div>
                 <div>
@@ -1164,7 +1164,7 @@ export default function ClientesPage() {
                   <input type="date" value={vencimento} readOnly className="hinput w-full opacity-80" />
                 </div>
                 <div>
-                  <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Responsavel</label>
+                  <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Responsável</label>
                   <input type="text" value={responsavel} onChange={(e) => setResponsavel(e.target.value)} className="hinput w-full" />
                 </div>
                 <div>
@@ -1187,7 +1187,7 @@ export default function ClientesPage() {
                   Contrato recorrente
                 </label>
                 <div className="md:col-span-2">
-                  <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Observacoes do contrato</label>
+                  <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Observações do contrato</label>
                   <textarea rows={3} value={obsContrato} onChange={(e) => setObsContrato(e.target.value)} className="hinput w-full resize-none" />
                 </div>
               </div>

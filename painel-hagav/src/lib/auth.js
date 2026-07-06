@@ -1,8 +1,8 @@
-export const ADMIN_ROLES = ['viewer', 'operacao', 'comercial', 'admin'];
+export const ADMIN_ROLES = ['viewer', 'operação', 'comercial', 'admin'];
 
 const ROLE_LABELS = {
   viewer: 'Viewer',
-  operacao: 'Operacao',
+  operacao: 'Operação',
   comercial: 'Comercial',
   admin: 'Admin',
 };

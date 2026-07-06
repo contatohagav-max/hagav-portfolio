@@ -1,7 +1,7 @@
 export const PRODUCTION_STAGES = [
   { id: 'aguardando_materiais', label: 'Aguardando materiais', color: 'border-slate-500' },
   { id: 'pronto_preparar', label: 'Pronto para preparar', color: 'border-sky-500' },
-  { id: 'em_edicao', label: 'Em edicao', color: 'border-blue-500' },
+  { id: 'em_edicao', label: 'Em edição', color: 'border-blue-500' },
   { id: 'revisao_interna', label: 'Revisao interna', color: 'border-violet-500' },
   { id: 'revisao_cliente', label: 'Revisao do cliente', color: 'border-fuchsia-500' },
   { id: 'ajustes', label: 'Ajustes', color: 'border-orange-500' },

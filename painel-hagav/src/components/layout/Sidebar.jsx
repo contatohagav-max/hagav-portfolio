@@ -11,10 +11,10 @@ import { roleLabel } from '@/lib/auth';
 const NAV = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard, permission: 'readDashboard' },
   { href: '/leads', label: 'Leads', icon: Users, permission: 'readLeads' },
-  { href: '/orcamentos', label: 'Orcamentos', icon: FileText, permission: 'readOrcamentos' },
+  { href: '/orcamentos', label: 'Orçamentos', icon: FileText, permission: 'readOrcamentos' },
   { href: '/clientes', label: 'Clientes', icon: Users, permission: 'readClientes' },
   { href: '/pipeline', label: 'Pipeline', icon: Kanban, permission: 'readPipeline' },
-  { href: '/producao', label: 'Producao', icon: Clapperboard, permission: 'readProducao' },
+  { href: '/producao', label: 'Produção', icon: Clapperboard, permission: 'readProducao' },
   { href: '/financeiro', label: 'Financeiro', icon: Landmark, permission: 'readFinanceiro' },
   { href: '/configuracoes', label: 'Configuracoes', icon: Settings, permission: 'manageSettings' },
 ];
@@ -30,10 +30,10 @@ const NAV_TOOLTIPS = {
     title: 'Leads',
     whatIs: 'Etapa de triagem e qualificacao dos novos contatos.',
     purpose: 'Validar lead real antes de gerar orcamento.',
-    observe: 'Somente leads qualificados devem seguir para Orcamentos.',
+    observe: 'Somente leads qualificados devem seguir para Orçamentos.',
   },
   '/orcamentos': {
-    title: 'Orcamentos',
+    title: 'Orçamentos',
     whatIs: 'Etapa comercial de proposta, ajuste e fechamento.',
     purpose: 'Precificar, negociar e aprovar proposta comercial.',
     observe: 'Mantenha foco em proposta_enviada, ajustando e aprovado.',
@@ -51,7 +51,7 @@ const NAV_TOOLTIPS = {
     observe: 'Evite acumulo em Novo, Contatado e Qualificado.',
   },
   '/producao': {
-    title: 'Producao',
+    title: 'Produção',
     whatIs: 'Kanban das demandas aprovadas e em execucao.',
     purpose: 'Controlar materiais, edicao, revisao, render e entrega.',
     observe: 'Toda demanda deve ter responsavel, prazo e proxima acao.',

@@ -778,7 +778,7 @@ function buildStructuredFromAnswers(flow, answers) {
   const resolvedOperations = operations.length > 0
     ? operations
     : qtyEntries.map((entry) => entry.label).filter(Boolean);
-  const fallbackOperation = normalizeText(answers.rec_tipo_operacao);
+  const fallbackOperation = normalizeText(answers.rec_tipo_operação);
   const prazo = normalizePrazoLabel(answers.rec_inicio || answers.recorrente_prazo, '');
   const referencia = normalizeText(answers.rec_referencia || answers.referencia);
 
@@ -810,7 +810,7 @@ function buildStructuredFromAnswers(flow, answers) {
 
 function normalizeItemPayload(rawItem, defaults = {}) {
   if (!rawItem || typeof rawItem !== 'object') return null;
-  const servico = normalizeText(rawItem.servico || rawItem.servico_ou_operacao || rawItem.operacao || '');
+  const servico = normalizeText(rawItem.servico || rawItem.servico_ou_operação || rawItem.operação || '');
   if (!servico) return null;
   return {
     servico,
@@ -978,7 +978,7 @@ function applyStructuredFallback(record) {
     servico: normalizeText(record?.servico)
       || normalizeText(structured?.servico_resumo)
       || items.map((item) => item.servico).join(' | ')
-      || normalizeText(parsed?.servico || parsed?.servicoOuOperacao || parsed?.operacao)
+      || normalizeText(parsed?.servico || parsed?.servicoOuOperacao || parsed?.operação)
       || normalizeText(record?.ServicoOuOperacao),
     quantidade: normalizeText(record?.quantidade)
       || normalizeText(structured?.quantidade_resumo)
@@ -1066,7 +1066,7 @@ export function computePricingSnapshot(record, pricingRulesInput = DEFAULT_PRICI
   const itemList = items.length > 0
     ? items
     : [{
-      servico: normalizeText(record?.servico || record?.ServicoOuOperacao || 'Servico'),
+      servico: normalizeText(record?.servico || record?.ServicoOuOperacao || 'Serviço'),
       quantidade: normalizeText(record?.quantidade || record?.Quantidade || '1'),
       material_gravado: normalizeText(record?.material_gravado || record?.MaterialGravado || ''),
       tempo_bruto: normalizeText(record?.tempo_bruto || record?.TempoBruto || ''),
@@ -1160,7 +1160,7 @@ function buildPricingVariantRecord(record, targetTotal = 1) {
   const variantItems = scaleServiceItemsToTargetQuantity(currentItems, safeTarget);
   const quantitySummary = variantItems.length <= 1
     ? String(safeTarget)
-    : variantItems.map((item) => `${item?.servico || 'Servico'}: ${item?.quantidade || 1}`).join(' | ');
+    : variantItems.map((item) => `${item?.servico || 'Serviço'}: ${item?.quantidade || 1}`).join(' | ');
 
   return {
     ...safeRecord,
@@ -1183,11 +1183,11 @@ export function buildRecordFieldsFromItems(items = [], fallback = {}) {
     : normalizeText(fallback?.servico);
 
   const quantidade = safeItems.length > 1
-    ? safeItems.map((item) => `${normalizeText(item?.servico || 'Servico')}: ${normalizeText(item?.quantidade || '-')}`).join(' | ')
+    ? safeItems.map((item) => `${normalizeText(item?.servico || 'Serviço')}: ${normalizeText(item?.quantidade || '-')}`).join(' | ')
     : normalizeText(safeItems[0]?.quantidade || fallback?.quantidade);
 
   const materialGravado = safeItems.length > 1
-    ? safeItems.map((item) => `${normalizeText(item?.servico || 'Servico')}: ${normalizeText(item?.material_gravado || '-')}`).join(' | ')
+    ? safeItems.map((item) => `${normalizeText(item?.servico || 'Serviço')}: ${normalizeText(item?.material_gravado || '-')}`).join(' | ')
     : normalizeText(safeItems[0]?.material_gravado || fallback?.material_gravado);
 
   const tempoBruto = safeItems.length > 1
@@ -1195,7 +1195,7 @@ export function buildRecordFieldsFromItems(items = [], fallback = {}) {
       .map((item) => {
         const tempo = normalizeText(item?.horas_estimadas || item?.tempo_bruto || '');
         const display = tempo || formatDurationCompact(Number(item?.horas_por_unidade || 0)) || '-';
-        return `${normalizeText(item?.servico || 'Servico')}: ${display}`;
+        return `${normalizeText(item?.servico || 'Serviço')}: ${display}`;
       })
       .join(' | ')
     : normalizeText(
@@ -1267,7 +1267,7 @@ export function buildComparativeProposalPricing(record, { baseQuantity, baseTota
     },
     {
       key: 'melhor_custo_beneficio',
-      title: 'Melhor custo-beneficio',
+      title: 'Melhor custo-benefício',
       quantity: qty3,
       snapshot: computePricingSnapshot(buildPricingVariantRecord(safeRecord, qty3), pricingRules),
     },
@@ -1640,10 +1640,10 @@ export function buildDashboardInsights(rawLeads = [], rawOrcamentos = []) {
     orcamentos.flatMap((orc) => {
       const items = Array.isArray(orc.itens_servico) && orc.itens_servico.length > 0
         ? orc.itens_servico
-        : [{ servico: orc.servico || 'Nao informado' }];
-      return items.map((item) => ({ servico: normalizeText(item?.servico) || 'Nao informado' }));
+        : [{ servico: orc.servico || 'Não informado' }];
+      return items.map((item) => ({ servico: normalizeText(item?.servico) || 'Não informado' }));
     }),
-    (entry) => normalizeText(entry.servico || 'Nao informado')
+    (entry) => normalizeText(entry.servico || 'Não informado')
   ).map(([servico, total]) => ({ servico, total }))
     .sort((a, b) => b.total - a.total)
     .slice(0, 8);
@@ -1656,20 +1656,20 @@ export function buildDashboardInsights(rawLeads = [], rawOrcamentos = []) {
       if (items.length > 0) {
         const fallbackValue = toNumber(orc.preco_final || orc.preco_base || orc.valor_estimado, 0);
         return items.map((item) => ({
-          servico: normalizeText(item?.servico) || 'Nao informado',
+          servico: normalizeText(item?.servico) || 'Não informado',
           valor: toNumber(item?.valor_sugerido_item, 0) || (fallbackValue / items.length),
         }));
       }
 
       const servicos = splitPipeValues(orc.servico);
       if (servicos.length === 0) {
-        return [{ servico: 'Nao informado', valor: toNumber(orc.preco_final || orc.preco_base || orc.valor_estimado, 0) }];
+        return [{ servico: 'Não informado', valor: toNumber(orc.preco_final || orc.preco_base || orc.valor_estimado, 0) }];
       }
       const valorTotal = toNumber(orc.preco_final || orc.preco_base || orc.valor_estimado, 0);
       const rateio = valorTotal / servicos.length;
       return servicos.map((servico) => ({ servico, valor: rateio }));
     }),
-    (entry) => normalizeText(entry.servico || 'Nao informado'),
+    (entry) => normalizeText(entry.servico || 'Não informado'),
     (entry) => toNumber(entry.valor, 0)
   ).map(([servico, valor]) => ({ servico, valor: Math.round(valor * 100) / 100 }))
     .sort((a, b) => b.valor - a.valor)
@@ -1750,7 +1750,7 @@ export function buildDashboardInsights(rawLeads = [], rawOrcamentos = []) {
     charts: {
       origemConversao: origemGrouped,
       servicosMaisPedidos: serviceDemand,
-      receitaPorServico: revenueByService,
+      receitaPorServiço: revenueByService,
       funilPipeline: pipeline,
       leadsPorUrgencia: urgenciaData,
     },

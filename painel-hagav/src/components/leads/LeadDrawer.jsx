@@ -175,7 +175,7 @@ export default function LeadDrawer({ lead, onClose, onUpdated }) {
           <div className="grid grid-cols-2 gap-2">
             <InfoCard label="WhatsApp" value={liveLead.whatsapp} />
             <InfoCard label="Pagina" value={liveLead.pagina} />
-            <InfoCard label="Servico" value={liveLead.servico} />
+            <InfoCard label="Serviço" value={liveLead.servico} />
             <InfoCard label="Valor estimado" value={fmtBRL(liveLead.valor_estimado)} />
             <InfoCard label="Criado em" value={fmtDateTime(liveLead.created_at)} />
             <InfoCard label="Ultimo contato" value={liveLead.ultimo_contato_em ? fmtDateTime(liveLead.ultimo_contato_em) : 'Sem contato'} />
@@ -210,22 +210,22 @@ export default function LeadDrawer({ lead, onClose, onUpdated }) {
                 <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Prioridade</label>
                 <select value={prioridade} onChange={(e) => setPrioridade(e.target.value)} className="hselect w-full">
                   <option value="alta">Alta</option>
-                  <option value="media">Media</option>
+                  <option value="media">Média</option>
                   <option value="baixa">Baixa</option>
                 </select>
               </div>
               <div>
-                <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Urgencia</label>
+                <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Urgência</label>
                 <select value={urgencia} onChange={(e) => setUrgencia(e.target.value)} className="hselect w-full">
                   <option value="alta">Alta</option>
-                  <option value="media">Media</option>
+                  <option value="media">Média</option>
                   <option value="baixa">Baixa</option>
                 </select>
               </div>
             </div>
 
             <div>
-              <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Proxima acao</label>
+              <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Próxima ação</label>
               <input
                 type="text"
                 value={proximaAcao}
@@ -251,7 +251,7 @@ export default function LeadDrawer({ lead, onClose, onUpdated }) {
             </div>
 
             <div>
-              <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Observacoes internas</label>
+              <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Observações internas</label>
               <textarea
                 value={obs}
                 onChange={(e) => setObs(e.target.value)}

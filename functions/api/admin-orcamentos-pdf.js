@@ -1,4 +1,4 @@
-﻿import { authenticateRequest, getClientIp } from '../_utils/admin-auth.js';
+import { authenticateRequest, getClientIp } from '../_utils/admin-auth.js';
 import { applyRateLimit } from '../_utils/rate-limit.js';
 import { normalizePrazoLabel } from '../../shared/pricing-engine.js';
 
@@ -375,7 +375,7 @@ function createPdfFromLines(lines) {
   const safeLines = Array.isArray(lines) ? lines : [];
   if (safeLines.length === 0) {
     safeLines.push("HAGAV Studio");
-    safeLines.push("Documento sem conteudo para gerar PDF.");
+    safeLines.push("Documento sem conteúdo para gerar PDF.");
   }
   let y = 800;
   const textCommands = [];
@@ -505,14 +505,14 @@ function normalizePdfshiftEndpoint(rawEndpoint) {
   }
 }
 
-function getPdfRenderConfig(env) {
+function getPdfRenderConfig(env, options = {}) {
   const forcedEngine = firstEnvValue(env, ["PDF_ENGINE", "PDF_RENDER_ENGINE", "PDF_PROVIDER"]).toLowerCase();
   const pdfshiftKey = firstEnvValue(env, ["PDFSHIFT_API_KEY", "PDFSHIFT_KEY"]);
   const browserlessToken = firstEnvValue(env, ["BROWSERLESS_TOKEN", "BROWSERLESS_API_KEY", "PDF_BROWSERLESS_TOKEN"]);
   const allowNativeFallbackRaw = firstEnvValue(env, ["PDF_NATIVE_FALLBACK", "PDF_ALLOW_NATIVE_FALLBACK"]);
-  const allowNativeFallback = allowNativeFallbackRaw
+  const allowNativeFallback = Boolean(options.allowNativeFallback) && (allowNativeFallbackRaw
     ? !/^(0|false|no)$/i.test(allowNativeFallbackRaw)
-    : true;
+    : false);
 
   const autoEngine = browserlessToken ? "browserless" : (pdfshiftKey ? "pdfshift" : "native_text");
   const normalizedForced = forcedEngine && forcedEngine !== "auto" ? forcedEngine : "";
@@ -726,10 +726,18 @@ async function renderPdfViaBrowserless(html, config) {
   };
 }
 
-async function renderHtmlToPdf(html, env) {
-  const config = getPdfRenderConfig(env);
+async function renderHtmlToPdf(html, env, options = {}) {
+  const config = getPdfRenderConfig(env, options);
   if (config.engine === "native_text") {
-    return renderPdfViaNativeText(html);
+    if (config.allowNativeFallback) return renderPdfViaNativeText(html);
+    return {
+      ok: false,
+      reason: "pdf_engine_not_configured",
+      status: 503,
+      detail: "Engine HTML para PDF ausente. Configure PDFSHIFT_API_KEY ou BROWSERLESS_TOKEN para gerar o PDF com acentos e layout completo.",
+      renderMode: "remote_html_to_pdf",
+      pdfEngine: "native_text",
+    };
   }
 
   let primaryResult = null;
@@ -742,7 +750,7 @@ async function renderHtmlToPdf(html, env) {
       ok: false,
       reason: "pdf_engine_not_supported",
       status: 400,
-      detail: `Engine nao suportada: ${config.engine}`,
+      detail: `Engine não suportada: ${config.engine}`,
       renderMode: config.renderMode,
       pdfEngine: config.engine,
     };
@@ -799,12 +807,12 @@ function normalizeServiceName(value) {
   if (/criativo/.test(key) && /(ads|trafego)/.test(key)) return "Criativo para Ads";
   if (/corte/.test(key) && /podcast/.test(key)) return "Corte Podcast / Clipe";
   if (/youtube/.test(key)) return "YouTube";
-  if (/vsl/.test(key) && /(15|ate|curta)/.test(key)) return "VSL ate 15 min";
+  if (/vsl/.test(key) && /(15|ate|curta)/.test(key)) return "VSL até 15 min";
   if (/vsl/.test(key) && /(longa|30|min)/.test(key)) return "VSL longa (15-30 min)";
-  if (/videoaula|modulo/.test(key)) return "Videoaula / Modulo";
+  if (/videoaula|modulo/.test(key)) return "Videoaula / Módulo";
   if (/depoimento/.test(key)) return "Depoimento";
   if (/motion|vinheta/.test(key)) return "Motion / Vinheta";
-  if (/conteudo.*rede/.test(key)) return "Conteudo para redes sociais";
+  if (/conteudo.*rede/.test(key)) return "Conteúdo para redes sociais";
   return cleaned;
 }
 
@@ -863,7 +871,7 @@ function parseItemsFromQuantityText(rawText) {
     .filter(Boolean);
 }
 
-function mergeServiceItems(items, fallbackService = "Conteudo audiovisual", fallbackQty = 1) {
+function mergeServiceItems(items, fallbackService = "Conteúdo audiovisual", fallbackQty = 1) {
   const map = new Map();
   (Array.isArray(items) ? items : []).forEach((item) => {
     if (!item || typeof item !== "object") return;
@@ -876,7 +884,7 @@ function mergeServiceItems(items, fallbackService = "Conteudo audiovisual", fall
   const merged = Array.from(map.entries()).map(([servico, quantidade]) => ({ servico, quantidade }));
   if (merged.length > 0) return merged;
 
-  const safeService = normalizeServiceName(fallbackService) || "Conteudo audiovisual";
+  const safeService = normalizeServiceName(fallbackService) || "Conteúdo audiovisual";
   const safeQty = Math.max(1, parseQuantityNumber(fallbackQty) || 1);
   return [{ servico: safeService, quantidade: safeQty }];
 }
@@ -915,7 +923,7 @@ function extractServiceItems(row, detalhes) {
     detalhes?.servico,
     row?.servico,
     row?.pacote_sugerido,
-    "Conteudo audiovisual"
+    "Conteúdo audiovisual"
   );
   const fallbackQty = firstNonEmptyValue(
     row?.quantidade,
@@ -937,7 +945,7 @@ function inferUnitByService(serviceLabel, quantity) {
     .toLowerCase();
   if (/motion|vinheta/.test(key)) return quantity === 1 ? "projeto" : "projetos";
   if (/videoaula|modulo/.test(key)) return quantity === 1 ? "modulo" : "modulos";
-  return quantity === 1 ? "video" : "videos";
+  return quantity === 1 ? "vídeo" : "vídeos";
 }
 
 function buildQuantitySummary(items) {
@@ -948,7 +956,7 @@ function buildQuantitySummary(items) {
     return {
       total,
       quantityLabel: `${total} ${unit}`,
-      breakdown: `${total} ${safeItems[0]?.servico || "conteudo audiovisual"}`,
+      breakdown: `${total} ${safeItems[0]?.servico || "conteúdo audiovisual"}`,
     };
   }
   const compactBreakdown = safeItems
@@ -982,9 +990,9 @@ function normalizeReferenceText(referenceRaw) {
   if (!raw) return { show: false, text: "" };
   const shortUrlMatch = raw.match(/https?:\/\/[^\s]+/i);
   if (shortUrlMatch && shortUrlMatch[0] && shortUrlMatch[0].length <= 120) {
-    return { show: true, text: `Referencia: ${shortUrlMatch[0]}` };
+    return { show: true, text: `Referência: ${shortUrlMatch[0]}` };
   }
-  return { show: true, text: "Referencia enviada pelo cliente sera considerada no briefing." };
+  return { show: true, text: "Referência enviada pelo cliente será considerada no briefing." };
 }
 
 function normalizeObservationForClient(rawValue) {
@@ -1012,11 +1020,11 @@ function buildCommercialScope({
 }) {
   const safeItems = Array.isArray(serviceItems) ? serviceItems : [];
   if (safeItems.length <= 1) {
-    const single = safeItems[0] || { servico: "conteudo audiovisual", quantidade: 1 };
+    const single = safeItems[0] || { servico: "conteúdo audiovisual", quantidade: 1 };
     const unit = inferUnitByService(single.servico, single.quantidade);
     return [
-      `Edicao e finalizacao de ${single.quantidade} ${unit} de ${single.servico} conforme briefing aprovado.`,
-      "Inclui organizacao do material, cortes, ritmo, acabamento visual e exportacao final em MP4.",
+      `Edição e finalização de ${single.quantidade} ${unit} de ${single.servico} conforme briefing aprovado.`,
+      "Inclui organização do material, cortes, ritmo, acabamento visual e exportacao final em MP4.",
       `O projeto contempla ${revisoesText.toLowerCase()}`,
     ].join(" ");
   }
@@ -1027,8 +1035,8 @@ function buildCommercialScope({
     .join(" + ");
 
   return [
-    `Edicao e finalizacao de ${quantitySummary.total} itens (${compactServices}) conforme briefing aprovado.`,
-    "Inclui organizacao do material, cortes, ritmo, acabamento visual e exportacao final em MP4.",
+    `Edição e finalização de ${quantitySummary.total} itens (${compactServices}) conforme briefing aprovado.`,
+    "Inclui organização do material, cortes, ritmo, acabamento visual e exportacao final em MP4.",
     `O projeto contempla ${revisoesText.toLowerCase()}`,
   ].join(" ");
 }
@@ -1068,21 +1076,21 @@ function formatComparativeOptions(qtyBase, totalBase) {
 
   return {
     opcao1_titulo: "Pedido atual",
-    opcao1_qtd: `${safeQty} videos`,
+    opcao1_qtd: `${safeQty} vídeos`,
     opcao1_preco: formatMoney(safeTotal),
-    opcao1_unitario: `${formatMoney(unitBase)} por video`,
+    opcao1_unitario: `${formatMoney(unitBase)} por vídeo`,
     opcao1_desc: "Sem desconto aplicado",
     opcao1_desconto: "",
     opcao2_titulo: "Mais volume",
-    opcao2_qtd: `${qty2} videos`,
+    opcao2_qtd: `${qty2} vídeos`,
     opcao2_preco: formatMoney(total2),
-    opcao2_unitario: `${formatMoney(unit2)} por video`,
+    opcao2_unitario: `${formatMoney(unit2)} por vídeo`,
     opcao2_desc: discount2 > 0 ? `Desconto aplicado: ${discount2}%` : "Sem desconto aplicado",
     opcao2_desconto: discount2 > 0 ? `-${discount2}%` : "",
-    opcao3_titulo: "Melhor custo-beneficio",
-    opcao3_qtd: `${qty3} videos`,
+    opcao3_titulo: "Melhor custo-benefício",
+    opcao3_qtd: `${qty3} vídeos`,
     opcao3_preco: formatMoney(total3),
-    opcao3_unitario: `${formatMoney(unit3)} por video`,
+    opcao3_unitario: `${formatMoney(unit3)} por vídeo`,
     opcao3_desc: discount3 > 0 ? `Desconto aplicado: ${discount3}%` : "Sem desconto aplicado",
     opcao3_desconto: discount3 > 0 ? `-${discount3}%` : "",
     texto_comparativo: "",
@@ -1191,7 +1199,7 @@ function sanitizeTemplateOverrides(input) {
 }
 
 function proposalModeLabel(mode) {
-  if (mode === "opcoes") return "Com opcoes";
+  if (mode === "opcoes") return "Com opções";
   if (mode === "mensal") return "Mensal";
   if (mode === "personalizada") return "Personalizada";
   return "Direta";
@@ -1226,7 +1234,7 @@ function buildTemplateValues(row, env, options = {}) {
   const qtyTotal = Math.max(1, Number(quantitySummary?.total || 1));
   const primaryService = serviceItems.length > 1
     ? `Multiplos servicos (${serviceItems.length})`
-    : (serviceItems[0]?.servico || "Conteudo audiovisual");
+    : (serviceItems[0]?.servico || "Conteúdo audiovisual");
   const quantidade = serviceItems.length > 1
     ? `${quantitySummary.quantityLabel} (${quantitySummary.breakdown})`
     : quantitySummary.quantityLabel;
@@ -1362,12 +1370,12 @@ function buildTemplateValues(row, env, options = {}) {
     templateOverrides?.forma_pagamento,
     comercial?.forma_pagamento,
     detalhes?.forma_pagamento,
-    "PIX / Transferencia / A combinar"
+    "PIX / Transferência / A combinar"
   );
   const condicaoPagamento = firstNonEmptyValue(
     comercial?.condicao_pagamento,
     detalhes?.condicao_pagamento,
-    "A vista / Conforme combinado"
+    "À vista / Conforme combinado"
   );
   const revisoesInclusas = firstNonEmptyValue(
     comercial?.revisoes_inclusas,
@@ -1377,7 +1385,7 @@ function buildTemplateValues(row, env, options = {}) {
   const formatoEntrega = firstNonEmptyValue(
     comercial?.formato_entrega,
     detalhes?.formato_entrega,
-    "Arquivo final pronto para publicacao em MP4."
+    "Arquivo final pronto para publicação em MP4."
   );
   const dataValidadeInput = firstNonEmptyValue(
     templateOverrides?.data_validade,
@@ -1390,9 +1398,9 @@ function buildTemplateValues(row, env, options = {}) {
     : formatDatePlusDaysBr(dataHojeIso, 7);
   const condicoesDefault = [
     `Forma de pagamento: ${formaPagamento}.`,
-    `Proposta valida ate ${dataValidade}.`,
-    "O projeto inicia apos aprovacao e envio dos materiais.",
-    "Inclui 1 rodada de ajustes por entrega. Alteracoes de estrutura, roteiro, estilo ou escopo podem gerar novo orcamento.",
+    `Proposta válida até ${dataValidade}.`,
+    "O projeto inicia após aprovação e envio dos materiais.",
+    "Inclui 1 rodada de ajustes por entrega. Alterações de estrutura, roteiro, estilo ou escopo podem gerar novo orçamento.",
   ];
   const condicoesComerciais = firstNonEmptyValue(
     templateOverrides?.condicoes_comerciais,
@@ -1422,9 +1430,9 @@ function buildTemplateValues(row, env, options = {}) {
   if (proposalMode === "mensal") {
     const mensalDisplay = firstNonEmptyValue(valorMensal, valorTotalMoeda);
     if (mensalDisplay) {
-      valorTotalMoeda = /\/m[eÃª]s/i.test(mensalDisplay)
+      valorTotalMoeda = /\/m[eê]s/i.test(mensalDisplay)
         ? mensalDisplay
-        : `${mensalDisplay}/mÃªs`;
+        : `${mensalDisplay}/mês`;
     }
   }
   if (proposalMode === "personalizada") {
@@ -1522,7 +1530,7 @@ function buildTemplateValues(row, env, options = {}) {
     plano_servico: primaryService,
     servico_principal: primaryService,
     formato_entrega: formatoEntrega,
-    formato_entrega_curto: "MP4 pronto para publicacao",
+    formato_entrega_curto: "MP4 pronto para publicação",
     escopo,
     escopo_comercial: escopo,
     escopo_mensal: escopoMensal,
@@ -1562,8 +1570,8 @@ function buildTemplateValues(row, env, options = {}) {
     condicao_linha_4_style: condicoesLinhas[3] ? "display:block;" : "display:none;",
     revisoes_inclusas: revisoesTexto,
     revisoes_inclusas_texto: revisoesTexto,
-    inicio_producao_texto: "O projeto inicia apos aprovacao e envio dos materiais.",
-    ajustes_texto: "Inclui 1 rodada de ajustes. Alteracoes adicionais ou mudancas de escopo podem gerar novo orcamento.",
+    inicio_producao_texto: "O projeto inicia após aprovação e envio dos materiais.",
+    ajustes_texto: "Inclui 1 rodada de ajustes. Alterações adicionais ou mudanças de escopo podem gerar novo orçamento.",
     cta_aprovacao: "Aprovar proposta no WhatsApp",
     observacao_adicional: observacaoManual.text,
     observacoes_bloco_style: observacaoManual.show ? "display:block;" : "display:none;",
@@ -1815,7 +1823,7 @@ export async function onRequestPost(context) {
   }
 
   const auth = await authenticateRequest(request, env, {
-    requiredRoles: ['operacao', 'comercial', 'admin'],
+    requiredRoles: ['operação', 'comercial', 'admin'],
     allowBearer: true,
     allowCookie: true,
   });
@@ -1924,7 +1932,7 @@ export async function onRequestPost(context) {
     });
   }
 
-  const pdfRender = await renderHtmlToPdf(renderedHtml, env);
+  const pdfRender = await renderHtmlToPdf(renderedHtml, env, { allowNativeFallback: testMode });
   if (!pdfRender.ok) {
     return fail(requestId, "pdf_render", pdfRender.reason || "pdf_render_failed", pdfRender.status || 502, {
       detail: previewRawResponse(String(pdfRender.detail || "html_to_pdf_render_failed"), 320),

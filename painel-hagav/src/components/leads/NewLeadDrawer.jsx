@@ -25,7 +25,7 @@ const STATUS_OPTIONS = [
 
 const FLUXO_OPTIONS = [
   { value: 'DU', label: 'Projeto pontual (DU)' },
-  { value: 'DR', label: 'Producao mensal (DR)' },
+  { value: 'DR', label: 'Produção mensal (DR)' },
 ];
 
 const MATERIAL_OPTIONS = [
@@ -199,7 +199,7 @@ export default function NewLeadDrawer({ onClose, onCreated }) {
             <InfoCard label="Origem" value={origem} />
             <InfoCard label="Fluxo" value={fluxo} />
             <InfoCard label="Prioridade" value={prioridade} />
-            <InfoCard label="Urgencia" value={urgencia} />
+            <InfoCard label="Urgência" value={urgencia} />
           </div>
 
           {/* Bloco: Dados principais */}
@@ -246,7 +246,7 @@ export default function NewLeadDrawer({ onClose, onCreated }) {
                 </select>
               </Field>
 
-              <Field label="Servico de interesse">
+              <Field label="Serviço de interesse">
                 <input
                   type="text"
                   value={servico}
@@ -257,7 +257,7 @@ export default function NewLeadDrawer({ onClose, onCreated }) {
               </Field>
             </div>
             <p className="text-[11px] text-hagav-gray/80 -mt-1">
-              Use `|` para separar mais de um servico (ex.: `YouTube | VSL ate 15 min`).
+              Use `|` para separar mais de um serviço (ex.: `YouTube | VSL até 15 min`).
             </p>
 
             <Field label="Valor estimado inicial (R$)">
@@ -337,7 +337,7 @@ export default function NewLeadDrawer({ onClose, onCreated }) {
               </Field>
             </div>
 
-            <Field label="Referencia">
+            <Field label="Referência">
               <textarea
                 value={referencia}
                 onChange={(e) => setReferencia(e.target.value)}
@@ -376,21 +376,21 @@ export default function NewLeadDrawer({ onClose, onCreated }) {
               <Field label="Prioridade">
                 <select value={prioridade} onChange={(e) => setPrioridade(e.target.value)} className="hselect w-full">
                   <option value="alta">Alta</option>
-                  <option value="media">Media</option>
+                  <option value="media">Média</option>
                   <option value="baixa">Baixa</option>
                 </select>
               </Field>
 
-              <Field label="Urgencia">
+              <Field label="Urgência">
                 <select value={urgencia} onChange={(e) => setUrgencia(e.target.value)} className="hselect w-full">
                   <option value="alta">Alta</option>
-                  <option value="media">Media</option>
+                  <option value="media">Média</option>
                   <option value="baixa">Baixa</option>
                 </select>
               </Field>
             </div>
 
-            <Field label="Proxima acao">
+            <Field label="Próxima ação">
               <input
                 type="text"
                 value={proximaAcao}
@@ -410,7 +410,7 @@ export default function NewLeadDrawer({ onClose, onCreated }) {
                 />
               </Field>
 
-              <Field label="Responsavel">
+              <Field label="Responsável">
                 <input
                   type="text"
                   value={responsavel}
@@ -428,7 +428,7 @@ export default function NewLeadDrawer({ onClose, onCreated }) {
           <div className="space-y-3">
             <p className="text-[10px] text-hagav-gray uppercase tracking-wider">Anotacoes</p>
 
-            <Field label="Observacoes internas">
+            <Field label="Observações internas">
               <textarea
                 value={observacoesInternas}
                 onChange={(e) => setObservacoesInternas(e.target.value)}

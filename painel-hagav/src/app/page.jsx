@@ -75,7 +75,7 @@ const KPI_TOOLTIPS = {
     observe: 'Compare com os dias anteriores e a origem dos leads.',
   },
   orcamentos_aberto: {
-    title: 'Orcamentos em aberto',
+    title: 'Orçamentos em aberto',
     whatIs: 'Soma dos orcamentos ainda em negociacao.',
     purpose: 'Priorizar fechamento e previsao de curto prazo.',
     observe: 'Valor alto com baixa conversao indica gargalo comercial.',
@@ -178,7 +178,7 @@ const CHART_TOOLTIPS = {
     observe: 'Volume alto em urgencia alta pede acao imediata.',
   },
   servicos_pedidos: {
-    title: 'Servicos mais pedidos',
+    title: 'Serviços mais pedidos',
     whatIs: 'Ranking de servicos com maior demanda no periodo.',
     purpose: 'Guiar foco comercial e operacional em ofertas mais recorrentes.',
     observe: 'Use para ajustar campanhas e capacidade do time.',
@@ -267,7 +267,7 @@ export default function DashboardPage() {
 
   const metricCards = [
     { id: 'leads_mes', label: 'Leads no mes', value: m.leadsMes, icon: Users, onClick: () => router.push('/leads'), title: 'Abrir tela de leads' },
-    { id: 'orcamentos_aberto', label: 'Orcamentos em aberto', value: fmtBRL(m.orcamentosAbertos), icon: Wallet, onClick: () => router.push('/orcamentos?abertos=1'), title: 'Abrir orcamentos em aberto' },
+    { id: 'orcamentos_aberto', label: 'Orçamentos em aberto', value: fmtBRL(m.orcamentosAbertos), icon: Wallet, onClick: () => router.push('/orcamentos?abertos=1'), title: 'Abrir orçamentos em aberto' },
     { id: 'receita_fechada_mes', label: 'Receita fechada no mes', value: fmtBRL(m.receitaFechadaMes), icon: CircleDollarSign, onClick: () => router.push('/pipeline'), title: 'Abrir pipeline e revisar fechamentos' },
     { id: 'ticket_medio', label: 'Ticket medio', value: fmtBRL(m.ticketMedio), icon: BadgeDollarSign, onClick: () => router.push('/orcamentos'), title: 'Abrir tela de orcamentos' },
     { id: 'taxa_conversao', label: 'Taxa de conversao', value: fmtPercent(m.taxaConversao), icon: Percent, onClick: () => router.push('/pipeline'), title: 'Abrir pipeline' },
@@ -301,7 +301,7 @@ export default function DashboardPage() {
 
   const alertCards = [
     {
-      label: 'Orcamentos urgentes',
+      label: 'Orçamentos urgentes',
       value: lists.orcUrgentes.length,
       hint: 'Requerem priorizacao imediata',
       tone: 'red',
@@ -309,9 +309,9 @@ export default function DashboardPage() {
       icon: AlertTriangle,
     },
     {
-      label: 'Sem revisao',
+      label: 'Sem revisão',
       value: lists.orcSemRevisao.length,
-      hint: 'Pendentes de validacao comercial',
+      hint: 'Pendentes de validação comercial',
       tone: 'yellow',
       onClick: () => router.push('/orcamentos?status_orcamento=orcamento'),
       icon: CircleDollarSign,
@@ -520,10 +520,10 @@ export default function DashboardPage() {
 
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
           <ChartCard
-            title="Servicos mais pedidos"
+            title="Serviços mais pedidos"
             icon={Filter}
             tooltip={CHART_TOOLTIPS.servicos_pedidos}
-            description="Servicos com maior volume de demanda no periodo"
+            description="Serviços com maior volume de demanda no período"
             empty={charts.servicosMaisPedidos.length === 0}
             loading={loading}
           >

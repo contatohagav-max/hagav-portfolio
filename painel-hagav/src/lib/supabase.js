@@ -416,12 +416,12 @@ function buildLeadResumoOrcamento({
   const prazoNormalizado = normalizePrazoLabel(prazo, '') || '-';
   const parts = [
     fluxo || '-',
-    `Servico: ${servicoResumo || '-'}`,
+    `Serviço: ${servicoResumo || '-'}`,
     `Quantidade: ${quantidadeResumo || '-'}`,
     `Material gravado: ${materialResumo || '-'}`,
     `Prazo: ${prazoNormalizado}`,
   ];
-  if (referencia) parts.push(`Referencia: ${referencia}`);
+  if (referencia) parts.push(`Referência: ${referencia}`);
   return parts.join(' | ');
 }
 
@@ -574,7 +574,7 @@ export async function createLead(fields = {}) {
     ? temperaturaField
     : temperatureByScore(scoreLead);
 
-  const resumoComercial = `${flow} | Servico: ${servicoResumo || '-'} | Qtd: ${quantidadeResumo || '-'} | Material: ${materialResumo || '-'} | Prazo: ${normalizePrazoLabel(prazo, '') || '-'} | Score: ${scoreLead}`;
+  const resumoComercial = `${flow} | Serviço: ${servicoResumo || '-'} | Qtd: ${quantidadeResumo || '-'} | Material: ${materialResumo || '-'} | Prazo: ${normalizePrazoLabel(prazo, '') || '-'} | Score: ${scoreLead}`;
   const valorEstimadoInput = Number(fields.valor_estimado);
   const valorEstimado = Number.isFinite(valorEstimadoInput) && valorEstimadoInput > 0
     ? valorEstimadoInput
@@ -967,7 +967,7 @@ async function generatePdfDocument(endpoint, id, { adminKey, payload } = {}) {
       throw new Error(withMeta('PDF gerado, mas falhou ao salvar link_pdf no deal.'));
     }
     if (reason === 'template_not_found') {
-      throw new Error(withMeta('Template oficial de PDF nao encontrado no deploy. Verifique publicacao em /templates.'));
+      throw new Error(withMeta('Template oficial de PDF não encontrado no deploy. Verifique publicação em /templates.'));
     }
     if (reason === 'template_placeholders_missing') {
       throw new Error(withMeta('Template de PDF com placeholders sem valor. Revise mapeamento de campos antes de gerar para uso comercial.'));

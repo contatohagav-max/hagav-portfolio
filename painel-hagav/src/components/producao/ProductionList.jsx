@@ -73,7 +73,7 @@ function PathAction({ label, value, icon: Icon = FolderOpen }) {
     return (
       <div className="rounded-lg border border-hagav-border/70 bg-hagav-muted/10 px-3 py-2">
         <p className="text-[10px] uppercase tracking-wider text-hagav-gray">{label}</p>
-        <p className="text-xs text-hagav-muted mt-1">Nao informado</p>
+        <p className="text-xs text-hagav-muted mt-1">Não informado</p>
       </div>
     );
   }
@@ -155,7 +155,7 @@ function DetailPanel({ job, onEdit }) {
 
       <div className="grid grid-cols-2 gap-2 text-xs">
         <div className="rounded-lg bg-hagav-muted/10 border border-hagav-border/70 px-3 py-2">
-          <p className="text-hagav-gray flex items-center gap-1.5"><UserRound size={11} /> Responsavel</p>
+          <p className="text-hagav-gray flex items-center gap-1.5"><UserRound size={11} /> Responsável</p>
           <p className="text-hagav-light mt-1">{job.responsavel || 'Sem responsavel'}</p>
         </div>
         <div className="rounded-lg bg-hagav-muted/10 border border-hagav-border/70 px-3 py-2">
@@ -165,7 +165,7 @@ function DetailPanel({ job, onEdit }) {
       </div>
 
       <div className="rounded-lg border border-hagav-border bg-hagav-muted/10 px-3 py-2">
-        <p className="text-[10px] uppercase tracking-wider text-hagav-gray">Proxima acao</p>
+        <p className="text-[10px] uppercase tracking-wider text-hagav-gray">Próxima ação</p>
         <p className="text-sm text-hagav-light mt-1">{job.proxima_acao || 'Sem proxima acao definida.'}</p>
       </div>
 
@@ -201,7 +201,7 @@ function DetailPanel({ job, onEdit }) {
           )}
           {job.observacoes && (
             <div className="rounded-lg border border-hagav-border bg-hagav-muted/10 px-3 py-2">
-              <p className="text-[10px] uppercase tracking-wider text-hagav-gray">Observacoes</p>
+              <p className="text-[10px] uppercase tracking-wider text-hagav-gray">Observações</p>
               <p className="text-xs text-hagav-light mt-1 whitespace-pre-wrap">{job.observacoes}</p>
             </div>
           )}
@@ -231,9 +231,9 @@ export default function ProductionList({
                 <th className="px-4 py-3 w-[190px]">Etapa</th>
                 <th className="px-4 py-3">Prioridade</th>
                 <th className="px-4 py-3">Materiais</th>
-                <th className="px-4 py-3 w-[230px]">Proxima acao</th>
+                <th className="px-4 py-3 w-[230px]">Próxima ação</th>
                 <th className="px-4 py-3">Prazo</th>
-                <th className="px-4 py-3">Responsavel</th>
+                <th className="px-4 py-3">Responsável</th>
                 <th className="px-4 py-3">Mapa</th>
               </tr>
             </thead>

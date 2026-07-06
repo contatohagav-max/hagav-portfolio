@@ -37,7 +37,7 @@ export default function ContractPreview({ preview }) {
         <div className="mb-4 flex items-start justify-between gap-3">
           <div>
             <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.32em] text-[#f4dd9c]">
-              HAGAV Studio de Edicao
+              HAGAV Studio de Edição
             </p>
             <h3 className="text-[24px] font-black tracking-[-0.02em]">{preview.title}</h3>
             <p className="mt-2 max-w-md text-sm leading-6 text-[#dbd7cb]">{preview.subtitle}</p>
@@ -75,10 +75,10 @@ export default function ContractPreview({ preview }) {
             <div className="rounded-2xl border border-[#e7dfcf] bg-white p-3">
               <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#8a826f]">Contratada</p>
               <div className="space-y-2">
-                <PreviewField label="Empresa" value="HAGAV - Studio de Edicao" />
+                <PreviewField label="Empresa" value="HAGAV - Studio de Edição" />
                 <PreviewField label="CNPJ" value="34.271.613/0001-85" />
                 <PreviewField label="E-mail" value="contato.hagav@gmail.com" />
-                <PreviewField label="Responsavel" value={preview.responsible} />
+                <PreviewField label="Responsável" value={preview.responsible} />
               </div>
             </div>
           </div>
@@ -165,7 +165,7 @@ export default function ContractPreview({ preview }) {
             </div>
             <div className="rounded-2xl border border-[#d6c18a] bg-[#fff8e6] px-4 py-3">
               <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#8a6f2b]">Contratada</p>
-              <p className="text-sm font-semibold text-[#1b1508]">HAGAV - Studio de Edicao</p>
+              <p className="text-sm font-semibold text-[#1b1508]">HAGAV - Studio de Edição</p>
             </div>
           </div>
         </PreviewSection>

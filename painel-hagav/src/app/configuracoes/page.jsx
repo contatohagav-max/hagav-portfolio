@@ -218,9 +218,9 @@ export default function ConfiguracoesPage() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <NumberField label="Urgencia alta" value={scoreWeights.urgenciaAlta} onChange={(v) => setScoreWeights((p) => ({ ...p, urgenciaAlta: v }))} />
           <NumberField label="Fluxo recorrente" value={scoreWeights.fluxoRecorrente} onChange={(v) => setScoreWeights((p) => ({ ...p, fluxoRecorrente: v }))} />
-          <NumberField label="Referencia visual" value={scoreWeights.referenciaVisual} onChange={(v) => setScoreWeights((p) => ({ ...p, referenciaVisual: v }))} />
+          <NumberField label="Referência visual" value={scoreWeights.referenciaVisual} onChange={(v) => setScoreWeights((p) => ({ ...p, referenciaVisual: v }))} />
           <NumberField label="Material gravado" value={scoreWeights.materialGravado} onChange={(v) => setScoreWeights((p) => ({ ...p, materialGravado: v }))} />
-          <NumberField label="Servico alto valor" value={scoreWeights.servicoAltoValor} onChange={(v) => setScoreWeights((p) => ({ ...p, servicoAltoValor: v }))} />
+          <NumberField label="Serviço alto valor" value={scoreWeights.servicoAltoValor} onChange={(v) => setScoreWeights((p) => ({ ...p, servicoAltoValor: v }))} />
           <NumberField label="Sem prazo definido" value={scoreWeights.semPressa} onChange={(v) => setScoreWeights((p) => ({ ...p, semPressa: v }))} step={1} min={-100} max={100} />
         </div>
       </Section>
@@ -233,11 +233,11 @@ export default function ConfiguracoesPage() {
         <div className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <SelectField
-              label="Preco base"
+              label="Preço base"
               value={String(pricing?.basePriceMode || 'reference')}
               onChange={(value) => setPricingPath(['basePriceMode'], value)}
               options={[
-                { value: 'reference', label: 'Referencia de mercado' },
+                { value: 'reference', label: 'Referência de mercado' },
                 { value: 'floor', label: 'Piso minimo' },
               ]}
             />
@@ -312,7 +312,7 @@ export default function ConfiguracoesPage() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-            <NumberField label="Sem referencia %" value={Number(pricing?.ajustes?.semReferencia || 0)} onChange={(v) => setPricingPath(['ajustes', 'semReferencia'], v)} min={0} max={100} />
+            <NumberField label="Sem referência %" value={Number(pricing?.ajustes?.semReferencia || 0)} onChange={(v) => setPricingPath(['ajustes', 'semReferencia'], v)} min={0} max={100} />
             <NumberField label="Multicamera %" value={Number(pricing?.ajustes?.multicamera || 0)} onChange={(v) => setPricingPath(['ajustes', 'multicamera'], v)} min={0} max={100} />
             <NumberField label="Sugere pacote acima de" value={Number(pricing?.pacotes?.sugerirAcimaQtd || 0)} onChange={(v) => setPricingPath(['pacotes', 'sugerirAcimaQtd'], v)} min={0} />
             <NumberField label="Revisao capacidade acima de" value={Number(pricing?.pacotes?.revisaoCapacidadeAcimaQtd || 0)} onChange={(v) => setPricingPath(['pacotes', 'revisaoCapacidadeAcimaQtd'], v)} min={0} />

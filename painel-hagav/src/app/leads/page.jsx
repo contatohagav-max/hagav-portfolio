@@ -18,7 +18,7 @@ const UPDATE_TOOLTIP = {
   title: 'Atualizar',
   whatIs: 'Recarrega a lista de leads com os filtros atuais.',
   purpose: 'Evitar decisao com dados antigos.',
-  observe: 'Use apos novos contatos ou alteracoes de status.',
+  observe: 'Use após novos contatos ou alterações de status.',
 };
 
 function normalizeLeadStatus(value) {
@@ -124,7 +124,7 @@ export default function LeadsPage() {
 
     const normalized = normalizeLeadStatus(updated?.status);
     if (normalized === 'orcamento') {
-      setFeedback('Lead movido para Orcamentos.');
+      setFeedback('Lead movido para Orçamentos.');
     } else if (normalized === 'descartado') {
       setFeedback('Lead descartado com sucesso.');
     } else {
@@ -248,16 +248,16 @@ export default function LeadsPage() {
         </select>
 
         <select value={urgencia} onChange={(e) => setUrgencia(e.target.value)} className="hselect">
-          <option value="">Urgencia</option>
+          <option value="">Urgência</option>
           <option value="alta">Alta</option>
-          <option value="media">Media</option>
+          <option value="media">Média</option>
           <option value="baixa">Baixa</option>
         </select>
 
         <select value={prioridade} onChange={(e) => setPrioridade(e.target.value)} className="hselect">
           <option value="">Prioridade</option>
           <option value="alta">Alta</option>
-          <option value="media">Media</option>
+          <option value="media">Média</option>
           <option value="baixa">Baixa</option>
         </select>
 

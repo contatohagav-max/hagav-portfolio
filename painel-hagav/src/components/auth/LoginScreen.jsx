@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useState } from 'react';
 import { Eye, EyeOff, Loader2, LogIn, ShieldCheck } from 'lucide-react';
@@ -71,7 +71,7 @@ export default function LoginScreen() {
           <div className="absolute top-0 left-0 right-0 h-px bg-gold-gradient" />
 
           <h2 className="text-sm font-semibold text-hagav-white mb-1">Acesso restrito</h2>
-          <p className="text-xs text-hagav-gray mb-5">Login real com sessao protegida para ambiente de producao.</p>
+          <p className="text-xs text-hagav-gray mb-5">Login real com sessão protegida para ambiente de produção.</p>
 
           <form onSubmit={handleSubmit} className="space-y-3">
             <div>
@@ -121,7 +121,7 @@ export default function LoginScreen() {
         </div>
 
         <p className="text-center text-[10px] text-hagav-gray/40 mt-6 tracking-wider uppercase">
-          HAGAV Studio Â· Acesso interno
+          HAGAV Studio - Acesso interno
         </p>
       </div>
     </div>

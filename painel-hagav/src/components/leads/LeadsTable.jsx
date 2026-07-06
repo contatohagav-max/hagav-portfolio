@@ -29,11 +29,11 @@ export default function LeadsTable({ leads, onSelect }) {
         <thead>
           <tr>
             <th>Lead</th>
-            <th>Servico</th>
+            <th>Serviço</th>
             <th>Origem</th>
             <th>Score</th>
-            <th>Urgencia</th>
-            <th>Proxima acao</th>
+            <th>Urgência</th>
+            <th>Próxima ação</th>
             <th>Status</th>
             <th>Contato</th>
           </tr>
@@ -68,7 +68,7 @@ export default function LeadsTable({ leads, onSelect }) {
               </td>
               <td><UrgenciaBadge urgencia={lead.urgencia} /></td>
               <td className="text-xs text-hagav-light max-w-[180px]" title={lead.proxima_acao || ''}>
-                {truncate(lead.proxima_acao || 'Sem acao definida', 48)}
+                {truncate(lead.proxima_acao || 'Sem ação definida', 48)}
               </td>
               <td><LeadStatusBadge status={lead.status} /></td>
               <td>

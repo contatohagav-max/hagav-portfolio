@@ -1,4 +1,4 @@
-﻿import { authenticateRequest, getClientIp } from '../_utils/admin-auth.js';
+import { authenticateRequest, getClientIp } from '../_utils/admin-auth.js';
 import { applyRateLimit } from '../_utils/rate-limit.js';
 import { normalizePrazoLabel } from '../../shared/pricing-engine.js';
 
@@ -355,7 +355,7 @@ function createPdfFromLines(lines) {
   const safeLines = Array.isArray(lines) ? lines : [];
   if (safeLines.length === 0) {
     safeLines.push("HAGAV Studio");
-    safeLines.push("Documento sem conteudo para gerar PDF.");
+    safeLines.push("Documento sem conteúdo para gerar PDF.");
   }
   let y = 800;
   const textCommands = [];
@@ -485,14 +485,14 @@ function bytesToBase64(bytesLike) {
   return btoa(binary);
 }
 
-function getPdfRenderConfig(env) {
+function getPdfRenderConfig(env, options = {}) {
   const forcedEngine = firstEnvValue(env, ["PDF_ENGINE", "PDF_RENDER_ENGINE", "PDF_PROVIDER"]).toLowerCase();
   const pdfshiftKey = firstEnvValue(env, ["PDFSHIFT_API_KEY", "PDFSHIFT_KEY"]);
   const browserlessToken = firstEnvValue(env, ["BROWSERLESS_TOKEN", "BROWSERLESS_API_KEY", "PDF_BROWSERLESS_TOKEN"]);
   const allowNativeFallbackRaw = firstEnvValue(env, ["PDF_NATIVE_FALLBACK", "PDF_ALLOW_NATIVE_FALLBACK"]);
-  const allowNativeFallback = allowNativeFallbackRaw
+  const allowNativeFallback = Boolean(options.allowNativeFallback) && (allowNativeFallbackRaw
     ? !/^(0|false|no)$/i.test(allowNativeFallbackRaw)
-    : true;
+    : false);
 
   const autoEngine = browserlessToken ? "browserless" : (pdfshiftKey ? "pdfshift" : "native_text");
   const normalizedForced = forcedEngine && forcedEngine !== "auto" ? forcedEngine : "";
@@ -706,10 +706,18 @@ async function renderPdfViaBrowserless(html, config) {
   };
 }
 
-async function renderHtmlToPdf(html, env) {
-  const config = getPdfRenderConfig(env);
+async function renderHtmlToPdf(html, env, options = {}) {
+  const config = getPdfRenderConfig(env, options);
   if (config.engine === "native_text") {
-    return renderPdfViaNativeText(html);
+    if (config.allowNativeFallback) return renderPdfViaNativeText(html);
+    return {
+      ok: false,
+      reason: "pdf_engine_not_configured",
+      status: 503,
+      detail: "Engine HTML para PDF ausente. Configure PDFSHIFT_API_KEY ou BROWSERLESS_TOKEN para gerar o PDF com acentos e layout completo.",
+      renderMode: "remote_html_to_pdf",
+      pdfEngine: "native_text",
+    };
   }
 
   let primaryResult = null;
@@ -722,7 +730,7 @@ async function renderHtmlToPdf(html, env) {
       ok: false,
       reason: "pdf_engine_not_supported",
       status: 400,
-      detail: `Engine nao suportada: ${config.engine}`,
+      detail: `Engine não suportada: ${config.engine}`,
       renderMode: config.renderMode,
       pdfEngine: config.engine,
     };
@@ -930,25 +938,25 @@ function buildTemplateValues(row, env, runtime = {}) {
     contrato?.empresa_cliente,
     detalhes?.empresa_cliente,
     detalhes?.empresa,
-    "Nao informado"
+    "Não informado"
   );
   const cpfCnpjCliente = firstNonEmptyValue(
     contrato?.cpf_cnpj_cliente,
     detalhes?.cpf_cnpj_cliente,
     detalhes?.cpf_cnpj,
-    "Nao informado"
+    "Não informado"
   );
   const emailCliente = firstNonEmptyValue(
     contrato?.email_cliente,
     detalhes?.email_cliente,
     detalhes?.email,
-    "Nao informado"
+    "Não informado"
   );
   const enderecoCliente = firstNonEmptyValue(
     contrato?.endereco_cliente,
     detalhes?.endereco_cliente,
     detalhes?.endereco,
-    "Nao informado"
+    "Não informado"
   );
   const whatsappCliente = formatWhatsapp(
     firstNonEmptyValue(row?.whatsapp, contrato?.whatsapp_cliente, detalhes?.whatsapp, "")
@@ -959,7 +967,7 @@ function buildTemplateValues(row, env, runtime = {}) {
     row?.servico,
     row?.pacote_sugerido,
     detalhes?.servico,
-    "Servico audiovisual"
+    "Serviço audiovisual"
   );
   const quantidade = firstNonEmptyValue(
     contrato?.quantidade,
@@ -1376,7 +1384,7 @@ export async function onRequestPost(context) {
   }
 
   const auth = await authenticateRequest(request, env, {
-    requiredRoles: ['operacao', 'comercial', 'admin'],
+    requiredRoles: ['operação', 'comercial', 'admin'],
     allowBearer: true,
     allowCookie: true,
   });
@@ -1469,7 +1477,7 @@ export async function onRequestPost(context) {
     });
   }
 
-  const pdfRender = await renderHtmlToPdf(renderedHtml, env);
+  const pdfRender = await renderHtmlToPdf(renderedHtml, env, { allowNativeFallback: testMode });
   if (!pdfRender.ok) {
     return fail(requestId, "pdf_render", pdfRender.reason || "pdf_render_failed", pdfRender.status || 502, {
       detail: previewRawResponse(String(pdfRender.detail || "html_to_pdf_render_failed"), 320),

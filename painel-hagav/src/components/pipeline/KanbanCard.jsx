@@ -9,7 +9,7 @@ const WHATSAPP_TOOLTIP = {
   title: 'WhatsApp',
   whatIs: 'Abre conversa direta com o lead deste card.',
   purpose: 'Acelerar resposta durante o trabalho no pipeline.',
-  observe: 'Registre a proxima acao apos o contato.',
+  observe: 'Registre a próxima ação após o contato.',
 };
 
 export default function KanbanCard({ lead, onSelect }) {
@@ -56,7 +56,7 @@ export default function KanbanCard({ lead, onSelect }) {
           </div>
 
           <p className="text-[11px] text-hagav-gray mt-2">{fmtBRL(lead.valor_estimado)}</p>
-          <p className="text-[11px] text-hagav-gray truncate">{truncate(lead.proxima_acao || 'Sem acao definida', 34)}</p>
+          <p className="text-[11px] text-hagav-gray truncate">{truncate(lead.proxima_acao || 'Sem ação definida', 34)}</p>
 
           <div className="flex items-center justify-between mt-2.5">
             <span className="text-[10px] text-hagav-gray">{fmtRelative(lead.created_at)}</span>

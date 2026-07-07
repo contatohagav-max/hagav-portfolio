@@ -19,7 +19,7 @@ const WHATSAPP_TOOLTIP = {
   title: 'WhatsApp',
   whatIs: 'Abre conversa direta com o contato no WhatsApp.',
   purpose: 'Agilizar follow-up e acelerar avancos no funil.',
-  observe: 'Confirme contexto e proxima acao antes de enviar.',
+  observe: 'Confirme contexto e próxima ação antes de enviar.',
 };
 
 function toDateTimeLocal(iso) {
@@ -101,7 +101,7 @@ export default function LeadDrawer({ lead, onClose, onUpdated }) {
       onUpdated?.(updated);
       onClose();
     } catch (err) {
-      setError(err.message ?? 'Erro ao gerar orcamento.');
+      setError(err.message ?? 'Erro ao gerar orçamento.');
     } finally {
       setSaving(false);
     }
@@ -285,7 +285,7 @@ export default function LeadDrawer({ lead, onClose, onUpdated }) {
           ) : (
             <span className="btn-ghost flex-1 justify-center cursor-not-allowed opacity-50">
               <MessageCircle size={15} />
-              WhatsApp indisponivel
+              WhatsApp indisponível
             </span>
           )}
           <button type="button" onClick={handleDescartar} disabled={saving} className="btn-ghost">

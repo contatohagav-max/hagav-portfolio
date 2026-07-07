@@ -1233,7 +1233,7 @@ function buildTemplateValues(row, env, options = {}) {
   const quantitySummary = buildQuantitySummary(serviceItems);
   const qtyTotal = Math.max(1, Number(quantitySummary?.total || 1));
   const primaryService = serviceItems.length > 1
-    ? `Multiplos servicos (${serviceItems.length})`
+    ? `Múltiplos serviços (${serviceItems.length})`
     : (serviceItems[0]?.servico || "Conteúdo audiovisual");
   const quantidade = serviceItems.length > 1
     ? `${quantitySummary.quantityLabel} (${quantitySummary.breakdown})`
@@ -1494,7 +1494,7 @@ function buildTemplateValues(row, env, options = {}) {
     : "Sem economia por escala";
   const descontoAplicadoTexto = discountPercent > 0 || economiaTotalNum > 0
     ? `Faixa aplicada: ${discountPercent > 0 ? `${Math.round(discountPercent)}%` : "ajuste protegido"} com economia de ${formatMoney(economiaTotalNum)}.`
-    : "Nesta proposta, nao foi aplicado desconto progressivo por volume.";
+    : "Nesta proposta, não foi aplicado desconto progressivo por volume.";
 
   const revisoesTexto = normalizeRevisoesText(revisoesInclusas);
   const whatsappHagav = getOfficialWhatsapp(env, detalhes);

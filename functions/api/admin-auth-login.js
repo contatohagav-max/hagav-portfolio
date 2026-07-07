@@ -19,9 +19,9 @@ function normalizeLoginError(reason) {
     return 'Seu acesso ao painel esta desativado.';
   }
   if (raw.includes('admin_role_lookup_failed')) {
-    return 'Seu usuario ainda nao foi liberado para o painel.';
+    return 'Seu usuário ainda não foi liberado para o painel.';
   }
-  return 'Nao foi possivel autenticar agora.';
+  return 'Não foi possível autenticar agora.';
 }
 
 export async function onRequestPost(context) {
@@ -53,7 +53,7 @@ export async function onRequestPost(context) {
   try {
     body = await request.json();
   } catch {
-    return json({ ok: false, error: 'invalid_json', message: 'Corpo invalido.' }, 400, rateLimitHeaders(rateState));
+    return json({ ok: false, error: 'invalid_json', message: 'Corpo inválido.' }, 400, rateLimitHeaders(rateState));
   }
 
   const email = stripDangerousText(String(body?.email || ''), 180).toLowerCase();

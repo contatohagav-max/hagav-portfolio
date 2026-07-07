@@ -68,7 +68,7 @@ export default function OrcamentosPage() {
       setOrcamentos(rows);
     } catch (err) {
       console.error('[Orcamentos]', err);
-      setLoadError('Nao foi possivel carregar os orcamentos. Tente novamente.');
+      setLoadError('Não foi possível carregar os orçamentos. Tente novamente.');
     } finally {
       setLoading(false);
     }
@@ -87,7 +87,7 @@ export default function OrcamentosPage() {
       const keepOpen = !(abertosOnly && !statusOrc && !isActiveOrcamento(updated));
       setSelected(keepOpen ? updated : null);
     }
-    setFeedback('Orcamento salvo com sucesso.');
+    setFeedback('Orçamento salvo com sucesso.');
     setTimeout(() => setFeedback(''), 2500);
     load();
   }
@@ -140,7 +140,7 @@ export default function OrcamentosPage() {
             <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-hagav-gray pointer-events-none" />
             <input
               type="text"
-              placeholder="Buscar nome, WhatsApp, servico, resumo..."
+              placeholder="Buscar nome, WhatsApp, serviço, resumo..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="hinput w-full pl-8 text-sm"
@@ -184,7 +184,7 @@ export default function OrcamentosPage() {
             onClick={() => setAbertosOnly((prev) => !prev)}
             className={`btn-ghost btn-sm ${abertosOnly ? 'border-hagav-gold/40 text-hagav-gold' : ''}`}
           >
-            Orcamentos ativos
+            Orçamentos ativos
           </button>
         </div>
       </div>

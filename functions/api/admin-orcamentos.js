@@ -118,7 +118,7 @@ async function fetchSupabase(config, path, options = {}) {
 
 function formatBoolLike(value) {
   if (value === true) return 'Sim';
-  if (value === false) return 'Nao';
+  if (value === false) return 'Não';
   return String(value || '');
 }
 
@@ -166,7 +166,7 @@ async function ensureAccess(request, env, requiredRoles) {
       response: json({
         ok: false,
         error: 'rate_limited',
-        message: 'Muitas operacoes em pouco tempo. Aguarde alguns segundos.',
+        message: 'Muitas operações em pouco tempo. Aguarde alguns segundos.',
       }, 429),
     };
   }

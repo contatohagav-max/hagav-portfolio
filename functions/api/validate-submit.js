@@ -151,20 +151,20 @@ function validateWhatsapp(raw) {
   const digits = String(raw || "").replace(/\D/g, "");
 
   if (digits.length < 10 || digits.length > 11) {
-    return { ok: false, error: "WhatsApp invalido" };
+    return { ok: false, error: "WhatsApp inválido" };
   }
 
   const ddd = digits.slice(0, 2);
   if (!DDD_VALIDOS.has(ddd)) {
-    return { ok: false, error: "DDD invalido" };
+    return { ok: false, error: "DDD inválido" };
   }
 
   if (/^(\d)\1+$/.test(digits) || digits === "12345678910" || isSequential(digits)) {
-    return { ok: false, error: "WhatsApp invalido" };
+    return { ok: false, error: "WhatsApp inválido" };
   }
 
   if (digits.length === 11 && digits.charAt(2) !== "9") {
-    return { ok: false, error: "Celular invalido" };
+    return { ok: false, error: "Celular inválido" };
   }
 
   return { ok: true, value: digits };
@@ -335,7 +335,7 @@ function validateTipoPayload(body) {
   const fail = (stage, error) => ({ ok: false, error, stage });
   const tipo = normalizeTipoValue(body?.tipo, body?.answers || {});
   if (tipo !== "unica" && tipo !== "recorrente") {
-    return fail("tipo", "Tipo de formulario invalido");
+    return fail("tipo", "Tipo de formulário inválido");
   }
 
   const answers = body?.answers;
@@ -344,56 +344,56 @@ function validateTipoPayload(body) {
   }
 
   const nome = stripDangerousText(answers.nome, LIMITS.nome);
-  if (!nome) return fail("nome", "Nome invalido");
+  if (!nome) return fail("nome", "Nome inválido");
 
   const whatsapp = validateWhatsapp(answers.whatsapp);
-  if (!whatsapp.ok) return fail("whatsapp", whatsapp.error || "WhatsApp invalido");
+  if (!whatsapp.ok) return fail("whatsapp", whatsapp.error || "WhatsApp inválido");
 
   const instagram = stripDangerousText(answers.instagram || "", LIMITS.instagram);
   const empresa = stripDangerousText(answers.empresa || "", LIMITS.empresa);
   const extras = stripDangerousText(answers.extras || "", LIMITS.extras);
 
   if (hasDangerousScheme(instagram) || hasDangerousScheme(extras) || hasDangerousScheme(empresa)) {
-    return fail("content", "Conteudo invalido");
+    return fail("content", "Conteúdo inválido");
   }
 
   if (tipo === "unica") {
     const referencia = stripDangerousText(answers.unica_referencia || "", LIMITS.referencia);
-    if (hasDangerousScheme(referencia)) return fail("du.referencia", "Referencia invalida");
+    if (hasDangerousScheme(referencia)) return fail("du.referencia", "Referência inválida");
 
     const servicos = answers.unica_servicos;
     if (!servicos || !Array.isArray(servicos.selected) || servicos.selected.length === 0) {
-      return fail("du.servicos", "Servicos invalidos");
+      return fail("du.servicos", "Serviços inválidos");
     }
 
     if (servicos.selected.includes("Outro")) {
       const outro = stripDangerousText(servicos.outro || "", LIMITS.outro);
-      if (!outro) return fail("du.outro", "Outro invalido");
+      if (!outro) return fail("du.outro", "Outro inválido");
     }
 
     const quantidades = answers.unica_quantidades;
     if (!quantidades || typeof quantidades !== "object") {
-      return fail("du.quantidades", "Quantidades invalidas");
+      return fail("du.quantidades", "Quantidades inválidas");
     }
 
     for (const service of Object.keys(quantidades)) {
       const safeService = stripDangerousText(service, LIMITS.service);
-      if (!safeService) return fail("du.quantidades.servico", "Servico invalido");
+      if (!safeService) return fail("du.quantidades.servico", "Serviço inválido");
       const qty = Number(quantidades[service]);
       if (!Number.isInteger(qty) || qty < 1 || qty > 10000) {
-        return fail("du.quantidades.valor", "Quantidade invalida");
+        return fail("du.quantidades.valor", "Quantidade inválida");
       }
     }
 
     if (!answers.unica_prazo || !isValidPrazoOption(answers.unica_prazo)) {
-      return fail("du.prazo", "Prazo invalido");
+      return fail("du.prazo", "Prazo inválido");
     }
 
     const tempos = answers.unica_tempo_bruto || {};
     if (tempos && typeof tempos === "object") {
       for (const key of Object.keys(tempos)) {
         const val = stripDangerousText(String(tempos[key] || ""), LIMITS.duration);
-        if (!val) return fail("du.tempo_bruto", "Tempo bruto invalido");
+        if (!val) return fail("du.tempo_bruto", "Tempo bruto inválido");
       }
     }
   }
@@ -402,10 +402,10 @@ function validateTipoPayload(body) {
     const newFlowOps = answers?.rec_operacoes;
     if (newFlowOps && typeof newFlowOps === "object") {
       const selected = Array.isArray(newFlowOps.selected) ? newFlowOps.selected : [];
-      if (selected.length === 0) return fail("dr.operacoes", "Campo recorrente invalido");
+      if (selected.length === 0) return fail("dr.operacoes", "Campo recorrente inválido");
       const outroValue = stripDangerousText(newFlowOps.outro || "", LIMITS.outro);
       if (selected.includes("Outro")) {
-        if (!outroValue) return fail("dr.outro", "Campo recorrente invalido");
+        if (!outroValue) return fail("dr.outro", "Campo recorrente inválido");
       }
       const normalizedOps = selected.map((operation) => {
         const safeOp = stripDangerousText(String(operation || ""), LIMITS.service);
@@ -414,12 +414,12 @@ function validateTipoPayload(body) {
       }).filter(Boolean);
       const quantidades = answers?.rec_quantidades;
       if (!quantidades || typeof quantidades !== "object") {
-        return fail("dr.quantidades", "Campo recorrente invalido");
+        return fail("dr.quantidades", "Campo recorrente inválido");
       }
       for (const operation of normalizedOps) {
         const qty = Number(getMapValueByKey(quantidades, operation));
         if (!Number.isInteger(qty) || qty < 1 || qty > 10000) {
-          return fail("dr.quantidades.valor", "Campo recorrente invalido");
+          return fail("dr.quantidades.valor", "Campo recorrente inválido");
         }
       }
       const gravado = normalizeServiceMap(answers?.rec_gravado_por_tipo, LIMITS.service, 16);
@@ -432,39 +432,39 @@ function validateTipoPayload(body) {
         LIMITS.duration
       );
       if (Object.keys(gravado).length === 0 && !legacyGravado) {
-        return fail("dr.gravado", "Campo recorrente invalido");
+        return fail("dr.gravado", "Campo recorrente inválido");
       }
       for (const operation of normalizedOps) {
         const stateValue = normalizeYesNoValue(getMapValueByKey(gravado, operation) || legacyGravado);
         if (!stateValue) {
-          return fail("dr.gravado.valor", "Campo recorrente invalido");
+          return fail("dr.gravado.valor", "Campo recorrente inválido");
         }
         if (stateValue === "Sim") {
           const tempo = stripDangerousText(
             String(getMapValueByKey(tempoBruto, operation) || legacyTempo || ""),
             LIMITS.duration
           );
-          if (!tempo) return fail("dr.tempo_bruto", "Campo recorrente invalido");
+          if (!tempo) return fail("dr.tempo_bruto", "Campo recorrente inválido");
         }
       }
       const prazo = normalizePrazoLabel(stripDangerousText(answers.rec_inicio || "", 120), "");
       if (!prazo || hasDangerousScheme(prazo) || !isValidPrazoOption(prazo)) {
-        return fail("dr.prazo", "Campo recorrente invalido");
+        return fail("dr.prazo", "Campo recorrente inválido");
       }
     } else {
       const required = ["rec_tipo_operacao", "rec_volume", "rec_objetivo", "rec_gravado", "rec_inicio"];
       for (const field of required) {
         const v = stripDangerousText(answers[field] || "", 120);
-        if (!v) return fail(`dr.legacy.${field}`, "Campo recorrente invalido");
-        if (hasDangerousScheme(v)) return fail(`dr.legacy.${field}.scheme`, "Campo recorrente invalido");
+        if (!v) return fail(`dr.legacy.${field}`, "Campo recorrente inválido");
+        if (hasDangerousScheme(v)) return fail(`dr.legacy.${field}.scheme`, "Campo recorrente inválido");
       }
       if (!isValidPrazoOption(answers.rec_inicio)) {
-        return fail("dr.legacy.rec_inicio", "Campo recorrente invalido");
+        return fail("dr.legacy.rec_inicio", "Campo recorrente inválido");
       }
       const recTempoBruto = stripDangerousText(answers.rec_tempo_bruto || "", LIMITS.duration);
       const recReferencia = stripDangerousText(answers.rec_referencia || "", LIMITS.referencia);
       if (hasDangerousScheme(recTempoBruto) || hasDangerousScheme(recReferencia)) {
-        return fail("dr.legacy.content", "Campo recorrente invalido");
+        return fail("dr.legacy.content", "Campo recorrente inválido");
       }
     }
   }
@@ -757,7 +757,7 @@ function formatQuantidadeResumo(flow, quantidadeRaw) {
   if (quantidade.includes("|")) return quantidade;
   const qtdNum = parsePositiveNumber(quantidade);
   if (!qtdNum) return quantidade;
-  return flow === "DR" ? `${qtdNum} por mes` : `${qtdNum} videos`;
+  return flow === "DR" ? `${qtdNum} por mês` : `${qtdNum} vídeos`;
 }
 
 function summarizeMaterial(raw) {
@@ -793,13 +793,13 @@ function buildResumoOrcamento(row) {
   const observacoes = stripDangerousText(String(row?.Observacoes || ""), 300);
   const parts = [
     fluxo,
-    `Servico: ${servico}`,
+    `Serviço: ${servico}`,
     `Quantidade: ${quantidade}`,
     `Material gravado: ${materialGravado}`,
     `Tempo bruto: ${tempoBruto}`,
     `Prazo: ${prazo}`
   ];
-  if (referencia) parts.push(`Referencia: ${referencia}`);
+  if (referencia) parts.push(`Referência: ${referencia}`);
   if (observacoes) parts.push(`Observacoes: ${observacoes}`);
   return stripDangerousText(parts.join(" | "), 2000);
 }
@@ -892,14 +892,14 @@ function estimateMargemFromPricing(row, pricing) {
 function buildResumoComercial(row, pricing, score, urgencia, prioridade) {
   const parts = [
     row?.Fluxo || "",
-    `Servico: ${normalizeServicoCurto(row?.ServicoOuOperacao || "") || "-"}`,
+    `Serviço: ${normalizeServicoCurto(row?.ServicoOuOperacao || "") || "-"}`,
     `Quantidade: ${row?.Quantidade || "-"}`,
     `Prazo: ${normalizePrazoLabel(row?.Prazo, "-") || "-"}`,
-    `Urgencia: ${urgencia}`,
+    `Urgência: ${urgencia}`,
     `Prioridade: ${prioridade}`,
     `Score: ${score}`,
     `Valor sugerido: ${pricing?.valorSugerido || pricing?.precoFinal || pricing?.precoBase || 0}`,
-    `Revisao manual: ${pricing?.revisaoManual ? "sim" : "nao"}`
+    `Revisão manual: ${pricing?.revisaoManual ? "sim" : "não"}`
   ];
   return stripDangerousText(parts.join(" | "), 1800);
 }
@@ -1282,7 +1282,7 @@ function getUrgencyMultiplier(flow, prazoKey, serviceKey, pricingRules) {
       blocked = true;
       forcedManual = true;
       multiplier = 1;
-      reasons.push("VSL nao aceita prazo urgente.");
+      reasons.push("VSL não aceita prazo urgente.");
     } else if (prazoKey === "Em até 7 dias") {
       multiplier = Math.max(multiplier, readUrgencyMultiplier(vslTable, "Em até 7 dias") || 1.4);
       reasons.push("Prazo em até 7 dias para VSL aplica adicional de 40%.");
@@ -1660,7 +1660,7 @@ export async function onRequestPost(context) {
       message: String(error?.message || "invalid_json"),
       stack: String(error?.stack || "").slice(0, 1000)
     });
-    return respond({ ok: false, error: "JSON invalido" }, 400);
+    return respond({ ok: false, error: "JSON inválido" }, 400);
   }
   const rawTraceId = stripDangerousText(String(body?.meta?.submissionId || ""), 90);
   if (rawTraceId) traceId = rawTraceId;

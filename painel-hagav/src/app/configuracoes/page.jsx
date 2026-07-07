@@ -75,29 +75,29 @@ function deepMerge(base, override) {
 
 const SERVICE_KEYS = [
   ['reels_shorts_tiktok', 'Reels / Shorts / TikTok'],
-  ['criativo_trafego_pago', 'Criativo trafego pago'],
+  ['criativo_trafego_pago', 'Criativo tráfego pago'],
   ['corte_podcast', 'Corte podcast'],
-  ['video_medio', 'Video medio'],
+  ['video_medio', 'Vídeo médio'],
   ['depoimento', 'Depoimento'],
-  ['videoaula_modulo', 'Videoaula / modulo'],
+  ['videoaula_modulo', 'Videoaula / módulo'],
   ['youtube', 'YouTube'],
-  ['vsl_15', 'VSL ate 15min'],
+  ['vsl_15', 'VSL até 15min'],
   ['vsl_longa', 'VSL longa'],
-  ['motion_min', 'Motion minimo'],
-  ['motion_max', 'Motion maximo'],
+  ['motion_min', 'Motion mínimo'],
+  ['motion_max', 'Motion máximo'],
   ['default_du', 'Fallback DU'],
   ['default_dr', 'Fallback DR'],
 ];
 
 const SERVICE_HOUR_KEYS = [
   ['reels_shorts_tiktok', 'Reels / Shorts / TikTok'],
-  ['criativo_trafego_pago', 'Criativo trafego pago'],
+  ['criativo_trafego_pago', 'Criativo tráfego pago'],
   ['corte_podcast', 'Corte podcast'],
-  ['video_medio', 'Video medio'],
+  ['video_medio', 'Vídeo médio'],
   ['depoimento', 'Depoimento'],
-  ['videoaula_modulo', 'Videoaula / modulo'],
+  ['videoaula_modulo', 'Videoaula / módulo'],
   ['youtube', 'YouTube'],
-  ['vsl_15', 'VSL ate 15min'],
+  ['vsl_15', 'VSL até 15min'],
   ['vsl_longa', 'VSL longa'],
   ['motion', 'Motion'],
   ['default', 'Fallback geral'],
@@ -129,7 +129,7 @@ export default function ConfiguracoesPage() {
       setPipelineStatusText((settings?.pipelineStatus || defaults.pipelineStatus).join(', '));
     } catch (err) {
       console.error('[Configuracoes]', err);
-      setError('Nao foi possivel carregar configuracoes. Verifique se a migration do CRM foi aplicada.');
+      setError('Não foi possível carregar configurações. Verifique se a migration do CRM foi aplicada.');
     } finally {
       setLoading(false);
     }
@@ -189,7 +189,7 @@ export default function ConfiguracoesPage() {
       setTimeout(() => setSaved(false), 2200);
     } catch (err) {
       console.error('[Configuracoes] save', err);
-      setError(err.message || 'Falha ao salvar configuracoes.');
+      setError(err.message || 'Falha ao salvar configurações.');
     } finally {
       setSaving(false);
     }
@@ -201,8 +201,8 @@ export default function ConfiguracoesPage() {
     <div className="space-y-5 animate-fade-in max-w-6xl">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="page-title">Configuracoes comerciais</h1>
-          <p className="page-subtitle">Centro unico para score, pricing e status do pipeline.</p>
+          <h1 className="page-title">Configurações comerciais</h1>
+          <p className="page-subtitle">Centro único para score, pricing e status do pipeline.</p>
         </div>
         <button onClick={load} disabled={loading} className="btn-ghost btn-sm">
           <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
@@ -216,7 +216,7 @@ export default function ConfiguracoesPage() {
         description="Regras usadas para classificar lead quente/morno/frio e prioridade comercial."
       >
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <NumberField label="Urgencia alta" value={scoreWeights.urgenciaAlta} onChange={(v) => setScoreWeights((p) => ({ ...p, urgenciaAlta: v }))} />
+          <NumberField label="Urgência alta" value={scoreWeights.urgenciaAlta} onChange={(v) => setScoreWeights((p) => ({ ...p, urgenciaAlta: v }))} />
           <NumberField label="Fluxo recorrente" value={scoreWeights.fluxoRecorrente} onChange={(v) => setScoreWeights((p) => ({ ...p, fluxoRecorrente: v }))} />
           <NumberField label="Referência visual" value={scoreWeights.referenciaVisual} onChange={(v) => setScoreWeights((p) => ({ ...p, referenciaVisual: v }))} />
           <NumberField label="Material gravado" value={scoreWeights.materialGravado} onChange={(v) => setScoreWeights((p) => ({ ...p, materialGravado: v }))} />
@@ -228,7 +228,7 @@ export default function ConfiguracoesPage() {
       <Section
         icon={SlidersHorizontal}
         title="Pricing base"
-        description="Base de mercado por servico, modo de piso e presets operacionais por hora."
+        description="Base de mercado por serviço, modo de piso e presets operacionais por hora."
       >
         <div className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -238,13 +238,13 @@ export default function ConfiguracoesPage() {
               onChange={(value) => setPricingPath(['basePriceMode'], value)}
               options={[
                 { value: 'reference', label: 'Referência de mercado' },
-                { value: 'floor', label: 'Piso minimo' },
+                { value: 'floor', label: 'Piso mínimo' },
               ]}
             />
           </div>
 
           <div>
-            <p className="text-xs text-hagav-gray uppercase tracking-wider mb-2">Preco base por servico</p>
+            <p className="text-xs text-hagav-gray uppercase tracking-wider mb-2">Preço base por serviço</p>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               {SERVICE_KEYS.map(([key, label]) => (
                 <NumberField
@@ -260,7 +260,7 @@ export default function ConfiguracoesPage() {
           </div>
 
           <div>
-            <p className="text-xs text-hagav-gray uppercase tracking-wider mb-2">Horas base por servico</p>
+            <p className="text-xs text-hagav-gray uppercase tracking-wider mb-2">Horas base por serviço</p>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               {SERVICE_HOUR_KEYS.map(([key, label]) => (
                 <NumberField
@@ -315,7 +315,7 @@ export default function ConfiguracoesPage() {
             <NumberField label="Sem referência %" value={Number(pricing?.ajustes?.semReferencia || 0)} onChange={(v) => setPricingPath(['ajustes', 'semReferencia'], v)} min={0} max={100} />
             <NumberField label="Multicamera %" value={Number(pricing?.ajustes?.multicamera || 0)} onChange={(v) => setPricingPath(['ajustes', 'multicamera'], v)} min={0} max={100} />
             <NumberField label="Sugere pacote acima de" value={Number(pricing?.pacotes?.sugerirAcimaQtd || 0)} onChange={(v) => setPricingPath(['pacotes', 'sugerirAcimaQtd'], v)} min={0} />
-            <NumberField label="Revisao capacidade acima de" value={Number(pricing?.pacotes?.revisaoCapacidadeAcimaQtd || 0)} onChange={(v) => setPricingPath(['pacotes', 'revisaoCapacidadeAcimaQtd'], v)} min={0} />
+            <NumberField label="Revisão capacidade acima de" value={Number(pricing?.pacotes?.revisaoCapacidadeAcimaQtd || 0)} onChange={(v) => setPricingPath(['pacotes', 'revisaoCapacidadeAcimaQtd'], v)} min={0} />
           </div>
         </div>
       </Section>
@@ -354,7 +354,7 @@ export default function ConfiguracoesPage() {
       <div className="flex justify-end">
         <button onClick={handleSave} disabled={saving || loading} className="btn-gold">
           {saving ? <RefreshCw size={14} className="animate-spin" /> : <Save size={14} />}
-          {saved ? 'Salvo!' : 'Salvar configuracoes'}
+          {saved ? 'Salvo!' : 'Salvar configurações'}
         </button>
       </div>
     </div>

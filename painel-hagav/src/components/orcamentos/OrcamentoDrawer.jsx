@@ -30,7 +30,7 @@ const ORC_STATUSES = ['orcamento', 'proposta_enviada', 'ajustando', 'aprovado', 
 const WHATSAPP_TOOLTIP = {
   title: 'WhatsApp',
   whatIs: 'Abre o contato direto do cliente no WhatsApp.',
-  purpose: 'Acelerar negociacao e confirmacoes de proposta.',
+  purpose: 'Acelerar negociação e confirmações de proposta.',
   observe: 'Use mensagem objetiva com proximo passo claro.',
 };
 const SEND_PROPOSTA_TOOLTIP = {
@@ -68,7 +68,7 @@ const PROPOSAL_MODE_PRESETS = {
     servico_principal: 'Conteúdo para redes sociais',
     quantidade: '10 vídeos',
     prazo: 'Urgente',
-    escopo_comercial: 'Comparativo comercial com pedido atual e duas opcoes de maior volume para reduzir custo medio por entrega.',
+    escopo_comercial: 'Comparativo comercial com pedido atual e duas opções de maior volume para reduzir custo médio por entrega.',
     quantidade_mensal: '',
     duracao_contrato_meses: '',
     valor_mensal_moeda: '',
@@ -78,7 +78,7 @@ const PROPOSAL_MODE_PRESETS = {
     servico_principal: 'Plano mensal de conteúdo',
     quantidade: '12 vídeos mensais',
     prazo: 'Este mês',
-    escopo_comercial: 'Operação mensal de edicao com padrão visual consistente, organizacao de entregas e acompanhamento por cronograma aprovado.',
+    escopo_comercial: 'Operação mensal de edição com padrão visual consistente, organização de entregas e acompanhamento por cronograma aprovado.',
     quantidade_mensal: '12 vídeos por mês',
     duracao_contrato_meses: '3',
     valor_mensal_moeda: '',
@@ -88,7 +88,7 @@ const PROPOSAL_MODE_PRESETS = {
     servico_principal: 'Proposta personalizada',
     quantidade: 'Escopo sob medida',
     prazo: 'Sem prazo definido',
-    escopo_comercial: 'Estrutura personalizada para atender necessidades específicas, com planejamento de escopo, organização de materiais e execucao premium.',
+    escopo_comercial: 'Estrutura personalizada para atender necessidades específicas, com planejamento de escopo, organização de materiais e execução premium.',
     quantidade_mensal: '',
     duracao_contrato_meses: '',
     valor_mensal_moeda: '',
@@ -703,7 +703,7 @@ function getPdfEngineBlockedMessage(meta) {
   const pdfEngine = String(meta?.pdfEngine || '').trim();
   const fallbackUsed = Boolean(meta?.pdfFallbackUsed);
   if (!pdfEngine) {
-    return 'PDF bloqueado para uso comercial: engine HTML/CSS nao detectada. Configure PDF_ENGINE + BROWSERLESS_TOKEN (ou PDFSHIFT_API_KEY) no deploy.';
+    return 'PDF bloqueado para uso comercial: engine HTML/CSS não detectada. Configure PDF_ENGINE + BROWSERLESS_TOKEN (ou PDFSHIFT_API_KEY) no deploy.';
   }
   if (renderMode === 'native_text_fallback' || pdfEngine === 'native_text' || fallbackUsed) {
     return 'PDF bloqueado para uso comercial: documento gerado em modo fallback/texto. Ative engine HTML real no deploy e gere novamente.';
@@ -1407,7 +1407,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
           Number(updated?.preco_final ?? 0) - Number(updated?.valor_sugerido ?? autoPricing?.valorSugerido ?? 0)
         ) > 0.009
       );
-      setInfo('Orcamento salvo com campos financeiros atualizados.');
+      setInfo('Orçamento salvo com campos financeiros atualizados.');
     } catch (err) {
       setError(err.message ?? 'Erro ao salvar.');
     } finally {
@@ -1594,7 +1594,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
     const fileName = `proposta-${orc.id}.pdf`;
     const mode = await openOrDownloadPropostaPdf(propostaLink, fileName);
     if (mode === 'none') {
-      setError('Nao foi possivel abrir o PDF agora.');
+      setError('Não foi possível abrir o PDF agora.');
       return;
     }
     setInfo('PDF aberto para download.');
@@ -1609,7 +1609,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
       return;
     }
     if (!hasWhatsapp) {
-      setError('WhatsApp do cliente indisponivel para envio da proposta.');
+      setError('WhatsApp do cliente indisponível para envio da proposta.');
       return;
     }
     setSaving(true);
@@ -1651,7 +1651,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
   async function handleRecalculateValues() {
     const nextPrecoFinal = Number(autoPricing?.precoFinal || autoPricing?.valorSugerido || autoPricing?.precoBase || precoFinal || 0);
     if (!Number.isFinite(nextPrecoFinal) || nextPrecoFinal <= 0) {
-      setError('Nao foi possivel recalcular: valor sugerido indisponivel.');
+      setError('Não foi possível recalcular: valor sugerido indisponível.');
       return;
     }
 
@@ -1695,7 +1695,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
         ) : null}
         <div className="drawer-head">
           <div>
-            <p className="text-xs text-hagav-gray uppercase tracking-wider mb-1">Orcamento #{orc.id}</p>
+            <p className="text-xs text-hagav-gray uppercase tracking-wider mb-1">Orçamento #{orc.id}</p>
             <h2 className="text-lg font-bold text-hagav-white">{orc.nome || 'Sem nome'}</h2>
             <p className="text-sm text-hagav-gray">{servicoResumo || '—'}</p>
           </div>
@@ -2405,7 +2405,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
             </div>
 
             <div>
-              <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Preco final (R$)</label>
+              <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Preço final (R$)</label>
               <input
                 type="number"
                 step="0.01"
@@ -2459,7 +2459,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
                 value={obsInternas}
                 onChange={(e) => setObsInternas(e.target.value)}
                 rows={4}
-                placeholder="Anotacoes internas, pendencias, negociacao..."
+                placeholder="Anotações internas, pendências, negociação..."
                 className="hinput w-full resize-none"
               />
             </div>
@@ -2519,7 +2519,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
                 ) : (
                   <span className="btn-ghost btn-sm orcamento-action-button opacity-60 cursor-not-allowed">
                     <MessageCircle size={13} />
-                    WhatsApp indisponivel
+                    WhatsApp indisponível
                   </span>
                 )}
               </EduTooltip>

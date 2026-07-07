@@ -87,7 +87,7 @@ export default function LeadsPage() {
       setLeads((data || []).filter(isLeadVisible));
     } catch (err) {
       console.error('[Leads]', err);
-      setLoadError('Nao foi possivel carregar os leads. Tente novamente.');
+      setLoadError('Não foi possível carregar os leads. Tente novamente.');
     } finally {
       setLoading(false);
     }

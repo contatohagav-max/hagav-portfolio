@@ -211,7 +211,7 @@ export const supabase = new Proxy({}, {
   get(_, prop) {
     const client = getSupabase();
     if (!client) {
-      return () => Promise.resolve({ data: null, count: 0, error: { message: 'Supabase nao configurado' } });
+      return () => Promise.resolve({ data: null, count: 0, error: { message: 'Supabase não configurado' } });
     }
     const value = client[prop];
     return typeof value === 'function' ? value.bind(client) : value;
@@ -222,7 +222,7 @@ export const supabase = new Proxy({}, {
 
 export async function signIn(email, password) {
   const client = getSupabase();
-  if (!client) throw new Error('Supabase nao configurado. Verifique o .env.local.');
+  if (!client) throw new Error('Supabase não configurado. Verifique o .env.local.');
 
   const { data, error } = await client.auth.signInWithPassword({ email, password });
   if (error) throw error;
@@ -385,7 +385,7 @@ function normalizeLeadMaterialState(value) {
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase();
   if (raw.startsWith('sim')) return 'Sim';
-  if (raw.startsWith('nao')) return 'Nao';
+  if (raw.startsWith('nao')) return 'Não';
   if (raw.startsWith('parcial')) return 'Parcial';
   return '';
 }
@@ -439,7 +439,7 @@ function buildLeadAnswersPayload({
   contextoResumo,
 }) {
   const flowSelection = { selected: services, outro: '' };
-  const flowContratacao = flow === 'DR' ? 'Producao mensal' : 'Projeto pontual';
+  const flowContratacao = flow === 'DR' ? 'Produção mensal' : 'Projeto pontual';
 
   const base = {
     nome,
@@ -502,12 +502,12 @@ function buildLeadAnswersPayload({
 
 export async function createLead(fields = {}) {
   const client = getSupabase();
-  if (!client) throw new Error('Supabase nao configurado');
+  if (!client) throw new Error('Supabase não configurado');
 
   const nome = String(fields.nome || '').trim();
   const whatsapp = String(fields.whatsapp || '').replace(/\D/g, '');
   if (!nome) throw new Error('Nome e obrigatorio');
-  if (!whatsapp || whatsapp.length < 8) throw new Error('WhatsApp invalido');
+  if (!whatsapp || whatsapp.length < 8) throw new Error('WhatsApp inválido');
 
   const empresa = normalizeLeadText(fields.empresa, 120);
   const origem = normalizeLeadText(fields.origem, 120) || 'prospeccao_ativa';
@@ -654,7 +654,7 @@ export async function createLead(fields = {}) {
 
 export async function updateLead(id, patch) {
   const client = getSupabase();
-  if (!client) throw new Error('Supabase nao configurado');
+  if (!client) throw new Error('Supabase não configurado');
 
   const payload = normalizeLeadPatchToDeals(patch);
   const { data, error } = await client
@@ -734,7 +734,7 @@ export async function fetchOrcamentos({
 
 export async function updateOrcamento(id, patch) {
   const client = getSupabase();
-  if (!client) throw new Error('Supabase nao configurado');
+  if (!client) throw new Error('Supabase não configurado');
   const settings = await fetchCommercialSettings();
   const pricingRules = normalizePricingRules(settings?.pricing || COMMERCIAL_DEFAULTS.pricing);
 
@@ -943,22 +943,22 @@ async function generatePdfDocument(endpoint, id, { adminKey, payload } = {}) {
     };
 
     if (reason === 'admin_key_not_configured_or_session_missing') {
-      throw new Error(withMeta('Sua sessao administrativa expirou ou nao esta autorizada. Refaca o login no painel.'));
+      throw new Error(withMeta('Sua sessão administrativa expirou ou não está autorizada. Refaça o login no painel.'));
     }
     if (reason === 'unauthorized') {
       throw new Error(withMeta('Sem autorizacao para gerar PDF. Verifique chave admin ou sessao autenticada.'));
     }
     if (reason === 'supabase_not_configured') {
-      throw new Error(withMeta('Supabase nao configurado no endpoint de PDF.'));
+      throw new Error(withMeta('Supabase não configurado no endpoint de PDF.'));
     }
     if (reason === 'pdf_upload_failed') {
       throw new Error(withMeta('Falha no upload do PDF para o bucket configurado.'));
     }
     if (reason === 'pdf_engine_not_configured') {
-      throw new Error(withMeta('Engine de renderizacao PDF nao configurada no deploy. Defina PDFSHIFT_API_KEY ou BROWSERLESS_TOKEN.'));
+      throw new Error(withMeta('Engine de renderização PDF não configurada no deploy. Defina PDFSHIFT_API_KEY ou BROWSERLESS_TOKEN.'));
     }
     if (reason === 'pdf_engine_not_supported') {
-      throw new Error(withMeta('Engine de renderizacao PDF nao suportada no deploy.'));
+      throw new Error(withMeta('Engine de renderização PDF não suportada no deploy.'));
     }
     if (reason === 'pdf_render_failed') {
       throw new Error(withMeta('Falha ao renderizar HTML/CSS em PDF no endpoint.'));
@@ -1052,7 +1052,7 @@ export async function fetchClientesContratos({
 
 export async function updateDeal(id, patch) {
   const client = getSupabase();
-  if (!client) throw new Error('Supabase nao configurado');
+  if (!client) throw new Error('Supabase não configurado');
 
   const { data, error } = await client
     .from('deals')
@@ -1087,7 +1087,7 @@ export async function fetchContatos({ status, search, limit = 200 } = {}) {
 
 export async function updateContato(id, patch) {
   const client = getSupabase();
-  if (!client) throw new Error('Supabase nao configurado');
+  if (!client) throw new Error('Supabase não configurado');
   const { data, error } = await client
     .from('contatos')
     .update(patch)
@@ -1137,7 +1137,7 @@ export async function fetchCommercialSettings() {
 
 export async function saveCommercialSettings(settings) {
   const client = getSupabase();
-  if (!client) throw new Error('Supabase nao configurado');
+  if (!client) throw new Error('Supabase não configurado');
   const normalizedPricing = normalizePricingRules(settings?.pricing || COMMERCIAL_DEFAULTS.pricing);
 
   const rows = [
@@ -1224,7 +1224,7 @@ export async function fetchProductionJobs({ status, search, limit = 1000 } = {})
 
 export async function updateProductionJob(id, patch) {
   const client = getSupabase();
-  if (!client) throw new Error('Supabase nao configurado');
+  if (!client) throw new Error('Supabase não configurado');
 
   const payload = { ...(patch || {}) };
   if (payload.status === 'entregue' && !payload.entregue_em) {
@@ -1280,7 +1280,7 @@ export async function fetchFinancialEntries({
 
 export async function createFinancialEntry(fields) {
   const client = getSupabase();
-  if (!client) throw new Error('Supabase nao configurado');
+  if (!client) throw new Error('Supabase não configurado');
 
   const payload = {
     tipo: fields?.tipo === 'pagar' ? 'pagar' : 'receber',
@@ -1308,7 +1308,7 @@ export async function createFinancialEntry(fields) {
 
 export async function updateFinancialEntry(id, patch) {
   const client = getSupabase();
-  if (!client) throw new Error('Supabase nao configurado');
+  if (!client) throw new Error('Supabase não configurado');
 
   const payload = { ...(patch || {}) };
   if (payload.status === 'pago') {

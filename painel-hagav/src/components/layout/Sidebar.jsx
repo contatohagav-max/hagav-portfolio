@@ -16,20 +16,20 @@ const NAV = [
   { href: '/pipeline', label: 'Pipeline', icon: Kanban, permission: 'readPipeline' },
   { href: '/producao', label: 'Produção', icon: Clapperboard, permission: 'readProducao' },
   { href: '/financeiro', label: 'Financeiro', icon: Landmark, permission: 'readFinanceiro' },
-  { href: '/configuracoes', label: 'Configuracoes', icon: Settings, permission: 'manageSettings' },
+  { href: '/configuracoes', label: 'Configurações', icon: Settings, permission: 'manageSettings' },
 ];
 
 const NAV_TOOLTIPS = {
   '/': {
     title: 'Dashboard',
-    whatIs: 'Visao executiva dos indicadores comerciais.',
-    purpose: 'Acompanhar performance diaria e prioridades do funil.',
-    observe: 'Foque em conversao, urgencias e follow-up atrasado.',
+    whatIs: 'Visão executiva dos indicadores comerciais.',
+    purpose: 'Acompanhar performance diária e prioridades do funil.',
+    observe: 'Foque em conversão, urgências e follow-up atrasado.',
   },
   '/leads': {
     title: 'Leads',
-    whatIs: 'Etapa de triagem e qualificacao dos novos contatos.',
-    purpose: 'Validar lead real antes de gerar orcamento.',
+    whatIs: 'Etapa de triagem e qualificação dos novos contatos.',
+    purpose: 'Validar lead real antes de gerar orçamento.',
     observe: 'Somente leads qualificados devem seguir para Orçamentos.',
   },
   '/orcamentos': {
@@ -40,21 +40,21 @@ const NAV_TOOLTIPS = {
   },
   '/clientes': {
     title: 'Clientes',
-    whatIs: 'Carteira de contratos fechados e pos-venda.',
-    purpose: 'Acompanhar vigencia, renovacao e reenvio de documentos.',
-    observe: 'Priorize contratos com renovacao proxima.',
+    whatIs: 'Carteira de contratos fechados e pós-venda.',
+    purpose: 'Acompanhar vigência, renovação e reenvio de documentos.',
+    observe: 'Priorize contratos com renovação próxima.',
   },
   '/pipeline': {
     title: 'Pipeline',
     whatIs: 'Quadro visual das etapas do processo comercial.',
     purpose: 'Mover oportunidades com clareza de status.',
-    observe: 'Evite acumulo em Novo, Contatado e Qualificado.',
+    observe: 'Evite acúmulo em Novo, Contatado e Qualificado.',
   },
   '/producao': {
     title: 'Produção',
-    whatIs: 'Kanban das demandas aprovadas e em execucao.',
-    purpose: 'Controlar materiais, edicao, revisao, render e entrega.',
-    observe: 'Toda demanda deve ter responsavel, prazo e proxima acao.',
+    whatIs: 'Kanban das demandas aprovadas e em execução.',
+    purpose: 'Controlar materiais, edição, revisão, render e entrega.',
+    observe: 'Toda demanda deve ter responsável, prazo e próxima ação.',
   },
   '/financeiro': {
     title: 'Financeiro',

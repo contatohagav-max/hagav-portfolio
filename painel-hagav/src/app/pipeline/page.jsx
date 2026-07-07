@@ -31,7 +31,7 @@ export default function PipelinePage() {
       setLeads(data);
     } catch (err) {
       console.error('[Pipeline]', err);
-      setLoadError('Nao foi possivel carregar o pipeline. Tente novamente.');
+      setLoadError('Não foi possível carregar o pipeline. Tente novamente.');
     } finally {
       setLoading(false);
     }

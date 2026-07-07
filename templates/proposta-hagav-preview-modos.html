@@ -490,7 +490,7 @@
       <p>Quando aberto pelo painel, este preview usa os dados reais do drawer em tempo de edi&ccedil;&atilde;o.</p>
       <div class="mode-grid">
         <button class="mode-btn" data-mode="direta">Modo 1 - Direta<small>VSL até 15 min</small></button>
-        <button class="mode-btn" data-mode="opcoes">Modo 2 - Com Opções<small>Pedido atual + 2 sugestões por volume</small></button>
+        <button class="mode-btn" data-mode="opcoes">Modo 2 - Comparativo<small>Pedido atual + planos por volume</small></button>
         <button class="mode-btn" data-mode="mensal">Modo 3 - Mensal<small>Plano recorrente 3 meses</small></button>
         <button class="mode-btn" data-mode="personalizada">Modo 4 - Personalizada<small>Texto comercial livre</small></button>
       </div>
@@ -504,10 +504,11 @@
           <p class="brand-kicker">HAGAV STUDIO DE EDIÇÃO</p>
         </div>
         <h2>PROPOSTA COMERCIAL</h2>
-        <p class="subtitle">Proposta objetiva para validação de escopo, investimento e início da produção.</p>
+        <p class="subtitle">Documento com escopo, investimento, condições comerciais e próximos passos para início do projeto.</p>
         <div class="meta">
-          <span class="chip" id="proposalNumberChip">Proposta -</span>
+          <span class="chip" id="proposalNumberChip">Nº -</span>
           <span class="chip" id="proposalDateChip">Emitida em -</span>
+          <span class="chip" id="proposalValidityChip">Válida até -</span>
         </div>
       </header>
 
@@ -518,10 +519,6 @@
             <div class="field">
               <p class="field-label">Nome</p>
               <p class="field-value" id="clienteNome"></p>
-            </div>
-            <div class="field">
-              <p class="field-label">WhatsApp</p>
-              <p class="field-value" id="clienteWhatsapp"></p>
             </div>
           </div>
         </article>
@@ -558,16 +555,24 @@
         </article>
 
         <article class="section hidden" id="mensalSection">
-          <h3 class="section-title">Estrutura mensal</h3>
-          <div class="grid-2">
+          <h3 class="section-title">Plano mensal</h3>
+          <div class="grid-3">
             <div class="field soft">
-              <p class="field-label">Plano</p>
+              <p class="field-label">Valor mensal</p>
+              <p class="field-value" id="mensalValor"></p>
+            </div>
+            <div class="field soft">
+              <p class="field-label">Quantidade mensal</p>
               <p class="field-value" id="mensalPlano"></p>
             </div>
             <div class="field soft">
-              <p class="field-label">Duração</p>
+              <p class="field-label">Duração do contrato</p>
               <p class="field-value" id="mensalDuracao"></p>
             </div>
+          </div>
+          <div class="scope" style="margin-top:2mm;">
+            <p id="mensalEscopo"></p>
+            <p>Produção recorrente com organização mensal, recebimento de materiais, edição, revisão e entrega final conforme cronograma aprovado.</p>
           </div>
         </article>
 
@@ -590,11 +595,11 @@
         </article>
 
         <article class="section">
-          <h3 class="section-title">Proximos passos</h3>
+          <h3 class="section-title">Próximos passos</h3>
           <div class="steps">
-            <p>01 - Aprovacao da proposta via WhatsApp.</p>
-            <p>02 - Envio dos materiais e referencias pelo cliente.</p>
-            <p>03 - Inicio da edicao conforme prazo combinado.</p>
+            <p>01 Aprovação</p>
+            <p>02 Recebimento dos materiais</p>
+            <p>03 Início da produção</p>
           </div>
           <div class="cta" id="ctaText">APROVAR PROPOSTA NO WHATSAPP</div>
         </article>
@@ -611,8 +616,9 @@
     const MODOS = {
       direta: {
         label: "Modo 1 - Direta",
-        numero: "PV-TST-001",
+        numero: "01",
         data: "24/04/2026",
+        validade: "01/05/2026",
         cliente: { nome: "Lucas Andrade", whatsapp: "(11) 97777-1111" },
         resumo: {
           servico: "Conteúdo para redes sociais",
@@ -620,45 +626,45 @@
           prazo: "Urgente"
         },
         escopo: "Edição estratégica e finalização premium para conteúdo de redes sociais com ritmo otimizado para retenção, acabamento profissional e entrega final pronta para publicação. Inclui 1 rodada de ajustes para refinamento final.",
-        showInvestment: false,
+        showInvestment: true,
         valor: "R$ 1.700,00",
         opcoes: [
           {
             nome: "Pedido atual",
             preco: "R$ 1.700",
             unitario: "R$ 170,00 por vídeo",
-            desc: "Sem desconto aplicado"
+            desc: "Escopo solicitado inicialmente."
           },
           {
-            nome: "Mais volume",
+            nome: "Plano Crescimento",
             preco: "R$ 2.422,50",
             quantidade: "15 vídeos",
             unitario: "R$ 161,50 por vídeo",
-            desc: "5% de desconto por volume",
+            desc: "Mais indicado para quem publica com frequência. Economia: R$ 127,50 (5%).",
             desconto: "-5%",
             destaque: true
           },
           {
-            nome: "Melhor custo-benefício",
+            nome: "Plano Escala",
             preco: "R$ 4.335,00",
             quantidade: "30 vídeos",
             unitario: "R$ 144,50 por vídeo",
-            desc: "15% de desconto por volume",
+            desc: "Ideal para operações maiores e maior economia por entrega. Economia: R$ 765,00 (15%).",
             desconto: "-15%"
           },
         ],
         condicoes: [
           "Forma de pagamento: PIX / Transferência / Conforme combinado",
-          "Proposta válida até 01/05/2026",
           "O projeto inicia após aprovação e envio dos materiais.",
           "Inclui 1 rodada de ajustes. Alterações adicionais ou mudanças de escopo podem gerar novo orçamento."
         ],
         observacao: "",
       },
       opcoes: {
-        label: "Modo 2 - Com Opções",
-        numero: "PV-TST-002",
+        label: "Modo 2 - Comparativo",
+        numero: "02",
         data: "24/04/2026",
+        validade: "01/05/2026",
         cliente: { nome: "Studio Aurora", whatsapp: "(73) 98205-4283" },
         resumo: {
           servico: "Conteúdo para redes sociais",
@@ -675,30 +681,29 @@
             preco: "R$ 1.700",
             quantidade: "10 vídeos",
             unitario: "R$ 170,00 por vídeo",
-            desc: "Sem desconto aplicado"
+            desc: "Escopo solicitado inicialmente."
           },
           {
-            nome: "Mais volume",
+            nome: "Plano Crescimento",
             preco: "R$ 2.422,50",
             quantidade: "15 vídeos",
             unitario: "R$ 161,50 por vídeo",
-            desc: "5% de desconto por volume",
+            desc: "Mais indicado para quem publica com frequência. Economia: R$ 127,50 (5%).",
             desconto: "-5%",
             destaque: true
           },
           {
-            nome: "Melhor custo-benefício",
+            nome: "Plano Escala",
             preco: "R$ 4.335,00",
             quantidade: "30 vídeos",
             unitario: "R$ 144,50 por vídeo",
-            desc: "15% de desconto por volume",
+            desc: "Ideal para operações maiores e maior economia por entrega. Economia: R$ 765,00 (15%).",
             desconto: "-15%"
           },
         ],
-        opcoesTextoApoio: "Quanto maior o volume, menor o custo por vídeo. As opcoes acima usam descontos progressivos conforme quantidade.",
+        opcoesTextoApoio: "Comparativo pensado para orientar a decisão pelo melhor equilíbrio entre volume, investimento e custo por entrega.",
         condicoes: [
           "Forma de pagamento: PIX / Transferência / Conforme combinado",
-          "Proposta válida até 01/05/2026",
           "O projeto inicia após aprovação e envio dos materiais.",
           "Inclui 1 rodada de ajustes por entrega."
         ],
@@ -706,8 +711,9 @@
       },
       mensal: {
         label: "Modo 3 - Mensal",
-        numero: "PV-TST-003",
+        numero: "03",
         data: "24/04/2026",
+        validade: "01/05/2026",
         cliente: { nome: "Marca Horizonte", whatsapp: "(11) 98888-2222" },
         resumo: {
           servico: "Plano mensal de conteúdo",
@@ -718,12 +724,12 @@
         valor: "R$ 2.500/mes",
         investimentoTag: "Valor mensal",
         mensal: {
-          plano: "Plano Mensal",
+          plano: "12 vídeos por mês",
+          valor: "R$ 2.500/mês",
           duracao: "Contrato de 3 meses"
         },
         condicoes: [
           "Forma de pagamento: PIX / Transferência / Conforme combinado",
-          "Proposta válida até 01/05/2026",
           "O projeto inicia após aprovação e envio dos materiais.",
           "Inclui 1 rodada de ajustes por entrega."
         ],
@@ -731,8 +737,9 @@
       },
       personalizada: {
         label: "Modo 4 - Personalizada",
-        numero: "PV-TST-004",
+        numero: "04",
         data: "24/04/2026",
+        validade: "01/05/2026",
         cliente: { nome: "Empresa Vertex", whatsapp: "(21) 97777-9090" },
         resumo: {
           servico: "Proposta personalizada",
@@ -744,7 +751,6 @@
         investimentoTag: "Valor total",
         condicoes: [
           "Forma de pagamento: PIX / Transferência / Conforme combinado",
-          "Proposta válida até 01/05/2026",
           "O projeto inicia após aprovação e envio dos materiais.",
           "Inclui 1 rodada de ajustes. Escopo adicional pode gerar nova proposta."
         ],
@@ -790,9 +796,9 @@
         label: previewMode,
         numero: cleanDraftValue(preview.proposalNumber),
         data: cleanDraftValue(preview.emissionDate),
+        validade: cleanDraftValue(preview.validityDate),
         cliente: {
           nome: cleanDraftValue(preview.client?.name),
-          whatsapp: cleanDraftValue(preview.client?.whatsapp),
         },
         resumo: {
           servico: cleanDraftValue(preview.summary?.service),
@@ -817,6 +823,8 @@
         mensal: hasMensal
           ? {
             plano: cleanDraftValue(preview.monthly?.quantity),
+            valor: cleanDraftValue(preview.monthly?.value),
+            escopo: cleanDraftValue(preview.monthly?.scope),
             duracao: cleanDraftValue(preview.monthly?.duration)
               ? `Contrato de ${cleanDraftValue(preview.monthly?.duration)} meses`
               : "",
@@ -853,9 +861,9 @@
       const condicoesComerciais = cleanDraftValue(draft.condicoes_comerciais);
 
       if (clienteNome) data.cliente.nome = clienteNome;
-      if (whatsapp) data.cliente.whatsapp = whatsapp;
       if (numeroProposta) data.numero = numeroProposta;
       if (dataEmissao) data.data = dataEmissao;
+      if (dataValidade) data.validade = dataValidade;
       if (servico) data.resumo.servico = servico;
       if (quantidade) data.resumo.quantidade = quantidade;
       if (prazo) data.resumo.prazo = prazo;
@@ -871,7 +879,6 @@
       } else {
         const condicoes = Array.isArray(data.condicoes) ? [...data.condicoes] : [];
         if (formaPagamento) condicoes[0] = `Forma de pagamento: ${formaPagamento}`;
-        if (dataValidade) condicoes[1] = `Proposta válida até ${dataValidade}`;
         data.condicoes = condicoes.filter(Boolean);
       }
 
@@ -911,16 +918,21 @@
 
       if (mode === "mensal") {
         if (quantidadeMensal) data.resumo.quantidade = quantidadeMensal;
+        data.mensal = data.mensal || {};
+        if (quantidadeMensal) data.mensal.plano = quantidadeMensal;
         if (duracaoMensal) {
-          data.mensal = data.mensal || {};
           data.mensal.duracao = `Contrato de ${duracaoMensal} meses`;
         }
         if (valorMensal) {
           data.valor = valorMensal.toLowerCase().includes("/mes")
             ? valorMensal
             : `${valorMensal}/mes`;
+          data.mensal.valor = data.valor;
         }
-        if (escopoMensal) data.escopo = escopoMensal;
+        if (escopoMensal) {
+          data.escopo = escopoMensal;
+          data.mensal.escopo = escopoMensal;
+        }
       }
 
       if (mode === "personalizada") {
@@ -1033,17 +1045,17 @@
       });
 
       setText("stateText", `Modo ativo: ${data.label}`);
-      setText("proposalNumberChip", `Proposta ${data.numero}`);
+      setText("proposalNumberChip", `Nº ${data.numero || "01"}`);
       setText("proposalDateChip", `Emitida em ${data.data}`);
+      setText("proposalValidityChip", `Válida até ${data.validade || "-"}`);
       setText("clienteNome", data.cliente?.nome);
-      setText("clienteWhatsapp", data.cliente?.whatsapp);
 
       setFieldValue("resumoServicoField", "resumoServico", data.resumo?.servico);
       setFieldValue("resumoQuantidadeField", "resumoQuantidade", data.resumo?.quantidade);
       setFieldValue("resumoPrazoField", "resumoPrazo", data.resumo?.prazo);
       setText("escopoTexto", data.escopo);
 
-      const showInvestment = data.showInvestment !== false && String(data.valor || "").trim().length > 0;
+      const showInvestment = data.showInvestment !== false && !data.mensal && String(data.valor || "").trim().length > 0;
       setHidden("investmentSection", !showInvestment);
       setText("investmentTag", data.investimentoTag || "Valor total");
       setText("valorPrincipal", data.valor, "");
@@ -1068,6 +1080,8 @@
       const mensalSection = byId("mensalSection");
       mensalSection.classList.toggle("hidden", !data.mensal);
       setText("mensalPlano", data.mensal?.plano || "");
+      setText("mensalValor", data.mensal?.valor || data.valor || "");
+      setText("mensalEscopo", data.mensal?.escopo || data.escopo || "");
       setText("mensalDuracao", data.mensal?.duracao || "");
 
       const obsSection = byId("observacaoSection");

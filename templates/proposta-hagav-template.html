@@ -421,10 +421,11 @@
         <p class="brand-kicker">HAGAV STUDIO DE EDIÇÃO</p>
       </div>
       <h1>PROPOSTA COMERCIAL</h1>
-      <p class="subtitle">Proposta objetiva para valida&ccedil;&atilde;o de escopo, investimento e in&iacute;cio da produ&ccedil;&atilde;o.</p>
+      <p class="subtitle">Documento com escopo, investimento, condi&ccedil;&otilde;es comerciais e pr&oacute;ximos passos para in&iacute;cio do projeto.</p>
       <div class="meta">
-        <span class="chip">Proposta {{numero_proposta}}</span>
+        <span class="chip">N&ordm; {{numero_proposta}}</span>
         <span class="chip">Emitida em {{data_emissao}}</span>
+        <span class="chip">V&aacute;lida at&eacute; {{data_validade}}</span>
       </div>
     </header>
 
@@ -435,24 +436,6 @@
           <div class="field">
             <p class="field-label">Nome</p>
             <p class="field-value">{{cliente_nome}}</p>
-          </div>
-          <div class="field">
-            <p class="field-label">WhatsApp</p>
-            <p class="field-value">{{whatsapp}}</p>
-          </div>
-        </div>
-        <div class="grid-3" style="margin-top:2mm;">
-          <div class="field" style="{{empresa_bloco_style}}">
-            <p class="field-label">Empresa</p>
-            <p class="field-value">{{empresa}}</p>
-          </div>
-          <div class="field" style="{{instagram_bloco_style}}">
-            <p class="field-label">Instagram</p>
-            <p class="field-value">{{instagram}}</p>
-          </div>
-          <div class="field" style="{{email_bloco_style}}">
-            <p class="field-label">E-mail</p>
-            <p class="field-value">{{email_cliente}}</p>
           </div>
         </div>
       </article>
@@ -514,8 +497,12 @@
       </article>
 
       <article class="section" style="{{mensal_bloco_style}}">
-        <h2 class="section-title">Estrutura mensal</h2>
+        <h2 class="section-title">Plano mensal</h2>
         <div class="grid-3">
+          <div class="field">
+            <p class="field-label">Valor mensal</p>
+            <p class="field-value">{{valor_mensal_moeda}}</p>
+          </div>
           <div class="field">
             <p class="field-label">Quantidade mensal</p>
             <p class="field-value">{{quantidade_mensal}}</p>
@@ -524,13 +511,10 @@
             <p class="field-label">Dura&ccedil;&atilde;o do contrato</p>
             <p class="field-value">{{duracao_contrato_meses}} meses</p>
           </div>
-          <div class="field">
-            <p class="field-label">Valor mensal</p>
-            <p class="field-value">{{valor_mensal_moeda}}</p>
-          </div>
         </div>
         <div class="scope" style="margin-top:2mm;">
           <p>{{escopo_mensal}}</p>
+          <p>Produ&ccedil;&atilde;o recorrente com organiza&ccedil;&atilde;o mensal, recebimento de materiais, edi&ccedil;&atilde;o, revis&atilde;o e entrega final conforme cronograma aprovado.</p>
         </div>
       </article>
 
@@ -571,9 +555,9 @@
       <article class="section">
         <h2 class="section-title">Pr&oacute;ximos passos</h2>
         <div class="steps">
-          <p>01 - Aprova&ccedil;&atilde;o da proposta via WhatsApp.</p>
-          <p>02 - Envio dos materiais e refer&ecirc;ncias pelo cliente.</p>
-          <p>03 - In&iacute;cio da edi&ccedil;&atilde;o conforme prazo combinado.</p>
+          <p>01 Aprova&ccedil;&atilde;o</p>
+          <p>02 Recebimento dos materiais</p>
+          <p>03 In&iacute;cio da produ&ccedil;&atilde;o</p>
         </div>
         <div class="cta">{{cta_aprovacao}}</div>
       </article>

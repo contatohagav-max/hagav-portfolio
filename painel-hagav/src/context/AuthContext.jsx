@@ -93,7 +93,7 @@ export function AuthProvider({ children }) {
 
   async function login(email, password) {
     const client = getSupabase();
-    if (!client) throw new Error('Supabase nao configurado. Verifique o ambiente.');
+    if (!client) throw new Error('Supabase não configurado. Verifique o ambiente.');
 
     const response = await fetch('/api/admin-auth-login', {
       method: 'POST',

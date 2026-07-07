@@ -2,10 +2,27 @@ import { buildComparativeProposalPricing, normalizePrazoLabel } from '@/lib/comm
 import { fmtBRL } from '@/lib/utils';
 
 const DEFAULT_NEXT_STEPS = [
-  '01 - Aprovação da proposta via WhatsApp.',
-  '02 - Envio dos materiais e referências pelo cliente.',
-  '03 - Início da edição conforme prazo combinado.',
+  '01 Aprovação',
+  '02 Recebimento dos materiais',
+  '03 Início da produção',
 ];
+
+const PROPOSAL_SUBTITLE = 'Documento com escopo, investimento, condições comerciais e próximos passos para início do projeto.';
+
+const OPTION_STRATEGY = {
+  pedido_atual: {
+    title: 'Pedido atual',
+    subtitle: 'Escopo solicitado inicialmente.',
+  },
+  mais_volume: {
+    title: 'Plano Crescimento',
+    subtitle: 'Mais indicado para quem publica com frequência.',
+  },
+  melhor_custo_beneficio: {
+    title: 'Plano Escala',
+    subtitle: 'Ideal para operações maiores e maior economia por entrega.',
+  },
+};
 
 function normalizePlaceholderKey(value) {
   return String(value || '')
@@ -65,6 +82,40 @@ function parseCurrencyNumber(value, fallback = 0) {
   const parsed = Number(normalized);
   if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
   return parsed;
+}
+
+function formatProposalNumber(value) {
+  const digits = String(value || '').replace(/\D/g, '');
+  if (!digits) return '';
+  return digits.padStart(2, '0');
+}
+
+function formatDiscountBadge(value) {
+  const clean = normalizeText(value);
+  if (!clean) return '';
+  const number = Number(clean.replace('%', '').replace('-', '').replace(',', '.'));
+  if (!Number.isFinite(number) || number <= 0) return clean;
+  return `-${Math.round(number)}%`;
+}
+
+function buildEconomyText(scenario, baseUnitPrice) {
+  const quantity = Number(scenario?.quantity || 0);
+  const total = Number(scenario?.total || 0);
+  const unitPrice = Number(scenario?.unitPrice || 0);
+  if (!Number.isFinite(quantity) || !Number.isFinite(total) || quantity <= 0 || total <= 0) return '';
+
+  const referenceTotal = Number(baseUnitPrice || 0) > 0 ? baseUnitPrice * quantity : 0;
+  const economy = Math.max(0, referenceTotal - total);
+  const discountPercent = Number(scenario?.discountPercent || 0);
+  if (economy > 0 && discountPercent > 0) {
+    return `Economia: ${fmtBRL(economy)} (${Math.round(discountPercent)}%).`;
+  }
+  if (economy > 0) return `Economia: ${fmtBRL(economy)}.`;
+  if (discountPercent > 0) return `Economia: ${Math.round(discountPercent)}%.`;
+  if (unitPrice > 0 && baseUnitPrice > 0 && unitPrice < baseUnitPrice) {
+    return 'Economia por entrega em relação ao pedido atual.';
+  }
+  return '';
 }
 
 function getServiceItems(orc = {}) {
@@ -184,6 +235,7 @@ export function buildAutoOptionDraft({ orc, quantityText, totalText, pricingRule
     pricingRules,
   });
   const [pedidoAtual, maisVolume, melhorCustoBeneficio] = pricing.scenarios || [];
+  const baseUnitPrice = Number(pedidoAtual?.unitPrice || 0);
 
   const formatQuantityLabel = (scenario, overrideText = '') => {
     const manualText = normalizeText(overrideText);
@@ -199,33 +251,34 @@ export function buildAutoOptionDraft({ orc, quantityText, totalText, pricingRule
   };
 
   const buildDescription = (scenario, fallbackText) => {
-    if (!scenario) return fallbackText;
-    if (Number(scenario.discountPercent || 0) > 0) {
-      return `Desconto aplicado: ${scenario.discountPercent}%`;
-    }
-    return fallbackText;
+    const strategy = OPTION_STRATEGY[scenario?.key] || {};
+    const lines = [
+      strategy.subtitle || fallbackText,
+      buildEconomyText(scenario, baseUnitPrice),
+    ].filter(Boolean);
+    return lines.join(' ');
   };
 
   return {
-    opcao1_titulo: pedidoAtual?.title || 'Pedido atual',
+    opcao1_titulo: OPTION_STRATEGY.pedido_atual.title,
     opcao1_qtd: formatQuantityLabel(pedidoAtual, quantityText),
     opcao1_preco: fmtBRL(Number(pedidoAtual?.total || requestedTotal || 0)),
     opcao1_unitario: formatUnitPrice(pedidoAtual),
     opcao1_desc: buildDescription(pedidoAtual, 'Sem desconto aplicado'),
     opcao1_desconto: '',
-    opcao2_titulo: maisVolume?.title || 'Mais volume',
+    opcao2_titulo: OPTION_STRATEGY.mais_volume.title,
     opcao2_qtd: formatQuantityLabel(maisVolume),
     opcao2_preco: fmtBRL(Number(maisVolume?.total || 0)),
     opcao2_unitario: formatUnitPrice(maisVolume),
     opcao2_desc: buildDescription(maisVolume, 'Sem desconto aplicado'),
-    opcao2_desconto: Number(maisVolume?.discountPercent || 0) > 0 ? `-${maisVolume.discountPercent}%` : '',
-    opcao3_titulo: melhorCustoBeneficio?.title || 'Melhor custo-benefício',
+    opcao2_desconto: formatDiscountBadge(maisVolume?.discountPercent),
+    opcao3_titulo: OPTION_STRATEGY.melhor_custo_beneficio.title,
     opcao3_qtd: formatQuantityLabel(melhorCustoBeneficio),
     opcao3_preco: fmtBRL(Number(melhorCustoBeneficio?.total || 0)),
     opcao3_unitario: formatUnitPrice(melhorCustoBeneficio),
     opcao3_desc: buildDescription(melhorCustoBeneficio, 'Sem desconto aplicado'),
-    opcao3_desconto: Number(melhorCustoBeneficio?.discountPercent || 0) > 0 ? `-${melhorCustoBeneficio.discountPercent}%` : '',
-    texto_comparativo: '',
+    opcao3_desconto: formatDiscountBadge(melhorCustoBeneficio?.discountPercent),
+    texto_comparativo: 'Comparativo pensado para orientar a decisão pelo melhor equilíbrio entre volume, investimento e custo por entrega.',
   };
 }
 
@@ -259,8 +312,8 @@ export function buildProposalPreviewModel({ orc, proposalMode, proposalDraft }) 
   return {
     mode,
     title: 'PROPOSTA COMERCIAL',
-    subtitle: 'Proposta objetiva para validação de escopo, investimento e início da produção.',
-    proposalNumber: normalizeText(draft.numero_proposta),
+    subtitle: PROPOSAL_SUBTITLE,
+    proposalNumber: formatProposalNumber(draft.numero_proposta),
     emissionDate: normalizeText(draft.data_emissao),
     validityDate: normalizeText(draft.data_validade),
     paymentMethod: normalizeText(draft.forma_pagamento),
@@ -280,7 +333,7 @@ export function buildProposalPreviewModel({ orc, proposalMode, proposalDraft }) 
     investment: {
       label: investmentLabel,
       value: investmentValue,
-      visible: mode !== 'opcoes' && Boolean(investmentValue),
+      visible: mode !== 'opcoes' && mode !== 'mensal' && Boolean(investmentValue),
     },
     monthly: {
       visible: mode === 'mensal',
@@ -288,6 +341,7 @@ export function buildProposalPreviewModel({ orc, proposalMode, proposalDraft }) 
       duration: normalizeText(draft.duracao_contrato_meses),
       value: mensalValue,
       scope: normalizeText(draft.escopo_mensal || draft.escopo_comercial),
+      structure: 'Produção recorrente com organização mensal, recebimento de materiais, edição, revisão e entrega final conforme cronograma aprovado.',
     },
     options: {
       visible: mode === 'opcoes' && optionCards.length > 0,
@@ -295,8 +349,8 @@ export function buildProposalPreviewModel({ orc, proposalMode, proposalDraft }) 
       footnote: normalizeText(draft.texto_comparativo),
     },
     conditions,
-    reference: normalizeText(draft.referencia_texto),
-    observation: normalizeText(draft.observacao_adicional),
+    reference: mode === 'direta' ? '' : normalizeText(draft.referencia_texto),
+    observation: mode === 'direta' ? '' : normalizeText(draft.observacao_adicional),
     cta: normalizeText(draft.cta_aprovacao) || 'Aprovar proposta no WhatsApp',
     nextSteps: DEFAULT_NEXT_STEPS,
     source: {

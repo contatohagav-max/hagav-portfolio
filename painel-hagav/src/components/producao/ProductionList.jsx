@@ -166,7 +166,7 @@ function DetailPanel({ job, onEdit }) {
 
       <div className="rounded-lg border border-hagav-border bg-hagav-muted/10 px-3 py-2">
         <p className="text-[10px] uppercase tracking-wider text-hagav-gray">Próxima ação</p>
-        <p className="text-sm text-hagav-light mt-1">{job.proxima_acao || 'Sem proxima acao definida.'}</p>
+        <p className="text-sm text-hagav-light mt-1">{job.proxima_acao || 'Sem próxima ação definida.'}</p>
       </div>
 
       <div className="space-y-2">
@@ -275,7 +275,7 @@ export default function ProductionList({
                         {MATERIAL_STATUS_LABELS[job.materiais_status] || 'Pendente'}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-hagav-light">{truncate(job.proxima_acao || 'Sem proxima acao', 52)}</td>
+                    <td className="px-4 py-3 text-hagav-light">{truncate(job.proxima_acao || 'Sem próxima ação', 52)}</td>
                     <td className="px-4 py-3 text-hagav-light">{job.prazo_em ? fmtDate(job.prazo_em) : '-'}</td>
                     <td className="px-4 py-3 text-hagav-light">{job.responsavel || '-'}</td>
                     <td className="px-4 py-3">

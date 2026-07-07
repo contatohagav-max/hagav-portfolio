@@ -7,7 +7,7 @@ import EduTooltip from '@/components/ui/EduTooltip';
 import CollapsibleActionBlock from '@/components/ui/CollapsibleActionBlock';
 import useAdaptivePanelWidth from '@/components/ui/useAdaptivePanelWidth';
 import ProposalPreview from '@/components/orcamentos/ProposalPreview';
-import { fetchCommercialSettings, generateDealPdf, updateOrcamento } from '@/lib/supabase';
+import { fetchCommercialSettings, fetchNextProposalNumberForClient, generateDealPdf, updateOrcamento } from '@/lib/supabase';
 import {
   COMMERCIAL_DEFAULTS,
   computePricingSnapshot,
@@ -30,7 +30,7 @@ const ORC_STATUSES = ['orcamento', 'proposta_enviada', 'ajustando', 'aprovado', 
 const WHATSAPP_TOOLTIP = {
   title: 'WhatsApp',
   whatIs: 'Abre o contato direto do cliente no WhatsApp.',
-  purpose: 'Acelerar negociacao e confirmacoes de proposta.',
+  purpose: 'Acelerar negociação e confirmações de proposta.',
   observe: 'Use mensagem objetiva com proximo passo claro.',
 };
 const SEND_PROPOSTA_TOOLTIP = {
@@ -41,14 +41,13 @@ const SEND_PROPOSTA_TOOLTIP = {
 };
 const PROPOSAL_MODE_OPTIONS = [
   { value: 'direta', label: 'Modo 1 - Direta' },
-  { value: 'opcoes', label: 'Modo 2 - Com opcoes' },
+  { value: 'opcoes', label: 'Modo 2 - Comparativo' },
   { value: 'mensal', label: 'Modo 3 - Mensal' },
   { value: 'personalizada', label: 'Modo 4 - Personalizada' },
 ];
 
 const DEFAULT_CONDICOES_COMERCIAIS = [
   'Forma de pagamento: PIX / Transferência / Conforme combinado.',
-  'Proposta válida até [data].',
   'O projeto inicia após aprovação e envio dos materiais.',
   'Inclui 1 rodada de ajustes por entrega. Alterações de estrutura, roteiro, estilo ou escopo podem gerar novo orçamento.',
 ].join('\n');
@@ -68,7 +67,7 @@ const PROPOSAL_MODE_PRESETS = {
     servico_principal: 'Conteúdo para redes sociais',
     quantidade: '10 vídeos',
     prazo: 'Urgente',
-    escopo_comercial: 'Comparativo comercial com pedido atual e duas opcoes de maior volume para reduzir custo medio por entrega.',
+    escopo_comercial: 'Comparativo comercial com pedido atual e planos de maior volume para orientar a melhor decisão de investimento.',
     quantidade_mensal: '',
     duracao_contrato_meses: '',
     valor_mensal_moeda: '',
@@ -78,7 +77,7 @@ const PROPOSAL_MODE_PRESETS = {
     servico_principal: 'Plano mensal de conteúdo',
     quantidade: '12 vídeos mensais',
     prazo: 'Este mês',
-    escopo_comercial: 'Operação mensal de edicao com padrão visual consistente, organizacao de entregas e acompanhamento por cronograma aprovado.',
+    escopo_comercial: 'Operação mensal de edição com padrão visual consistente, organização de entregas e acompanhamento por cronograma aprovado.',
     quantidade_mensal: '12 vídeos por mês',
     duracao_contrato_meses: '3',
     valor_mensal_moeda: '',
@@ -88,7 +87,7 @@ const PROPOSAL_MODE_PRESETS = {
     servico_principal: 'Proposta personalizada',
     quantidade: 'Escopo sob medida',
     prazo: 'Sem prazo definido',
-    escopo_comercial: 'Estrutura personalizada para atender necessidades específicas, com planejamento de escopo, organização de materiais e execucao premium.',
+    escopo_comercial: 'Estrutura personalizada para atender necessidades específicas, com planejamento de escopo, organização de materiais e execução premium.',
     quantidade_mensal: '',
     duracao_contrato_meses: '',
     valor_mensal_moeda: '',
@@ -227,6 +226,34 @@ function formatDateBr(value) {
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const year = String(date.getFullYear());
   return `${day}/${month}/${year}`;
+}
+
+function formatProposalSequence(value) {
+  const digits = String(value || '').replace(/\D/g, '');
+  if (!digits) return '';
+  return digits.padStart(2, '0');
+}
+
+function shiftProposalSequence(value, delta) {
+  const current = Number(String(value || '').replace(/\D/g, '')) || 1;
+  return String(Math.max(1, current + delta)).padStart(2, '0');
+}
+
+function slugifyFilePart(value, fallback = 'cliente') {
+  const slug = String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 64);
+  return slug || fallback;
+}
+
+function buildProposalFileName(draft = {}, fallbackId = '') {
+  const number = formatProposalSequence(draft?.numero_proposta) || '01';
+  const client = slugifyFilePart(draft?.cliente_nome, fallbackId ? `cliente-${fallbackId}` : 'cliente');
+  return `proposta-hagav-${client}-n${number}.pdf`;
 }
 
 function normalizePlaceholderKey(value) {
@@ -621,8 +648,8 @@ function buildProposalDraftFromRecord(record, forcedMode, options = {}) {
       comercial?.duracao_contrato_meses,
       proposalMode === 'mensal' ? modePreset.duracao_contrato_meses : ''
     )),
-    numero_proposta: normalizeText(comercial?.numero_proposta || `PROP-${record?.id || ''}`),
-    data_emissao: normalizeText(comercial?.data_emissao || ''),
+    numero_proposta: formatProposalSequence(comercial?.numero_proposta || '01'),
+    data_emissao: normalizeText(comercial?.data_emissao || formatDateBr(new Date().toISOString())),
     cta_aprovacao: normalizeText(comercial?.cta_aprovacao || 'Aprovar proposta no WhatsApp'),
     opcao1_titulo: normalizeText(pickStoredOrLive(comercial?.opcao1_titulo, optionDefaults.opcao1_titulo)),
     opcao1_qtd: normalizeText(pickStoredOrLive(comercial?.opcao1_qtd, optionDefaults.opcao1_qtd)),
@@ -703,7 +730,7 @@ function getPdfEngineBlockedMessage(meta) {
   const pdfEngine = String(meta?.pdfEngine || '').trim();
   const fallbackUsed = Boolean(meta?.pdfFallbackUsed);
   if (!pdfEngine) {
-    return 'PDF bloqueado para uso comercial: engine HTML/CSS nao detectada. Configure PDF_ENGINE + BROWSERLESS_TOKEN (ou PDFSHIFT_API_KEY) no deploy.';
+    return 'PDF bloqueado para uso comercial: engine HTML/CSS não detectada. Configure PDF_ENGINE + BROWSERLESS_TOKEN (ou PDFSHIFT_API_KEY) no deploy.';
   }
   if (renderMode === 'native_text_fallback' || pdfEngine === 'native_text' || fallbackUsed) {
     return 'PDF bloqueado para uso comercial: documento gerado em modo fallback/texto. Ative engine HTML real no deploy e gere novamente.';
@@ -783,6 +810,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
   const [pricingRules, setPricingRules] = useState(() => normalizePricingRules(COMMERCIAL_DEFAULTS.pricing));
   const [pricingRulesLoading, setPricingRulesLoading] = useState(true);
   const [pricingItems, setPricingItems] = useState(() => buildInitialPricingItems(orc, COMMERCIAL_DEFAULTS.pricing));
+  const [proposalNumberLoading, setProposalNumberLoading] = useState(false);
   const [proposalMode, setProposalMode] = useState(() => {
     const detalhes = parseDetalhes(orc?.detalhes);
     const comercial = parseDetalhes(detalhes?.comercial);
@@ -1356,6 +1384,44 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
   }, [autoProposalDraft, proposalDirtyFields]);
 
   useEffect(() => {
+    const detalhes = parseDetalhes(orc?.detalhes);
+    const comercial = parseDetalhes(detalhes?.comercial);
+    const savedNumber = formatProposalSequence(comercial?.numero_proposta);
+    if (savedNumber || proposalDirtyFields.numero_proposta) return undefined;
+
+    let active = true;
+    async function loadNextProposalNumber() {
+      setProposalNumberLoading(true);
+      try {
+        const nextNumber = await fetchNextProposalNumberForClient({
+          nome: proposalDraft?.cliente_nome || orc?.nome,
+          whatsapp: proposalDraft?.whatsapp || orc?.whatsapp,
+          excludeId: orc?.id,
+        });
+        if (!active || !nextNumber) return;
+        setProposalDraft((prev) => {
+          if (formatProposalSequence(prev?.numero_proposta) && formatProposalSequence(prev?.numero_proposta) !== '01') {
+            return prev;
+          }
+          return {
+            ...prev,
+            numero_proposta: nextNumber,
+          };
+        });
+      } catch (err) {
+        console.warn('[Orcamentos][PropostaNumero]', err);
+      } finally {
+        if (active) setProposalNumberLoading(false);
+      }
+    }
+
+    loadNextProposalNumber();
+    return () => {
+      active = false;
+    };
+  }, [orc?.detalhes, orc?.id, orc?.nome, orc?.whatsapp, proposalDirtyFields.numero_proposta, proposalDraft?.cliente_nome, proposalDraft?.whatsapp]);
+
+  useEffect(() => {
     if (precoFinalTouched) return;
     const suggested = Number(autoPricing?.precoFinal || autoPricing?.valorSugerido || 0);
     if (!Number.isFinite(suggested) || suggested <= 0) return;
@@ -1407,7 +1473,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
           Number(updated?.preco_final ?? 0) - Number(updated?.valor_sugerido ?? autoPricing?.valorSugerido ?? 0)
         ) > 0.009
       );
-      setInfo('Orcamento salvo com campos financeiros atualizados.');
+      setInfo('Orçamento salvo com campos financeiros atualizados.');
     } catch (err) {
       setError(err.message ?? 'Erro ao salvar.');
     } finally {
@@ -1591,10 +1657,10 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
       return;
     }
     setError('');
-    const fileName = `proposta-${orc.id}.pdf`;
+    const fileName = buildProposalFileName(proposalDraft, orc.id);
     const mode = await openOrDownloadPropostaPdf(propostaLink, fileName);
     if (mode === 'none') {
-      setError('Nao foi possivel abrir o PDF agora.');
+      setError('Não foi possível abrir o PDF agora.');
       return;
     }
     setInfo('PDF aberto para download.');
@@ -1609,7 +1675,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
       return;
     }
     if (!hasWhatsapp) {
-      setError('WhatsApp do cliente indisponivel para envio da proposta.');
+      setError('WhatsApp do cliente indisponível para envio da proposta.');
       return;
     }
     setSaving(true);
@@ -1619,7 +1685,8 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
       const nowIso = new Date().toISOString();
       const detalhesAtual = parseDetalhes(orc.detalhes);
       const comercialAtual = parseDetalhes(detalhesAtual?.comercial);
-      const mensagem = `Ola, ${orc.nome || 'cliente'}. Preparei sua proposta da HAGAV. Segue o link para visualizar: ${propostaLink}. Qualquer ajuste, me chama aqui.`;
+      const numeroProposta = formatProposalSequence(proposalDraft?.numero_proposta) || '01';
+      const mensagem = `Olá, ${orc.nome || 'cliente'}. Preparei sua proposta comercial HAGAV Nº ${numeroProposta}. Segue o link para visualizar: ${propostaLink}. Qualquer ajuste, me chama aqui.`;
 
       if (typeof window !== 'undefined') {
         const target = whatsappLink(orc.whatsapp, mensagem);
@@ -1651,7 +1718,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
   async function handleRecalculateValues() {
     const nextPrecoFinal = Number(autoPricing?.precoFinal || autoPricing?.valorSugerido || autoPricing?.precoBase || precoFinal || 0);
     if (!Number.isFinite(nextPrecoFinal) || nextPrecoFinal <= 0) {
-      setError('Nao foi possivel recalcular: valor sugerido indisponivel.');
+      setError('Não foi possível recalcular: valor sugerido indisponível.');
       return;
     }
 
@@ -1695,7 +1762,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
         ) : null}
         <div className="drawer-head">
           <div>
-            <p className="text-xs text-hagav-gray uppercase tracking-wider mb-1">Orcamento #{orc.id}</p>
+            <p className="text-xs text-hagav-gray uppercase tracking-wider mb-1">Orçamento #{orc.id}</p>
             <h2 className="text-lg font-bold text-hagav-white">{orc.nome || 'Sem nome'}</h2>
             <p className="text-sm text-hagav-gray">{servicoResumo || '—'}</p>
           </div>
@@ -2050,14 +2117,36 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-2">
               <div>
-                <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Número da proposta</label>
-                <input
-                  type="text"
-                  value={proposalDraft.numero_proposta || ''}
-                  onChange={(e) => updateProposalDraftField('numero_proposta', e.target.value)}
-                  className="hinput w-full"
-                  placeholder="Ex.: PROP-001"
-                />
+                <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Proposta</label>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => updateProposalDraftField('numero_proposta', shiftProposalSequence(proposalDraft.numero_proposta, -1))}
+                    disabled={saving || pdfLoading || draftSaving || proposalNumberLoading}
+                    className="btn-ghost btn-sm h-10 w-10 shrink-0 px-0"
+                    aria-label="Diminuir número da proposta"
+                  >
+                    -
+                  </button>
+                  <input
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={String(proposalDraft.numero_proposta || '').replace(/\D/g, '')}
+                    onChange={(e) => updateProposalDraftField('numero_proposta', formatProposalSequence(e.target.value))}
+                    className="hinput w-full text-center"
+                    placeholder="01"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => updateProposalDraftField('numero_proposta', shiftProposalSequence(proposalDraft.numero_proposta, 1))}
+                    disabled={saving || pdfLoading || draftSaving || proposalNumberLoading}
+                    className="btn-ghost btn-sm h-10 w-10 shrink-0 px-0"
+                    aria-label="Aumentar número da proposta"
+                  >
+                    +
+                  </button>
+                </div>
               </div>
               <div>
                 <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Data de emissão</label>
@@ -2405,7 +2494,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
             </div>
 
             <div>
-              <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Preco final (R$)</label>
+              <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Preço final (R$)</label>
               <input
                 type="number"
                 step="0.01"
@@ -2459,7 +2548,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
                 value={obsInternas}
                 onChange={(e) => setObsInternas(e.target.value)}
                 rows={4}
-                placeholder="Anotacoes internas, pendencias, negociacao..."
+                placeholder="Anotações internas, pendências, negociação..."
                 className="hinput w-full resize-none"
               />
             </div>
@@ -2519,7 +2608,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
                 ) : (
                   <span className="btn-ghost btn-sm orcamento-action-button opacity-60 cursor-not-allowed">
                     <MessageCircle size={13} />
-                    WhatsApp indisponivel
+                    WhatsApp indisponível
                   </span>
                 )}
               </EduTooltip>

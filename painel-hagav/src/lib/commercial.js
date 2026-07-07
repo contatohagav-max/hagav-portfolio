@@ -1384,7 +1384,7 @@ function buildResumoComercial(record, computed) {
   const prioridade = normalizeText(computed?.prioridade || record?.prioridade || '').toLowerCase()
     || priorityByScore(score, urgencia);
 
-  return `${flow} | ${service} | Qtd: ${quantidade} | Material: ${material} | Prazo: ${prazo} | Urgencia: ${urgencia} | Prioridade: ${prioridade} | Score: ${score}`;
+  return `${flow} | ${service} | Qtd: ${quantidade} | Material: ${material} | Prazo: ${prazo} | Urgência: ${urgencia} | Prioridade: ${prioridade} | Score: ${score}`;
 }
 
 function parseDateSafe(value) {
@@ -1702,7 +1702,7 @@ export function buildDashboardInsights(rawLeads = [], rawOrcamentos = []) {
         entryType: 'orcamento',
         nome: lead.nome,
         origem: lead.origem,
-        tipo: lead.servico || lead.fluxo || 'Orcamento',
+        tipo: lead.servico || lead.fluxo || 'Orçamento',
         valor_estimado: lead.valor_estimado || lead.preco_final || lead.preco_base || 0,
         status_orcamento: mapDealStatusToLegacyOrcamento(statusDeal, 'orcamento'),
         prioridade: lead.prioridade,

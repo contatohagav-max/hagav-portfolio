@@ -982,7 +982,7 @@ function buildTemplateValues(row, env, runtime = {}) {
     detalhes?.resumo_servico,
     row?.resumo_orcamento,
     detalhes?.resumo_orcamento,
-    `Prestacao de servicos de ${servico} conforme escopo aprovado.`
+    `Prestação de serviços de ${servico} conforme escopo aprovado.`
   );
   const resumoServico = firstNonEmptyValue(
     contrato?.resumo_servico,
@@ -1063,8 +1063,8 @@ function buildTemplateValues(row, env, runtime = {}) {
   const renovacao = firstNonEmptyValue(
     contrato?.renovacao,
     contrato?.recorrente === false
-      ? "Sem renovacao automatica."
-      : "Renovacao mediante alinhamento comercial entre as partes."
+      ? "Sem renovação automática."
+      : "Renovação mediante alinhamento comercial entre as partes."
   );
 
   const observacoes = normalizeTemplateText(
@@ -1168,7 +1168,7 @@ function buildTemplateValues(row, env, runtime = {}) {
     whatsapp_hagav: whatsappHagav || "-",
 
     responsavel: firstNonEmptyValue(contrato?.responsavel, row?.responsavel, "Time HAGAV"),
-    recorrente: contrato?.recorrente === false ? "Nao" : "Sim",
+    recorrente: contrato?.recorrente === false ? "Não" : "Sim",
   };
 
   const expanded = {};

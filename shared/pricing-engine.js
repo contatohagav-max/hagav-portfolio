@@ -489,7 +489,7 @@ function getUrgencyContext(flow, prazo, serviceKey, pricingRules) {
     multiplier = 1;
     blocked = true;
     forcedManual = true;
-    reasons.push('VSL nao aceita prazo urgente.');
+    reasons.push('VSL não aceita prazo urgente.');
   } else if ((serviceKey === 'vsl_15' || serviceKey === 'vsl_longa') && key === 'Em até 7 dias') {
     multiplier = Math.max(multiplier, readUrgencyMultiplier(vslTable, 'Em até 7 dias') || 1.4);
   }
@@ -498,7 +498,7 @@ function getUrgencyContext(flow, prazo, serviceKey, pricingRules) {
     const allowUrgente = serviceKey === 'reels_shorts_tiktok' || serviceKey === 'criativo_trafego_pago';
     if (!allowUrgente) {
       forcedManual = true;
-      reasons.push('Prazo urgente em DU requer revisao manual para este servico.');
+      reasons.push('Prazo urgente em DU requer revisão manual para este serviço.');
     }
   }
 
@@ -543,7 +543,7 @@ function getMarginHealth(marginPercent, profitValue, pricingRules) {
     return {
       tone: 'red',
       label: 'Lucro negativo',
-      description: 'Preco final abaixo do custo real.',
+      description: 'Preço final abaixo do custo real.',
     };
   }
   if (!Number.isFinite(margin) || margin < Number(rules.minimaSegura || DEFAULT_PRICING_RULES.margem.minimaSegura)) {
@@ -555,7 +555,7 @@ function getMarginHealth(marginPercent, profitValue, pricingRules) {
   }
   return {
     tone: 'green',
-    label: margin >= Number(rules.excelente || DEFAULT_PRICING_RULES.margem.excelente) ? 'Margem excelente' : 'Margem saudavel',
+    label: margin >= Number(rules.excelente || DEFAULT_PRICING_RULES.margem.excelente) ? 'Margem excelente' : 'Margem saudável',
     description: 'Cenário comercial protegido.',
   };
 }
@@ -704,7 +704,7 @@ export function computeCommercialPricing(input = {}, pricingRulesInput = DEFAULT
 
     if (MANUAL_REVIEW_SERVICES.has(serviceKey)) {
       revisaoManual = true;
-      itemReasons.push(`${servico}: servico de revisao manual.`);
+      itemReasons.push(`${servico}: serviço de revisão manual.`);
     }
     if (urgencia.forcedManual || urgencia.blocked) {
       revisaoManual = true;
@@ -751,7 +751,7 @@ export function computeCommercialPricing(input = {}, pricingRulesInput = DEFAULT
 
   if (operacaoEspecial) {
     revisaoManual = true;
-    itemReasons.push('Operacao especial detectada: revisar escopo manualmente.');
+    itemReasons.push('Operação especial detectada: revisar escopo manualmente.');
   }
 
   const precoBaseRounded = Math.max(1, roundCurrency(precoBase));
@@ -785,13 +785,13 @@ export function computeCommercialPricing(input = {}, pricingRulesInput = DEFAULT
 
   const summaryLines = [
     `Custo real estimado: R$ ${custoRealRounded.toFixed(2)} com C/HORA de R$ ${roundCurrency(choHora).toFixed(2)}.`,
-    `Preco base de mercado: R$ ${precoBaseRounded.toFixed(2)} em modo ${basePriceMode === 'floor' ? 'piso minimo' : 'referencia'}.`,
+    `Preço base de mercado: R$ ${precoBaseRounded.toFixed(2)} em modo ${basePriceMode === 'floor' ? 'piso mínimo' : 'referência'}.`,
     `Horas totais estimadas: ${roundCurrency(totalHoras).toFixed(2)}h.`,
     descontoRealPercent > 0
       ? `Desconto por escala aplicado: ${descontoRealPercent}% com economia de R$ ${economiaTotalRounded.toFixed(2)}.`
       : 'Sem desconto por escala aplicado.',
     pacoteSugerido ? `Pacote sugerido: ${pacoteSugerido}.` : '',
-    anyReferenceAdjustment ? 'Sem referencia visual: ajuste comercial aplicado.' : '',
+    anyReferenceAdjustment ? 'Sem referência visual: ajuste comercial aplicado.' : '',
     multicameraPercent > 0 ? `Multicamera detectada: ajuste de ${multicameraPercent}% aplicado.` : '',
   ];
 

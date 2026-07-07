@@ -64,7 +64,7 @@ function ProductionCard({ job, onSelect }) {
             </span>
           </span>
           <span className="block text-[11px] text-hagav-light mt-2">
-            {truncate(job.proxima_acao || 'Sem proxima acao', 44)}
+            {truncate(job.proxima_acao || 'Sem próxima ação', 44)}
           </span>
           <span className="flex items-center justify-between gap-2 mt-2 text-[10px] text-hagav-gray">
             <span className="inline-flex items-center gap-1 truncate">

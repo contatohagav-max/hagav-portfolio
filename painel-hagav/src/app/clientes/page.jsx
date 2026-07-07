@@ -54,8 +54,8 @@ const STATUS_CONTRATO_COLORS = {
 const UPDATE_TOOLTIP = {
   title: 'Atualizar',
   whatIs: 'Recarrega os contratos fechados com os filtros atuais.',
-  purpose: 'Garantir visao atual para renovacao e pos-venda.',
-  observe: 'Use antes de acionar renovacao ou encerramento.',
+  purpose: 'Garantir visão atual para renovação e pós-venda.',
+  observe: 'Use antes de acionar renovação ou encerramento.',
 };
 
 function parseDetalhes(value) {
@@ -199,7 +199,7 @@ function getContratoPdfBlockedMessage(meta) {
   const pdfEngine = String(meta?.pdfEngine || '').trim();
   const fallbackUsed = Boolean(meta?.pdfFallbackUsed);
   if (!pdfEngine) {
-    return 'Contrato bloqueado para uso comercial: engine HTML/CSS nao detectada. Configure PDF_ENGINE + BROWSERLESS_TOKEN (ou PDFSHIFT_API_KEY) no deploy.';
+    return 'Contrato bloqueado para uso comercial: engine HTML/CSS não detectada. Configure PDF_ENGINE + BROWSERLESS_TOKEN (ou PDFSHIFT_API_KEY) no deploy.';
   }
   if (renderMode === 'native_text_fallback' || pdfEngine === 'native_text' || fallbackUsed) {
     return 'Contrato bloqueado para uso comercial: documento gerado em modo fallback/texto. Ative engine HTML real no deploy e gere novamente.';
@@ -380,7 +380,7 @@ export default function ClientesPage() {
       setRows(data);
     } catch (err) {
       console.error('[Clientes]', err);
-      setLoadError('Nao foi possivel carregar clientes/contratos agora.');
+      setLoadError('Não foi possível carregar clientes/contratos agora.');
     } finally {
       setLoading(false);
     }
@@ -698,7 +698,7 @@ export default function ClientesPage() {
 
     const whatsapp = String(row?.whatsapp || '').trim();
     if (!whatsapp) {
-      setFeedback('WhatsApp do cliente indisponivel para envio do contrato.');
+      setFeedback('WhatsApp do cliente indisponível para envio do contrato.');
       setTimeout(() => setFeedback(''), 3200);
       return;
     }
@@ -895,7 +895,7 @@ export default function ClientesPage() {
       setTimeout(() => setFeedback(''), 3200);
     } catch (err) {
       console.error('[Clientes][Reabrir]', err);
-      setFeedback(err.message || 'Falha ao reabrir negociacao.');
+      setFeedback(err.message || 'Falha ao reabrir negociação.');
       setTimeout(() => setFeedback(''), 3200);
     } finally {
       setSaving(false);
@@ -937,7 +937,7 @@ export default function ClientesPage() {
           <p className="text-lg font-bold text-hagav-gray">{metrics.encerrados}</p>
         </div>
         <div className="hcard p-4 text-center">
-          <p className="text-[10px] text-hagav-gray uppercase tracking-wider mb-1">Renovacao proxima</p>
+          <p className="text-[10px] text-hagav-gray uppercase tracking-wider mb-1">Renovação próxima</p>
           <p className="text-lg font-bold text-hagav-gold">{metrics.renovacaoProxima}</p>
         </div>
         <div className="hcard p-4 text-center border-hagav-gold/30">
@@ -951,7 +951,7 @@ export default function ClientesPage() {
           <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-hagav-gray pointer-events-none" />
           <input
             type="text"
-            placeholder="Buscar cliente, WhatsApp, servico..."
+            placeholder="Buscar cliente, WhatsApp, serviço..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="hinput w-full pl-8 text-sm"
@@ -970,7 +970,7 @@ export default function ClientesPage() {
         <select value={recorrenteFilter} onChange={(e) => setRecorrenteFilter(e.target.value)} className="hselect">
           <option value="">Recorrente?</option>
           <option value="sim">Sim</option>
-          <option value="nao">Nao</option>
+          <option value="nao">Não</option>
         </select>
 
         <button
@@ -1013,7 +1013,7 @@ export default function ClientesPage() {
                 <th>Recorrente</th>
                 <th>Status contrato</th>
                 <th>Responsável</th>
-                <th>Renovacao</th>
+                <th>Renovação</th>
                 <th>Acoes</th>
               </tr>
             </thead>
@@ -1037,7 +1037,7 @@ export default function ClientesPage() {
                       <p className="text-[11px] text-hagav-gray">{row.dias_para_vencimento} dia(s)</p>
                     )}
                   </td>
-                  <td className="text-xs text-hagav-light">{row.recorrente_contrato ? 'Sim' : 'Nao'}</td>
+                  <td className="text-xs text-hagav-light">{row.recorrente_contrato ? 'Sim' : 'Não'}</td>
                   <td><BadgeContrato status={resolveDisplayStatusContrato(row)} /></td>
                   <td className="text-xs text-hagav-light">{row.responsavel_contrato || row.responsavel || '—'}</td>
                   <td>
@@ -1128,7 +1128,7 @@ export default function ClientesPage() {
                   <p className="text-[10px] text-hagav-gray uppercase tracking-wider">Serviço</p>
                 </div>
                 <div className="md:col-span-2">
-                  <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Resumo do servico</label>
+                  <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Resumo do serviço</label>
                   <textarea rows={2} value={resumoServico} onChange={(e) => setResumoServico(e.target.value)} className="hinput w-full resize-none" />
                 </div>
                 <div>
@@ -1233,7 +1233,7 @@ export default function ClientesPage() {
                   <span className="text-xs text-hagav-gray md:col-span-2 xl:col-span-3">
                     {String(selected?.contrato_link_pdf || '').trim()
                       ? getContratoPdfBlockedMessage(readContratoPdfMeta(selected))
-                      : 'Gere o contrato PDF para habilitar envio e visualizacao.'}
+                      : 'Gere o contrato PDF para habilitar envio e visualização.'}
                   </span>
                 )}
               </CollapsibleActionBlock>
@@ -1260,7 +1260,7 @@ export default function ClientesPage() {
                   <Power size={12} /> Encerrar contrato
                 </button>
                 <button type="button" className="btn-ghost btn-sm orcamento-action-button" onClick={handleReabrirNegociacao} disabled={saving}>
-                  <Undo2 size={12} /> Reabrir negociacao
+                  <Undo2 size={12} /> Reabrir negociação
                 </button>
               </CollapsibleActionBlock>
             </div>

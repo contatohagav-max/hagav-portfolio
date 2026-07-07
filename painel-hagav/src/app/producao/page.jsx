@@ -87,7 +87,7 @@ function ProductionEditor({ job, onClose, onSaved }) {
       onClose?.();
     } catch (err) {
       console.error('[Producao][Salvar]', err);
-      setError('Nao foi possivel salvar a demanda.');
+      setError('Não foi possível salvar a demanda.');
     } finally {
       setSaving(false);
     }
@@ -297,7 +297,7 @@ export default function ProducaoPage() {
     } catch (err) {
       console.error('[Producao][Mover]', err);
       setJobs(previous);
-      setFeedback('Nao foi possivel mover a demanda.');
+      setFeedback('Não foi possível mover a demanda.');
     }
   }
 
@@ -325,7 +325,7 @@ export default function ProducaoPage() {
         {[
           { label: 'Demandas ativas', value: metrics.active, icon: Boxes },
           { label: 'Bloqueadas', value: metrics.blocked, icon: AlertTriangle },
-          { label: 'Sem proxima acao', value: metrics.withoutAction, icon: Clock3 },
+          { label: 'Sem próxima ação', value: metrics.withoutAction, icon: Clock3 },
           { label: 'Sem ClickUp', value: metrics.withoutClickUp, icon: Link2 },
         ].map(({ label, value, icon: Icon }) => (
           <div key={label} className="hcard p-4">

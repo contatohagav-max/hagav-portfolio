@@ -204,6 +204,13 @@ function formatMoney(value, { withCurrency = true } = {}) {
 }
 
 function formatDateBr(value) {
+  const raw = String(value || "").trim();
+  const brMatch = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (brMatch) {
+    const day = String(brMatch[1]).padStart(2, "0");
+    const month = String(brMatch[2]).padStart(2, "0");
+    return `${day}/${month}/${brMatch[3]}`;
+  }
   const date = new Date(value || Date.now());
   if (Number.isNaN(date.getTime())) return "-";
   const day = String(date.getDate()).padStart(2, "0");
@@ -1061,6 +1068,38 @@ function parseMoneyNumber(value, fallback = 0) {
   return parsed;
 }
 
+function formatProposalNumber(value) {
+  const digits = String(value || "").replace(/\D/g, "");
+  if (!digits) return "01";
+  return digits.padStart(2, "0");
+}
+
+function slugifyFilePart(value, fallback = "cliente") {
+  const slug = String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 64);
+  return slug || fallback;
+}
+
+function buildEconomyDescription({ subtitle, unitBase, unitPrice, quantity, total, discountPercent }) {
+  const referenceTotal = Number(unitBase || 0) > 0 && Number(quantity || 0) > 0
+    ? Number(unitBase) * Number(quantity)
+    : 0;
+  const economy = Math.max(0, referenceTotal - Number(total || 0));
+  const discount = Math.max(0, Number(discountPercent || 0));
+  const unitText = Number(unitPrice || 0) > 0 ? `Valor por entrega: ${formatMoney(unitPrice)}.` : "";
+  const economyText = economy > 0 && discount > 0
+    ? `Economia: ${formatMoney(economy)} (${Math.round(discount)}%).`
+    : (economy > 0
+      ? `Economia: ${formatMoney(economy)}.`
+      : (discount > 0 ? `Economia: ${Math.round(discount)}%.` : ""));
+  return [subtitle, unitText, economyText].filter(Boolean).join(" ");
+}
+
 function formatComparativeOptions(qtyBase, totalBase) {
   const safeQty = Math.max(1, Math.round(Number(qtyBase || 0) || 1));
   const safeTotal = Number(totalBase || 0) > 0 ? Number(totalBase) : (safeQty * 170);
@@ -1079,21 +1118,42 @@ function formatComparativeOptions(qtyBase, totalBase) {
     opcao1_qtd: `${safeQty} vídeos`,
     opcao1_preco: formatMoney(safeTotal),
     opcao1_unitario: `${formatMoney(unitBase)} por vídeo`,
-    opcao1_desc: "Sem desconto aplicado",
+    opcao1_desc: buildEconomyDescription({
+      subtitle: "Escopo solicitado inicialmente.",
+      unitBase,
+      unitPrice: unitBase,
+      quantity: safeQty,
+      total: safeTotal,
+      discountPercent: 0,
+    }),
     opcao1_desconto: "",
-    opcao2_titulo: "Mais volume",
+    opcao2_titulo: "Plano Crescimento",
     opcao2_qtd: `${qty2} vídeos`,
     opcao2_preco: formatMoney(total2),
     opcao2_unitario: `${formatMoney(unit2)} por vídeo`,
-    opcao2_desc: discount2 > 0 ? `Desconto aplicado: ${discount2}%` : "Sem desconto aplicado",
+    opcao2_desc: buildEconomyDescription({
+      subtitle: "Mais indicado para quem publica com frequência.",
+      unitBase,
+      unitPrice: unit2,
+      quantity: qty2,
+      total: total2,
+      discountPercent: discount2,
+    }),
     opcao2_desconto: discount2 > 0 ? `-${discount2}%` : "",
-    opcao3_titulo: "Melhor custo-benefício",
+    opcao3_titulo: "Plano Escala",
     opcao3_qtd: `${qty3} vídeos`,
     opcao3_preco: formatMoney(total3),
     opcao3_unitario: `${formatMoney(unit3)} por vídeo`,
-    opcao3_desc: discount3 > 0 ? `Desconto aplicado: ${discount3}%` : "Sem desconto aplicado",
+    opcao3_desc: buildEconomyDescription({
+      subtitle: "Ideal para operações maiores e maior economia por entrega.",
+      unitBase,
+      unitPrice: unit3,
+      quantity: qty3,
+      total: total3,
+      discountPercent: discount3,
+    }),
     opcao3_desconto: discount3 > 0 ? `-${discount3}%` : "",
-    texto_comparativo: "",
+    texto_comparativo: "Comparativo pensado para orientar a decisão pelo melhor equilíbrio entre volume, investimento e custo por entrega.",
   };
 }
 
@@ -1233,7 +1293,7 @@ function buildTemplateValues(row, env, options = {}) {
   const quantitySummary = buildQuantitySummary(serviceItems);
   const qtyTotal = Math.max(1, Number(quantitySummary?.total || 1));
   const primaryService = serviceItems.length > 1
-    ? `Multiplos servicos (${serviceItems.length})`
+    ? `Múltiplos serviços (${serviceItems.length})`
     : (serviceItems[0]?.servico || "Conteúdo audiovisual");
   const quantidade = serviceItems.length > 1
     ? `${quantitySummary.quantityLabel} (${quantitySummary.breakdown})`
@@ -1357,9 +1417,8 @@ function buildTemplateValues(row, env, options = {}) {
     detalhes?.whatsapp,
     ""
   ));
-  const propostaNumero = normalizeTemplateText(
-    firstNonEmptyValue(templateOverrides?.numero_proposta, comercial?.numero_proposta, `PROP-${row?.id || "-"}`),
-    80
+  const propostaNumero = formatProposalNumber(
+    firstNonEmptyValue(templateOverrides?.numero_proposta, comercial?.numero_proposta, "01")
   );
   const dataEmissao = firstNonEmptyValue(
     templateOverrides?.data_emissao,
@@ -1398,7 +1457,6 @@ function buildTemplateValues(row, env, options = {}) {
     : formatDatePlusDaysBr(dataHojeIso, 7);
   const condicoesDefault = [
     `Forma de pagamento: ${formaPagamento}.`,
-    `Proposta válida até ${dataValidade}.`,
     "O projeto inicia após aprovação e envio dos materiais.",
     "Inclui 1 rodada de ajustes por entrega. Alterações de estrutura, roteiro, estilo ou escopo podem gerar novo orçamento.",
   ];
@@ -1494,7 +1552,7 @@ function buildTemplateValues(row, env, options = {}) {
     : "Sem economia por escala";
   const descontoAplicadoTexto = discountPercent > 0 || economiaTotalNum > 0
     ? `Faixa aplicada: ${discountPercent > 0 ? `${Math.round(discountPercent)}%` : "ajuste protegido"} com economia de ${formatMoney(economiaTotalNum)}.`
-    : "Nesta proposta, nao foi aplicado desconto progressivo por volume.";
+    : "Nesta proposta, não foi aplicado desconto progressivo por volume.";
 
   const revisoesTexto = normalizeRevisoesText(revisoesInclusas);
   const whatsappHagav = getOfficialWhatsapp(env, detalhes);
@@ -1572,16 +1630,16 @@ function buildTemplateValues(row, env, options = {}) {
     revisoes_inclusas_texto: revisoesTexto,
     inicio_producao_texto: "O projeto inicia após aprovação e envio dos materiais.",
     ajustes_texto: "Inclui 1 rodada de ajustes. Alterações adicionais ou mudanças de escopo podem gerar novo orçamento.",
-    cta_aprovacao: "Aprovar proposta no WhatsApp",
+    cta_aprovacao: firstNonEmptyValue(templateOverrides?.cta_aprovacao, comercial?.cta_aprovacao, "Aprovar proposta no WhatsApp"),
     observacao_adicional: observacaoManual.text,
-    observacoes_bloco_style: observacaoManual.show ? "display:block;" : "display:none;",
+    observacoes_bloco_style: observacaoManual.show && proposalMode !== "direta" ? "display:block;" : "display:none;",
     referencia_texto: referenciaCliente.text,
-    referencia_bloco_style: referenciaCliente.show ? "display:block;" : "display:none;",
+    referencia_bloco_style: referenciaCliente.show && proposalMode !== "direta" ? "display:block;" : "display:none;",
     resumo_quantidade_breakdown: quantitySummary.breakdown,
     modo_proposta: proposalMode,
     modo_proposta_label: proposalModeLabel(proposalMode),
     opcoes_bloco_style: proposalMode === "opcoes" ? "display:block;" : "display:none;",
-    investimento_bloco_style: proposalMode === "opcoes" ? "display:none;" : "display:block;",
+    investimento_bloco_style: proposalMode === "opcoes" || proposalMode === "mensal" ? "display:none;" : "display:block;",
     mensal_bloco_style: proposalMode === "mensal" ? "display:block;" : "display:none;",
     personalizada_bloco_style: proposalMode === "personalizada" ? "display:block;" : "display:none;",
     empresa_bloco_style: empresa ? "display:block;" : "display:none;",
@@ -1614,6 +1672,8 @@ function buildTemplateValues(row, env, options = {}) {
   };
 
   Object.assign(base, templateOverrides);
+  base.numero_proposta = formatProposalNumber(base.numero_proposta);
+  base.proposta_numero = base.numero_proposta;
   if (base.cliente_nome || base.nome_cliente) {
     const nome = firstNonEmptyValue(base.cliente_nome, base.nome_cliente);
     base.cliente_nome = nome;
@@ -1972,7 +2032,14 @@ export async function onRequestPost(context) {
     html_has_header_class: Boolean(htmlHasHeaderClass),
   });
 
-  const fileName = `orcamento-${id}-${Date.now()}.pdf`;
+  const fileProposalNumber = formatProposalNumber(
+    firstNonEmptyValue(templateOverrides?.numero_proposta, readDetalhes(row)?.comercial?.numero_proposta, "01")
+  );
+  const fileClientName = slugifyFilePart(
+    firstNonEmptyValue(templateOverrides?.cliente_nome, templateOverrides?.nome_cliente, row?.nome),
+    "cliente"
+  );
+  const fileName = `proposta-hagav-${fileClientName}-n${fileProposalNumber}.pdf`;
   const uploadResult = await uploadPdfIfPossible(config, env, pdfContent, fileName);
   if (!uploadResult.ok) {
     return fail(requestId, "upload", "pdf_upload_failed", 502, {

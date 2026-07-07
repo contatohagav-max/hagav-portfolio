@@ -16,7 +16,7 @@ function normalizeUiError(error) {
     return 'Seu acesso ao painel esta desativado.';
   }
   if (raw.includes('liberado para o painel')) {
-    return 'Seu usuario ainda nao foi liberado para o painel.';
+    return 'Seu usuário ainda não foi liberado para o painel.';
   }
   return error?.message || 'Erro ao entrar.';
 }

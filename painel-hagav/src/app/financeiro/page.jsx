@@ -95,7 +95,7 @@ function FinancialEditor({ entry, createMode, onClose, onSaved }) {
       onClose?.();
     } catch (err) {
       console.error('[Financeiro][Salvar]', err);
-      setError('Nao foi possivel salvar o lancamento.');
+      setError('Não foi possível salvar o lançamento.');
     } finally {
       setSaving(false);
     }
@@ -194,7 +194,7 @@ export default function FinanceiroPage() {
       }));
     } catch (err) {
       console.error('[Financeiro]', err);
-      setLoadError('Nao foi possivel carregar o financeiro. A migracao do banco pode estar pendente.');
+      setLoadError('Não foi possível carregar o financeiro. A migração do banco pode estar pendente.');
     } finally {
       setLoading(false);
     }
@@ -265,7 +265,7 @@ export default function FinanceiroPage() {
 
       <div className="grid grid-cols-2 xl:grid-cols-5 gap-3">
         {[
-          { label: 'Recebido no mes', value: metrics.received, icon: ArrowDownCircle, tone: 'text-emerald-300' },
+          { label: 'Recebido no mês', value: metrics.received, icon: ArrowDownCircle, tone: 'text-emerald-300' },
           { label: 'A receber', value: metrics.pending, icon: CalendarClock, tone: 'text-blue-300' },
           { label: 'Em atraso', value: metrics.overdue, icon: CircleDollarSign, tone: 'text-red-300' },
           { label: 'Custos', value: metrics.costs, icon: ArrowUpCircle, tone: 'text-amber-300' },

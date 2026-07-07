@@ -26,35 +26,35 @@ const PIPELINE_STAGE_TOOLTIPS = {
     title: 'Novo',
     whatIs: 'Lead recem-entrado, ainda sem atendimento completo.',
     purpose: 'Dar início rápido ao primeiro contato.',
-    observe: 'Tempo alto aqui reduz chance de conversao.',
+    observe: 'Tempo alto aqui reduz chance de conversão.',
   },
   contatado: {
     title: 'Contatado',
     whatIs: 'Lead em contato ativo com o comercial.',
     purpose: 'Conduzir qualificacao e avancar para proposta.',
-    observe: 'Sempre deixe proxima acao definida.',
+    observe: 'Sempre deixe próxima ação definida.',
   },
   qualificado: {
     title: 'Qualificado',
     whatIs: 'Lead validado e pronto para gerar proposta.',
-    purpose: 'Separar oportunidades reais das nao qualificadas.',
+    purpose: 'Separar oportunidades reais das não qualificadas.',
     observe: 'Acao ideal nesta etapa e gerar orcamento rapidamente.',
   },
   proposta_enviada: {
     title: 'Proposta',
-    whatIs: 'Lead em fase comercial de proposta e negociacao.',
+    whatIs: 'Lead em fase comercial de proposta e negociação.',
     purpose: 'Acompanhar negociacoes em fase de decisao.',
     observe: 'Monitore prazo de retorno, ajustes e fechamento.',
   },
   fechado: {
     title: 'Fechado',
     whatIs: 'Negocio concluido com aceite do cliente.',
-    purpose: 'Representar conversao e receita efetiva.',
+    purpose: 'Representar conversão e receita efetiva.',
     observe: 'Revise ticket e origem para replicar padrao.',
   },
   perdido: {
     title: 'Perdido',
-    whatIs: 'Lead que nao virou venda.',
+    whatIs: 'Lead que não virou venda.',
     purpose: 'Registrar perdas e aprender com os motivos.',
     observe: 'Analise recorrencias para ajustar abordagem.',
   },
@@ -207,7 +207,7 @@ export default function KanbanBoard({
         onLeadsChange?.(next);
         return next;
       });
-      onStatusPersist?.({ type: 'error', message: 'Nao foi possivel salvar o status no pipeline.' });
+      onStatusPersist?.({ type: 'error', message: 'Não foi possível salvar o status no pipeline.' });
     }
   }
 

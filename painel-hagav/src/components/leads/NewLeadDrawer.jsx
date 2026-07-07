@@ -30,7 +30,7 @@ const FLUXO_OPTIONS = [
 
 const MATERIAL_OPTIONS = [
   { value: 'Sim', label: 'Sim' },
-  { value: 'Nao', label: 'Nao' },
+  { value: 'Nao', label: 'Não' },
   { value: 'Parcial', label: 'Parcial' },
 ];
 

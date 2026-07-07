@@ -21,7 +21,7 @@ export default function OrcamentosTable({ orcamentos, onSelect }) {
             <th>Potencial</th>
             <th>Preço final</th>
             <th>Margem (Auto/Com.)</th>
-            <th>Revisao</th>
+            <th>Revisão</th>
             <th>Status</th>
             <th>Urgência</th>
             <th>Próxima ação</th>

@@ -69,125 +69,125 @@ const EMPTY_INSIGHTS = {
 
 const KPI_TOOLTIPS = {
   leads_mes: {
-    title: 'Leads no mes',
-    whatIs: 'Total de leads criados no mes atual.',
+    title: 'Leads no mês',
+    whatIs: 'Total de leads criados no mês atual.',
     purpose: 'Medir entrada de oportunidades comerciais.',
     observe: 'Compare com os dias anteriores e a origem dos leads.',
   },
   orcamentos_aberto: {
     title: 'Orçamentos em aberto',
-    whatIs: 'Soma dos orcamentos ainda em negociacao.',
-    purpose: 'Priorizar fechamento e previsao de curto prazo.',
-    observe: 'Valor alto com baixa conversao indica gargalo comercial.',
+    whatIs: 'Soma dos orçamentos ainda em negociação.',
+    purpose: 'Priorizar fechamento e previsão de curto prazo.',
+    observe: 'Valor alto com baixa conversão indica gargalo comercial.',
   },
   receita_fechada_mes: {
-    title: 'Receita fechada no mes',
-    whatIs: 'Valor total de orcamentos fechados no mes corrente.',
+    title: 'Receita fechada no mês',
+    whatIs: 'Valor total de orçamentos fechados no mês corrente.',
     purpose: 'Acompanhar faturamento efetivamente convertido.',
     observe: 'Se cair, revise volume de propostas e taxa de fechamento.',
   },
   ticket_medio: {
-    title: 'Ticket medio',
-    whatIs: 'Media de valor por orcamento fechado no mes.',
+    title: 'Ticket médio',
+    whatIs: 'Média de valor por orçamento fechado no mês.',
     purpose: 'Entender qualidade financeira das vendas.',
     observe: 'Queda constante pode sinalizar desconto excessivo.',
   },
   taxa_conversao: {
-    title: 'Taxa de conversao',
-    whatIs: 'Percentual de leads do mes que viraram fechado.',
-    purpose: 'Medir eficiencia do funil comercial.',
-    observe: 'Cruze com origem, urgencia e tempo de resposta.',
+    title: 'Taxa de conversão',
+    whatIs: 'Percentual de leads do mês que viraram fechado.',
+    purpose: 'Medir eficiência do funil comercial.',
+    observe: 'Cruze com origem, urgência e tempo de resposta.',
   },
   leads_urgentes: {
     title: 'Leads urgentes',
-    whatIs: 'Quantidade de leads com urgencia alta ou media.',
-    purpose: 'Indicar demandas que exigem acao imediata.',
-    observe: 'Priorize contato rapido para evitar perda de oportunidade.',
+    whatIs: 'Quantidade de leads com urgência alta ou média.',
+    purpose: 'Indicar demandas que exigem ação imediata.',
+    observe: 'Priorize contato rápido para evitar perda de oportunidade.',
   },
   followup_atrasado: {
     title: 'Follow-up atrasado',
     whatIs: 'Leads abertos sem retorno dentro da janela esperada.',
     purpose: 'Evitar oportunidades esquecidas no funil.',
-    observe: 'Mantenha esse numero baixo com rotina diaria.',
+    observe: 'Mantenha esse número baixo com rotina diária.',
   },
   tempo_resposta_medio: {
-    title: 'Tempo medio de resposta',
-    whatIs: 'Tempo medio entre entrada e primeiro retorno ao lead.',
+    title: 'Tempo médio de resposta',
+    whatIs: 'Tempo médio entre entrada e primeiro retorno ao lead.',
     purpose: 'Medir velocidade operacional do comercial.',
-    observe: 'Quanto menor, maior chance de conversao.',
+    observe: 'Quanto menor, maior chance de conversão.',
   },
 };
 
 const PIPELINE_TOOLTIPS = {
   novo: {
     title: 'Novo',
-    whatIs: 'Lead recem-entrado, sem atendimento completo.',
+    whatIs: 'Lead recém-entrado, sem atendimento completo.',
     purpose: 'Identificar o que precisa do primeiro contato.',
-    observe: 'Nao deixe acumular por muito tempo.',
+    observe: 'Não deixe acumular por muito tempo.',
   },
   contatado: {
     title: 'Contatado',
     whatIs: 'Lead em contato ativo com o time comercial.',
-    purpose: 'Acompanhar negociacoes em andamento.',
-    observe: 'Valide se ha proxima acao definida para cada lead.',
+    purpose: 'Acompanhar negociações em andamento.',
+    observe: 'Valide se há próxima ação definida para cada lead.',
   },
   qualificado: {
     title: 'Qualificado',
-    whatIs: 'Lead validado e pronto para gerar orcamento.',
-    purpose: 'Garantir qualidade antes da fase de negociacao.',
-    observe: 'Use esta etapa para acionar o botao Gerar orcamento.',
+    whatIs: 'Lead validado e pronto para gerar orçamento.',
+    purpose: 'Garantir qualidade antes da fase de negociação.',
+    observe: 'Use esta etapa para acionar o botão Gerar orçamento.',
   },
   proposta_enviada: {
     title: 'Proposta',
-    whatIs: 'Lead que ja recebeu proposta comercial.',
-    purpose: 'Monitorar etapa de decisao do cliente.',
+    whatIs: 'Lead que já recebeu proposta comercial.',
+    purpose: 'Monitorar etapa de decisão do cliente.',
     observe: 'Foque em follow-up e prazo de retorno.',
   },
   fechado: {
     title: 'Fechado',
-    whatIs: 'Negocio concluido com aceite do cliente.',
-    purpose: 'Compor receita fechada e conversao do funil.',
-    observe: 'Acompanhe ticket medio e servicos mais vendidos.',
+    whatIs: 'Negócio concluído com aceite do cliente.',
+    purpose: 'Compor receita fechada e conversão do funil.',
+    observe: 'Acompanhe ticket médio e serviços mais vendidos.',
   },
   perdido: {
     title: 'Perdido',
-    whatIs: 'Lead que nao evoluiu para fechamento.',
+    whatIs: 'Lead que não evoluiu para fechamento.',
     purpose: 'Mapear perdas para ajustar abordagem comercial.',
-    observe: 'Analise motivo e origem para reduzir recorrencia.',
+    observe: 'Analise motivo e origem para reduzir recorrência.',
   },
 };
 
 const UPDATE_TOOLTIP = {
   title: 'Atualizar',
-  whatIs: 'Recarrega os dados da tela com as informacoes mais recentes.',
-  purpose: 'Garantir leitura atual antes de decidir proximo passo.',
+  whatIs: 'Recarrega os dados da tela com as informações mais recentes.',
+  purpose: 'Garantir leitura atual antes de decidir próximo passo.',
   observe: 'Use sempre antes de revisar KPI ou mover prioridades.',
 };
 
 const CHART_TOOLTIPS = {
   origem_conversao: {
-    title: 'Origem x conversao',
+    title: 'Origem x conversão',
     whatIs: 'Compara volume de leads por origem com taxa de fechamento.',
     purpose: 'Identificar canais que trazem mais resultado comercial.',
-    observe: 'Prefira origens com bom equilibrio entre volume e conversao.',
+    observe: 'Prefira origens com bom equilíbrio entre volume e conversão.',
   },
   leads_urgencia: {
-    title: 'Leads por urgencia',
-    whatIs: 'Distribuicao dos leads por nivel de urgencia.',
+    title: 'Leads por urgência',
+    whatIs: 'Distribuição dos leads por nível de urgência.',
     purpose: 'Ajudar a priorizar atendimento do time.',
-    observe: 'Volume alto em urgencia alta pede acao imediata.',
+    observe: 'Volume alto em urgência alta pede ação imediata.',
   },
   servicos_pedidos: {
     title: 'Serviços mais pedidos',
-    whatIs: 'Ranking de servicos com maior demanda no periodo.',
+    whatIs: 'Ranking de serviços com maior demanda no período.',
     purpose: 'Guiar foco comercial e operacional em ofertas mais recorrentes.',
     observe: 'Use para ajustar campanhas e capacidade do time.',
   },
   receita_servico: {
-    title: 'Receita por servico',
-    whatIs: 'Participacao de receita estimada por tipo de servico.',
-    purpose: 'Entender quais servicos sustentam o faturamento.',
-    observe: 'Concentre esforco nos servicos de maior retorno.',
+    title: 'Receita por serviço',
+    whatIs: 'Participação de receita estimada por tipo de serviço.',
+    purpose: 'Entender quais serviços sustentam o faturamento.',
+    observe: 'Concentre esforço nos serviços de maior retorno.',
   },
 };
 
@@ -248,7 +248,7 @@ export default function DashboardPage() {
     } catch (err) {
       console.error('[Dashboard]', err);
       setInsights(EMPTY_INSIGHTS);
-      setLoadError('Nao foi possivel carregar o dashboard agora. Tente novamente.');
+      setLoadError('Não foi possível carregar o dashboard agora. Tente novamente.');
     } finally {
       setLoading(false);
     }
@@ -281,14 +281,14 @@ const lists = safeInsights.lists;
     : null;
 
   const metricCards = [
-    { id: 'leads_mes', label: 'Leads no mes', value: m.leadsMes, icon: Users, onClick: () => router.push('/leads'), title: 'Abrir tela de leads' },
+    { id: 'leads_mes', label: 'Leads no mês', value: m.leadsMes, icon: Users, onClick: () => router.push('/leads'), title: 'Abrir tela de leads' },
     { id: 'orcamentos_aberto', label: 'Orçamentos em aberto', value: fmtBRL(m.orcamentosAbertos), icon: Wallet, onClick: () => router.push('/orcamentos?abertos=1'), title: 'Abrir orçamentos em aberto' },
-    { id: 'receita_fechada_mes', label: 'Receita fechada no mes', value: fmtBRL(m.receitaFechadaMes), icon: CircleDollarSign, onClick: () => router.push('/pipeline'), title: 'Abrir pipeline e revisar fechamentos' },
-    { id: 'ticket_medio', label: 'Ticket medio', value: fmtBRL(m.ticketMedio), icon: BadgeDollarSign, onClick: () => router.push('/orcamentos'), title: 'Abrir tela de orcamentos' },
-    { id: 'taxa_conversao', label: 'Taxa de conversao', value: fmtPercent(m.taxaConversao), icon: Percent, onClick: () => router.push('/pipeline'), title: 'Abrir pipeline' },
+    { id: 'receita_fechada_mes', label: 'Receita fechada no mês', value: fmtBRL(m.receitaFechadaMes), icon: CircleDollarSign, onClick: () => router.push('/pipeline'), title: 'Abrir pipeline e revisar fechamentos' },
+    { id: 'ticket_medio', label: 'Ticket médio', value: fmtBRL(m.ticketMedio), icon: BadgeDollarSign, onClick: () => router.push('/orcamentos'), title: 'Abrir tela de orçamentos' },
+    { id: 'taxa_conversao', label: 'Taxa de conversão', value: fmtPercent(m.taxaConversao), icon: Percent, onClick: () => router.push('/pipeline'), title: 'Abrir pipeline' },
     { id: 'leads_urgentes', label: 'Leads urgentes', value: m.leadsUrgentes, icon: Siren, onClick: () => router.push('/leads?urgencia=alta'), title: 'Filtrar leads urgentes' },
     { id: 'followup_atrasado', label: 'Follow-up atrasado', value: m.followupAtrasado, icon: Clock3, onClick: () => router.push('/leads?followup=1'), title: 'Filtrar follow-up atrasado' },
-    { id: 'tempo_resposta_medio', label: 'Tempo medio de resposta', value: fmtHours(m.tempoMedioResposta), icon: Timer, onClick: () => router.push('/leads'), title: 'Abrir leads e revisar tempos de resposta' },
+    { id: 'tempo_resposta_medio', label: 'Tempo médio de resposta', value: fmtHours(m.tempoMedioResposta), icon: Timer, onClick: () => router.push('/leads'), title: 'Abrir leads e revisar tempos de resposta' },
   ];
   const kpisPrincipais = metricCards.slice(0, 4);
   const kpisOperacionais = metricCards.slice(4);
@@ -318,7 +318,7 @@ const lists = safeInsights.lists;
     {
       label: 'Orçamentos urgentes',
       value: lists.orcUrgentes.length,
-      hint: 'Requerem priorizacao imediata',
+      hint: 'Requerem priorização imediata',
       tone: 'red',
       onClick: () => router.push('/orcamentos?urgencia=alta'),
       icon: AlertTriangle,
@@ -474,10 +474,10 @@ const lists = safeInsights.lists;
 
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
           <ChartCard
-            title="Origem x conversao"
+            title="Origem x conversão"
             icon={TrendingUp}
             tooltip={CHART_TOOLTIPS.origem_conversao}
-            description="Volume por origem e taxa media de fechamento"
+            description="Volume por origem e taxa média de fechamento"
             empty={charts.origemConversao.length === 0}
             loading={loading}
           >
@@ -490,7 +490,7 @@ const lists = safeInsights.lists;
                 <Tooltip
                   contentStyle={{ background: '#161616', border: '1px solid #2A2A2A', borderRadius: 10, fontSize: 12 }}
                   formatter={(value, name) => {
-                    if (name === 'conversao') return [`${Number(value).toFixed(1)}%`, 'Conversao'];
+                    if (name === 'conversao') return [`${Number(value).toFixed(1)}%`, 'Conversão'];
                     return [value, 'Leads'];
                   }}
                 />
@@ -501,7 +501,7 @@ const lists = safeInsights.lists;
           </ChartCard>
 
           <ChartCard
-            title="Leads por urgencia"
+            title="Leads por urgência"
             icon={Siren}
             tooltip={CHART_TOOLTIPS.leads_urgencia}
             description="Distribuicao dos leads por prioridade de atendimento"
@@ -554,10 +554,10 @@ const lists = safeInsights.lists;
           </ChartCard>
 
           <ChartCard
-            title="Receita por servico"
+            title="Receita por serviço"
             icon={CircleDollarSign}
             tooltip={CHART_TOOLTIPS.receita_servico}
-            description="Participacao de receita estimada por servico"
+            description="Participação de receita estimada por serviço"
             empty={charts.receitaPorServico.length === 0}
             loading={loading}
           >

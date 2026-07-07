@@ -145,6 +145,18 @@ function buildEconomyText(scenario, baseUnitPrice) {
   return '';
 }
 
+function syncEconomyDescription(description, economy, discountPercent) {
+  const clean = normalizeText(description);
+  if (!(Number(economy || 0) > 0) || !(Number(discountPercent || 0) > 0)) return clean;
+
+  const economyText = `Economia: ${fmtBRL(economy)} (${Math.round(discountPercent)}%).`;
+  if (/Economia:/i.test(clean)) {
+    const updated = clean.replace(/Economia:\s*.*?(?:\(\s*[\d.,]+\s*%\s*\)|\.)\.?/i, economyText);
+    return (updated === clean ? clean.replace(/Economia:\s*.*$/i, economyText) : updated).trim();
+  }
+  return [clean, economyText].filter(Boolean).join(' ');
+}
+
 function getServiceItems(orc = {}) {
   const itens = Array.isArray(orc?.itens_servico) ? orc.itens_servico.filter(Boolean) : [];
   if (itens.length > 0) return itens;
@@ -320,7 +332,7 @@ export function buildProposalPreviewModel({ orc, proposalMode, proposalDraft }) 
   const optionCards = [1, 2, 3].map((index) => {
     const title = normalizeText(draft[`opcao${index}_titulo`]);
     const quantity = normalizeText(draft[`opcao${index}_qtd`]);
-    const description = normalizeText(draft[`opcao${index}_desc`]);
+    let description = normalizeText(draft[`opcao${index}_desc`]);
     const manualDiscountText = normalizeText(draft[`opcao${index}_desconto`]);
 
     let total = normalizeText(draft[`opcao${index}_preco`]);
@@ -331,12 +343,15 @@ export function buildProposalPreviewModel({ orc, proposalMode, proposalDraft }) 
     const discountPercent = index > 1 ? parseDiscountPercent(manualDiscountText, 0) : 0;
 
     if (index > 1 && discountPercent > 0 && baseQuantity > 0 && optionQuantity > 0 && baseTotal > 0) {
-      const recalculatedTotal = (baseTotal / baseQuantity) * optionQuantity * (1 - (discountPercent / 100));
+      const totalWithoutDiscount = (baseTotal / baseQuantity) * optionQuantity;
+      const recalculatedTotal = totalWithoutDiscount * (1 - (discountPercent / 100));
       const unitLabel = inferUnitLabelFromUnitPrice(unitPrice, unitLabels.singular);
+      const economy = Math.max(0, totalWithoutDiscount - recalculatedTotal);
 
       total = fmtBRL(recalculatedTotal);
       unitPrice = `${fmtBRL(recalculatedTotal / optionQuantity)} por ${unitLabel}`;
       discount = formatPercentBadge(discountPercent);
+      description = syncEconomyDescription(description, economy, discountPercent);
     }
 
     return {

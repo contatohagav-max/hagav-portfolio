@@ -1223,6 +1223,7 @@ export function buildRecordFieldsFromItems(items = [], fallback = {}) {
 export function buildComparativeProposalPricing(record, { baseQuantity, baseTotal, pricingRules } = {}) {
   const safeRecord = record && typeof record === 'object' ? record : {};
   const items = extractServiceItems(safeRecord);
+
   const inferredBaseQty = Math.max(
     1,
     Math.round(
@@ -1232,11 +1233,13 @@ export function buildComparativeProposalPricing(record, { baseQuantity, baseTota
       || 1
     )
   );
+
   const qty2 = Math.max(inferredBaseQty + 1, Math.round(inferredBaseQty * 1.5));
   const qty3 = Math.max(qty2 + 1, Math.max(30, Math.round(inferredBaseQty * 3)));
 
   const baseRecord = buildPricingVariantRecord(safeRecord, inferredBaseQty);
   const baseSnapshot = computePricingSnapshot(baseRecord, pricingRules);
+
   const baseDisplayTotal = roundCurrency(
     toNumber(baseTotal, 0)
     || toNumber(safeRecord?.preco_final, 0)
@@ -1245,9 +1248,36 @@ export function buildComparativeProposalPricing(record, { baseQuantity, baseTota
     || baseSnapshot.valorSugerido
     || 0
   );
+
   const baseUnitPrice = inferredBaseQty > 0
     ? roundCurrency(baseDisplayTotal / inferredBaseQty)
     : 0;
+
+  const buildScenario = (key, title, quantity, discountPercent = 0, previousQuantity = inferredBaseQty) => {
+    const safeQuantity = Math.max(1, Math.round(Number(quantity || 0) || 1));
+    const safeDiscount = Math.max(0, Math.min(100, Number(discountPercent || 0)));
+
+    const grossTotal = roundCurrency(baseUnitPrice * safeQuantity);
+    const total = roundCurrency(grossTotal * (1 - (safeDiscount / 100)));
+    const unitPrice = safeQuantity > 0 ? roundCurrency(total / safeQuantity) : 0;
+    const savingsTotal = roundCurrency(Math.max(0, grossTotal - total));
+
+    return {
+      key,
+      title,
+      quantity: safeQuantity,
+      total,
+      unitPrice,
+      discountPercent: safeDiscount,
+      grossTotal,
+      savingsTotal,
+      previousQuantity,
+      snapshot: computePricingSnapshot(buildPricingVariantRecord(safeRecord, safeQuantity), pricingRules),
+    };
+  };
+
+  const discount2 = getVolumeDiscount(qty2);
+  const discount3 = getVolumeDiscount(qty3);
 
   const scenarios = [
     {
@@ -1257,41 +1287,18 @@ export function buildComparativeProposalPricing(record, { baseQuantity, baseTota
       total: baseDisplayTotal,
       unitPrice: baseUnitPrice,
       discountPercent: 0,
+      grossTotal: baseDisplayTotal,
+      savingsTotal: 0,
       snapshot: baseSnapshot,
     },
-    {
-      key: 'mais_volume',
-      title: 'Mais volume',
-      quantity: qty2,
-      snapshot: computePricingSnapshot(buildPricingVariantRecord(safeRecord, qty2), pricingRules),
-    },
-    {
-      key: 'melhor_custo_beneficio',
-      title: 'Melhor custo-benefício',
-      quantity: qty3,
-      snapshot: computePricingSnapshot(buildPricingVariantRecord(safeRecord, qty3), pricingRules),
-    },
-  ].map((scenario, index, list) => {
-    if (index === 0) return scenario;
-    const total = roundCurrency(Number(scenario?.snapshot?.valorSugerido || 0));
-    const unitPrice = scenario.quantity > 0
-      ? roundCurrency(total / scenario.quantity)
-      : 0;
-    const discountPercent = baseUnitPrice > 0
-      ? Math.max(0, Math.round((1 - (unitPrice / baseUnitPrice)) * 100))
-      : 0;
-    return {
-      ...scenario,
-      total,
-      unitPrice,
-      discountPercent,
-      previousQuantity: list[index - 1]?.quantity || inferredBaseQty,
-    };
-  });
+    buildScenario('mais_volume', 'Mais volume', qty2, discount2, inferredBaseQty),
+    buildScenario('melhor_custo_beneficio', 'Melhor custo-benefício', qty3, discount3, qty2),
+  ];
 
   return {
     baseQuantity: inferredBaseQty,
     baseTotal: baseDisplayTotal,
+    baseUnitPrice,
     scenarios,
   };
 }

@@ -83,7 +83,34 @@ function parseCurrencyNumber(value, fallback = 0) {
   if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
   return parsed;
 }
+function parseDiscountPercent(value, fallback = 0) {
+  const raw = normalizeText(value);
+  if (!raw) return fallback;
 
+  const normalized = raw
+    .replace('%', '')
+    .replace('-', '')
+    .replace(',', '.')
+    .replace(/[^0-9.]/g, '');
+
+  const parsed = Number(normalized);
+  if (!Number.isFinite(parsed) || parsed < 0) return fallback;
+
+  return Math.max(0, Math.min(100, parsed));
+}
+
+function formatPercentBadge(value) {
+  const number = Number(value || 0);
+  if (!Number.isFinite(number) || number <= 0) return '';
+
+  const rounded = Math.round(number * 100) / 100;
+  return `-${String(rounded).replace('.', ',')}%`;
+}
+
+function inferUnitLabelFromUnitPrice(value, fallback = 'vídeo') {
+  const match = normalizeText(value).match(/\spor\s+(.+)$/i);
+  return normalizeText(match?.[1]) || fallback;
+}
 function formatProposalNumber(value) {
   const digits = String(value || '').replace(/\D/g, '');
   if (!digits) return '';
@@ -286,14 +313,41 @@ export function buildProposalPreviewModel({ orc, proposalMode, proposalDraft }) 
   const draft = proposalDraft && typeof proposalDraft === 'object' ? proposalDraft : {};
   const mode = normalizeText(proposalMode) || 'direta';
   const conditions = splitLines(draft.condicoes_comerciais);
-  const optionCards = [1, 2, 3].map((index) => ({
-    title: normalizeText(draft[`opcao${index}_titulo`]),
-    quantity: normalizeText(draft[`opcao${index}_qtd`]),
-    total: normalizeText(draft[`opcao${index}_preco`]),
-    unitPrice: normalizeText(draft[`opcao${index}_unitario`]),
-    description: normalizeText(draft[`opcao${index}_desc`]),
-    discount: normalizeText(draft[`opcao${index}_desconto`]),
-  })).filter((card) => card.title || card.total || card.quantity || card.unitPrice);
+    const unitLabels = inferUnitLabels(orc);
+  const baseQuantity = parseQuantityNumber(draft.opcao1_qtd || draft.quantidade, 1);
+  const baseTotal = parseCurrencyNumber(draft.opcao1_preco || draft.valor_total_moeda, 0);
+
+  const optionCards = [1, 2, 3].map((index) => {
+    const title = normalizeText(draft[`opcao${index}_titulo`]);
+    const quantity = normalizeText(draft[`opcao${index}_qtd`]);
+    const description = normalizeText(draft[`opcao${index}_desc`]);
+    const manualDiscountText = normalizeText(draft[`opcao${index}_desconto`]);
+
+    let total = normalizeText(draft[`opcao${index}_preco`]);
+    let unitPrice = normalizeText(draft[`opcao${index}_unitario`]);
+    let discount = manualDiscountText;
+
+    const optionQuantity = parseQuantityNumber(quantity, 0);
+    const discountPercent = index > 1 ? parseDiscountPercent(manualDiscountText, 0) : 0;
+
+    if (index > 1 && discountPercent > 0 && baseQuantity > 0 && optionQuantity > 0 && baseTotal > 0) {
+      const recalculatedTotal = (baseTotal / baseQuantity) * optionQuantity * (1 - (discountPercent / 100));
+      const unitLabel = inferUnitLabelFromUnitPrice(unitPrice, unitLabels.singular);
+
+      total = fmtBRL(recalculatedTotal);
+      unitPrice = `${fmtBRL(recalculatedTotal / optionQuantity)} por ${unitLabel}`;
+      discount = formatPercentBadge(discountPercent);
+    }
+
+    return {
+      title,
+      quantity,
+      total,
+      unitPrice,
+      description,
+      discount,
+    };
+  }).filter((card) => card.title || card.total || card.quantity || card.unitPrice);
 
   const directValue = normalizeText(draft.valor_total_moeda);
   const mensalValue = ensureMensalValue(draft.valor_mensal_moeda || draft.valor_total_moeda);

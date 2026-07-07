@@ -37,13 +37,13 @@
       width: 210mm;
       min-height: 297mm;
       position: relative;
-      overflow: hidden;
+      overflow: visible;
       background: var(--paper);
     }
 
     .hero {
-      padding: 12mm 14mm 9mm;
-      border-bottom: 1.2mm solid var(--gold);
+      padding: 8mm 14mm 6.5mm;
+      border-bottom: 0.9mm solid var(--gold);
       background:
         radial-gradient(76mm 76mm at 96% -4%, rgba(244, 221, 156, 0.26), rgba(244, 221, 156, 0)),
         linear-gradient(140deg, #09090a 0%, #111113 55%, #272012 100%);
@@ -53,16 +53,8 @@
     .brand-row {
       display: flex;
       align-items: center;
-      justify-content: space-between;
-      gap: 6mm;
-      margin-bottom: 3.5mm;
-    }
-
-    .brand-logo {
-      width: 52mm;
-      max-height: 18mm;
-      object-fit: contain;
-      display: block;
+      justify-content: flex-start;
+      margin-bottom: 2.4mm;
     }
 
     .brand-kicker {
@@ -84,7 +76,7 @@
     }
 
     .subtitle {
-      margin: 2.4mm 0 0;
+      margin: 1.6mm 0 0;
       max-width: 126mm;
       font-size: 8.8pt;
       color: #d7d7d7;
@@ -92,7 +84,7 @@
     }
 
     .meta {
-      margin-top: 5.2mm;
+      margin-top: 3.2mm;
       display: flex;
       flex-wrap: wrap;
       gap: 1.8mm;
@@ -112,16 +104,16 @@
     }
 
     .wrap {
-      padding: 8mm 14mm 34mm;
+      padding: 6mm 14mm 26mm;
       display: grid;
-      gap: 4.2mm;
+      gap: 3mm;
     }
 
     .section {
       background: var(--card);
       border: 0.45pt solid var(--line);
       border-radius: 2.6mm;
-      padding: 3.6mm 3.8mm;
+      padding: 3mm 3.4mm;
       page-break-inside: avoid;
     }
 
@@ -192,6 +184,25 @@
       line-height: 1.4;
       word-break: break-word;
       overflow-wrap: anywhere;
+    }
+
+    .client-premium {
+      border: 0;
+      border-left: 1mm solid var(--gold);
+      background: linear-gradient(90deg, #fff8e5 0%, #fffdf8 100%);
+      padding: 3.2mm 3.8mm;
+      min-height: auto;
+    }
+
+    .client-premium .field-label {
+      color: #7a6a3c;
+      font-size: 6.3pt;
+      letter-spacing: 0.14em;
+    }
+
+    .client-premium .field-value {
+      font-size: 13pt;
+      line-height: 1.25;
     }
 
     .field-pre {
@@ -356,15 +367,16 @@
     .conditions p {
       margin: 0;
       font-size: 8.2pt;
-      line-height: 1.45;
+      line-height: 1.38;
       color: #2b2b2b;
+      overflow-wrap: anywhere;
     }
 
     .conditions b { color: #181818; }
 
     .steps {
       display: grid;
-      gap: 1mm;
+      gap: 0.8mm;
     }
 
     .steps p {
@@ -375,11 +387,11 @@
     }
 
     .cta {
-      margin-top: 1.6mm;
+      margin-top: 1.2mm;
       border-radius: 2mm;
       border: 0.5pt solid #c4a55e;
       background: linear-gradient(90deg, #f0d684 0%, #c8a23a 100%);
-      padding: 2.2mm 2.4mm;
+      padding: 1.8mm 2.2mm;
       font-size: 8.4pt;
       font-weight: 760;
       color: #1b1508;
@@ -417,7 +429,6 @@
   <main class="page">
     <header class="hero">
       <div class="brand-row">
-        <img class="brand-logo" src="{{logo_url}}" alt="HAGAV" />
         <p class="brand-kicker">HAGAV STUDIO DE EDIÇÃO</p>
       </div>
       <h1>PROPOSTA COMERCIAL</h1>
@@ -431,12 +442,9 @@
 
     <section class="wrap">
       <article class="section">
-        <h2 class="section-title">Cliente</h2>
-        <div class="grid-2">
-          <div class="field">
-            <p class="field-label">Nome</p>
+        <div class="field client-premium">
+            <p class="field-label">Proposta exclusiva para:</p>
             <p class="field-value">{{cliente_nome}}</p>
-          </div>
         </div>
       </article>
 

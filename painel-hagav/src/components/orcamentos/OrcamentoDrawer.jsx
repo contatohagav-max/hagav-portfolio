@@ -294,6 +294,10 @@ function normalizeText(value) {
     .trim();
 }
 
+function normalizeProposalCta(value) {
+  return normalizeText(value).replace(/\bWhatsApP\b|\bWhatsAPP\b/g, 'WhatsApp');
+}
+
 function escapeRegExp(value) {
   return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -650,7 +654,7 @@ function buildProposalDraftFromRecord(record, forcedMode, options = {}) {
     )),
     numero_proposta: formatProposalSequence(comercial?.numero_proposta || '01'),
     data_emissao: normalizeText(comercial?.data_emissao || formatDateBr(new Date().toISOString())),
-    cta_aprovacao: normalizeText(comercial?.cta_aprovacao || 'Aprovar proposta no WhatsApp'),
+    cta_aprovacao: normalizeProposalCta(comercial?.cta_aprovacao || 'Aprovar proposta no WhatsApp'),
     opcao1_titulo: normalizeText(pickStoredOrLive(comercial?.opcao1_titulo, optionDefaults.opcao1_titulo)),
     opcao1_qtd: normalizeText(pickStoredOrLive(comercial?.opcao1_qtd, optionDefaults.opcao1_qtd)),
     opcao1_preco: normalizeText(pickStoredOrLive(comercial?.opcao1_preco, optionDefaults.opcao1_preco)),

@@ -59,6 +59,17 @@ function safeParseJsonObject(value) {
   }
 }
 
+function extractProposalNumber(value) {
+  const digits = String(value || '').replace(/\D/g, '');
+  const parsed = Number(digits);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+}
+
+function formatProposalSequence(value) {
+  const safe = Math.max(1, Number(value || 1));
+  return String(safe).padStart(2, '0');
+}
+
 function parseDateSafe(value) {
   if (!value) return null;
   const date = new Date(value);
@@ -730,6 +741,41 @@ export async function fetchOrcamentos({
   if (incompleto === true) orcamentos = orcamentos.filter((orc) => orc.incompleto);
 
   return orcamentos;
+}
+
+export async function fetchNextProposalNumberForClient({ nome, whatsapp, excludeId } = {}) {
+  const client = getSupabase();
+  if (!client) return '01';
+
+  const name = String(nome || '').trim();
+  const phone = String(whatsapp || '').replace(/\D/g, '');
+  if (!name && !phone) return '01';
+
+  let query = client
+    .from('deals')
+    .select('id,nome,whatsapp,detalhes,created_at')
+    .order('created_at', { ascending: false })
+    .limit(200);
+
+  if (phone) {
+    query = query.eq('whatsapp', phone);
+  } else {
+    query = query.ilike('nome', `%${name}%`);
+  }
+
+  const { data, error } = await query;
+  if (error) throw error;
+
+  const maxNumber = (data || [])
+    .filter((row) => String(row?.id || '') !== String(excludeId || ''))
+    .reduce((max, row) => {
+      const detalhes = safeParseJsonObject(row?.detalhes);
+      const comercial = safeParseJsonObject(detalhes?.comercial);
+      const value = extractProposalNumber(comercial?.numero_proposta);
+      return Math.max(max, value);
+    }, 0);
+
+  return formatProposalSequence(maxNumber + 1);
 }
 
 export async function updateOrcamento(id, patch) {

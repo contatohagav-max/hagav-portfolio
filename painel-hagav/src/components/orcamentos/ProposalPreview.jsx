@@ -23,6 +23,27 @@ function PreviewSection({ title, children, hidden = false }) {
   );
 }
 
+function OptionCard({ option }) {
+  return (
+    <article className="relative rounded-2xl border border-[#dbcda8] bg-[#fffbef] px-4 py-3">
+      {option.discount ? (
+        <span className="absolute right-3 top-3 inline-flex h-9 min-w-9 items-center justify-center rounded-full border border-[#d0b06a] bg-[#f5dfaa] px-2 text-[11px] font-black text-[#5d4815]">
+          {option.discount}
+        </span>
+      ) : null}
+      <p className="max-w-[75%] text-[11px] font-bold uppercase tracking-[0.18em] text-[#75663d]">{option.title || 'Plano'}</p>
+      <p className="mt-2 text-[26px] font-black leading-none tracking-[-0.02em] text-[#161616]">{option.total || '-'}</p>
+      <div className="mt-3 space-y-1">
+        <p className="text-sm font-medium text-[#464646]">{option.quantity || '-'}</p>
+        <p className="text-sm font-medium text-[#464646]">{option.unitPrice || '-'}</p>
+        {option.description ? (
+          <p className="text-[13px] leading-5 text-[#5e5646]">{option.description}</p>
+        ) : null}
+      </div>
+    </article>
+  );
+}
+
 export default function ProposalPreview({ preview }) {
   if (!preview) return null;
 
@@ -49,28 +70,20 @@ export default function ProposalPreview({ preview }) {
 
         <div className="flex flex-wrap gap-2">
           <span className="rounded-full border border-[#f4dd9c]/55 bg-[#f4dd9c]/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#f4dd9c]">
-            Proposta {preview.proposalNumber || '-'}
+            Nº {preview.proposalNumber || '01'}
           </span>
           <span className="rounded-full border border-[#f4dd9c]/55 bg-[#f4dd9c]/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#f4dd9c]">
             Emitida em {preview.emissionDate || '-'}
           </span>
           <span className="rounded-full border border-[#f4dd9c]/55 bg-[#f4dd9c]/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#f4dd9c]">
-            Modelo {preview.mode}
+            Válida até {preview.validityDate || '-'}
           </span>
         </div>
       </div>
 
       <div className="space-y-4 p-4">
         <PreviewSection title="Cliente">
-          <div className="grid grid-cols-1 gap-2">
-            <PreviewField label="Nome" value={preview.client?.name} />
-            <PreviewField label="WhatsApp" value={preview.client?.whatsapp} />
-            <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
-              <PreviewField label="Empresa" value={preview.client?.company} />
-              <PreviewField label="Instagram" value={preview.client?.instagram} />
-              <PreviewField label="E-mail" value={preview.client?.email} />
-            </div>
-          </div>
+          <PreviewField label="Nome" value={preview.client?.name} />
         </PreviewSection>
 
         <PreviewSection title="Resumo da Demanda">
@@ -90,30 +103,30 @@ export default function ProposalPreview({ preview }) {
         <PreviewSection title="Opções de Investimento" hidden={!preview.options?.visible}>
           <div className="space-y-2.5">
             {(preview.options?.items || []).map((option) => (
-              <article
-                key={`${option.title}-${option.quantity}-${option.total}`}
-                className="relative rounded-2xl border border-[#dbcda8] bg-[#fffbef] px-4 py-3"
-              >
-                {option.discount ? (
-                  <span className="absolute right-3 top-3 inline-flex h-9 min-w-9 items-center justify-center rounded-full border border-[#d0b06a] bg-[#f5dfaa] px-2 text-[11px] font-black text-[#5d4815]">
-                    {option.discount}
-                  </span>
-                ) : null}
-                <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#75663d]">{option.title || 'Opção'}</p>
-                <p className="mt-2 text-[26px] font-black leading-none tracking-[-0.02em] text-[#161616]">{option.total || '-'}</p>
-                <div className="mt-3 space-y-1">
-                  <p className="text-sm font-medium text-[#464646]">{option.quantity || '-'}</p>
-                  <p className="text-sm font-medium text-[#464646]">{option.unitPrice || '-'}</p>
-                  {option.description ? (
-                    <p className="text-[13px] leading-5 text-[#5e5646]">{option.description}</p>
-                  ) : null}
-                </div>
-              </article>
+              <OptionCard key={`${option.title}-${option.quantity}-${option.total}`} option={option} />
             ))}
           </div>
           {preview.options?.footnote ? (
             <p className="mt-3 text-sm leading-6 text-[#595959]">{preview.options.footnote}</p>
           ) : null}
+        </PreviewSection>
+
+        <PreviewSection title="Plano Mensal" hidden={!preview.monthly?.visible}>
+          <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
+            <PreviewField label="Valor mensal" value={preview.monthly?.value} soft />
+            <PreviewField label="Quantidade mensal" value={preview.monthly?.quantity} soft />
+            <PreviewField
+              label="Duração do contrato"
+              value={preview.monthly?.duration ? `${preview.monthly.duration} meses` : ''}
+              soft
+            />
+          </div>
+          <div className="mt-3 space-y-2 rounded-2xl border border-[#e1d6ba] bg-[#fff9ea] px-4 py-3">
+            {preview.monthly?.scope ? (
+              <p className="text-sm leading-6 text-[#242424]">{preview.monthly.scope}</p>
+            ) : null}
+            <p className="text-sm leading-6 text-[#242424]">{preview.monthly?.structure}</p>
+          </div>
         </PreviewSection>
 
         <PreviewSection title={preview.investment?.label || 'Valor'} hidden={!preview.investment?.visible}>
@@ -137,23 +150,6 @@ export default function ProposalPreview({ preview }) {
           </div>
         </PreviewSection>
 
-        <PreviewSection title="Estrutura Mensal" hidden={!preview.monthly?.visible}>
-          <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
-            <PreviewField label="Quantidade mensal" value={preview.monthly?.quantity} soft />
-            <PreviewField
-              label="Duração do contrato"
-              value={preview.monthly?.duration ? `${preview.monthly.duration} meses` : ''}
-              soft
-            />
-            <PreviewField label="Valor mensal" value={preview.monthly?.value} soft />
-          </div>
-          {preview.monthly?.scope ? (
-            <div className="mt-3 rounded-2xl border border-[#e1d6ba] bg-[#fff9ea] px-4 py-3">
-              <p className="text-sm leading-6 text-[#242424]">{preview.monthly.scope}</p>
-            </div>
-          ) : null}
-        </PreviewSection>
-
         <PreviewSection title="Condições Comerciais" hidden={!Array.isArray(preview.conditions) || preview.conditions.length === 0}>
           <div className="space-y-2">
             {(preview.conditions || []).map((condition) => (
@@ -172,7 +168,7 @@ export default function ProposalPreview({ preview }) {
           <p className="text-sm leading-6 text-[#272727]">{preview.observation}</p>
         </PreviewSection>
 
-        <PreviewSection title="Proximos Passos">
+        <PreviewSection title="Próximos Passos">
           <div className="space-y-1.5">
             {(preview.nextSteps || []).map((step) => (
               <p key={step} className="text-sm leading-6 text-[#272727]">

@@ -193,7 +193,7 @@ async function listOrcamentos(request, env) {
   const query = new URLSearchParams();
   query.set(
     'select',
-    'id,created_at,updated_at,fluxo,pagina,origem,status,nome,whatsapp,servico,quantidade,material_gravado,tempo_bruto,prazo,referencia,observacoes,detalhes,resumo_orcamento,resumo_comercial,preco_base,preco_final,valor_estimado,valor_sugerido,margem_estimada,faixa_sugerida,motivo_calculo,revisao_manual,alerta_capacidade,operacao_especial,complexidade_nivel,multiplicador_complexidade,multiplicador_urgencia,desconto_volume_percent,ajuste_referencia_percent,ajuste_multicamera_percent,pacote_sugerido,urgencia,prioridade,temperatura,score_lead,proxima_acao,responsavel,ultimo_contato_em,proximo_followup_em,observacoes_internas,link_pdf'
+    'id,created_at,updated_at,fluxo,pagina,origem,status,nome,whatsapp,servico,quantidade,material_gravado,tempo_bruto,prazo,referencia,observacoes,detalhes,resumo_orcamento,resumo_comercial,preco_base,preco_final,valor_estimado,valor_sugerido,margem_estimada,faixa_sugerida,motivo_calculo,revisao_manual,alerta_capacidade,complexidade_nivel,multiplicador_complexidade,multiplicador_urgencia,desconto_volume_percent,ajuste_referencia_percent,ajuste_multicamera_percent,pacote_sugerido,urgencia,prioridade,temperatura,score_lead,proxima_acao,responsavel,ultimo_contato_em,proximo_followup_em,observacoes_internas,link_pdf'
   );
   query.set('order', 'created_at.desc');
   query.set('limit', String(limit));

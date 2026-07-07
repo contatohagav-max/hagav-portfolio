@@ -1269,7 +1269,6 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
       ajuste_multicamera_percent: Number(autoPricing.ajusteMulticameraPercent || 0),
       revisao_manual: Boolean(autoPricing.revisaoManual),
       alerta_capacidade: Boolean(autoPricing.alertaCapacidade),
-      operação_especial: Boolean(autoPricing.operaçãoEspecial),
       pacote_sugerido: String(autoPricing.pacoteSugerido || ''),
       motivo_calculo: String(autoPricing.motivoCalculo || ''),
       detalhes: {

@@ -990,7 +990,6 @@ async function saveLeadToSupabase(env, lead) {
     motivo_calculo: stripDangerousText(pricing.motivoCalculo || "", 2000),
     revisao_manual: Boolean(pricing.revisaoManual),
     alerta_capacidade: Boolean(pricing.alertaCapacidade),
-    operacao_especial: Boolean(pricing.operacaoEspecial),
     complexidade_nivel: complexidadeNivel || "n2",
     multiplicador_complexidade: Number(pricing.multiplicadorComplexidade || 1),
     multiplicador_urgencia: Number(pricing.multiplicadorUrgencia || 1),

@@ -192,6 +192,8 @@ function normalizeLeadPatchToDeals(patch = {}) {
 
 function normalizeOrcamentoPatchToDeals(patch = {}) {
   const next = { ...patch };
+  delete next.operacao_especial;
+  delete next.operação_especial;
   if (next.status_orcamento !== undefined) {
     next.status = mapLegacyOrcamentoStatusToDeal(next.status_orcamento, DEAL_STATUS.ORCAMENTO);
     delete next.status_orcamento;

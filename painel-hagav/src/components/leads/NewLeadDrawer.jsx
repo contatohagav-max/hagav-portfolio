@@ -17,6 +17,17 @@ const ORIGEM_OPTIONS = [
   { value: 'outro', label: 'Outro' },
 ];
 
+const SERVICE_OPTIONS = [
+  'Reels / Shorts / TikTok',
+  'Criativo para Ads',
+  'YouTube',
+  'Podcast',
+  'VSL',
+  'Institucional',
+  'Motion / Legendas',
+  'Outro',
+];
+
 const STATUS_OPTIONS = [
   { value: 'novo', label: 'Novo' },
   { value: 'contatado', label: 'Contatado' },
@@ -78,7 +89,8 @@ export default function NewLeadDrawer({ onClose, onCreated }) {
   const [empresa, setEmpresa] = useState('');
   const [origem, setOrigem] = useState('prospeccao_ativa');
   const [fluxo, setFluxo] = useState('DU');
-  const [servico, setServico] = useState('');
+  const [servicoSelecionado, setServicoSelecionado] = useState('');
+  const [servicoOutro, setServicoOutro] = useState('');
   const [quantidade, setQuantidade] = useState('1');
   const [materialGravado, setMaterialGravado] = useState('Sim');
   const [tempoBruto, setTempoBruto] = useState('');
@@ -131,6 +143,15 @@ export default function NewLeadDrawer({ onClose, onCreated }) {
       setError('Preencha nome e WhatsApp');
       return;
     }
+    if (!servicoSelecionado) {
+      setError('Selecione um serviço de interesse');
+      return;
+    }
+    const servicoFinal = servicoSelecionado === 'Outro' ? servicoOutro.trim() : servicoSelecionado;
+    if (servicoSelecionado === 'Outro' && !servicoFinal) {
+      setError('Informe o serviço de interesse');
+      return;
+    }
 
     setSaving(true);
     try {
@@ -140,7 +161,7 @@ export default function NewLeadDrawer({ onClose, onCreated }) {
         empresa,
         origem,
         fluxo,
-        servico,
+        servico: servicoFinal,
         quantidade,
         material_gravado_text: materialGravado,
         tempo_bruto: tempoBruto,
@@ -246,19 +267,24 @@ export default function NewLeadDrawer({ onClose, onCreated }) {
                 </select>
               </Field>
 
-              <Field label="Serviço de interesse">
-                <input
-                  type="text"
-                  value={servico}
-                  onChange={(e) => setServico(e.target.value)}
-                  placeholder="Ex.: Reels / Shorts / TikTok"
-                  className="hinput w-full"
-                />
+              <Field label="Serviço de interesse" required>
+                <select value={servicoSelecionado} onChange={(e) => setServicoSelecionado(e.target.value)} className="hselect w-full">
+                  <option value="" disabled>Selecione um serviço</option>
+                  {SERVICE_OPTIONS.map((option) => (
+                    <option key={option} value={option}>{option}</option>
+                  ))}
+                </select>
+                {servicoSelecionado === 'Outro' && (
+                  <input
+                    type="text"
+                    value={servicoOutro}
+                    onChange={(e) => setServicoOutro(e.target.value)}
+                    placeholder="Informe o serviço"
+                    className="hinput w-full mt-2"
+                  />
+                )}
               </Field>
             </div>
-            <p className="text-[11px] text-hagav-gray/80 -mt-1">
-              Use `|` para separar mais de um serviço (ex.: `YouTube | VSL até 15 min`).
-            </p>
 
             <Field label="Valor estimado inicial (R$)">
               <input

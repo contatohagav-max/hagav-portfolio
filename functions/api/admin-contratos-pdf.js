@@ -1611,7 +1611,14 @@ export async function onRequestPost(context) {
 
 export async function onRequest(context) {
   if (context.request.method.toUpperCase() === "POST") {
-    return onRequestPost(context);
+    try {
+      return await onRequestPost(context);
+    } catch (err) {
+      const requestId = createRequestId();
+      return fail(requestId, "unexpected", "contrato_pdf_unexpected_error", 500, {
+        detail: stripDangerousText(String(err?.message || "erro_desconhecido"), 240),
+      });
+    }
   }
   return json({ ok: false, error: "method_not_allowed" }, 405);
 }

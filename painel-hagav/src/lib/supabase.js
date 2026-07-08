@@ -932,11 +932,35 @@ async function generatePdfDocument(endpoint, id, { adminKey, payload } = {}) {
   let response = await request(endpoint);
   let rawText = '';
   let parsed = {};
+  let responseContentType = '';
   try {
+    responseContentType = String(response.headers.get('content-type') || '').toLowerCase();
     rawText = await response.text();
-    parsed = rawText ? JSON.parse(rawText) : {};
+    const trimmedRawText = String(rawText || '').trim();
+    const rawLooksJson = /^[\[{]/.test(trimmedRawText);
+    parsed = trimmedRawText && (responseContentType.includes('application/json') || rawLooksJson)
+      ? JSON.parse(trimmedRawText)
+      : {};
   } catch {
     parsed = {};
+  }
+
+  const rawSnippet = String(rawText || '').trim().slice(0, 300);
+  const responseLooksJson = responseContentType.includes('application/json') || /^[\[{]/.test(String(rawText || '').trim());
+  const responseLooksHtml = /<!doctype html|<html|<head|<body|<script/i.test(rawSnippet);
+  const hasUnexpectedResponse = Boolean(rawText) && !responseLooksJson;
+  if (hasUnexpectedResponse) {
+    console.error('[PDF][Runtime]', {
+      endpoint,
+      status: Number(response.status || 0),
+      reason: 'unexpected_non_json_response',
+      content_type: responseContentType,
+      raw_snippet: rawSnippet,
+      response_looks_html: responseLooksHtml,
+      has_admin_key_header: Boolean(key),
+      has_session_token: Boolean(token),
+    });
+    throw new Error('Falha ao gerar PDF: resposta inesperada do servidor.');
   }
 
   if (!response.ok || parsed?.ok === false) {
@@ -949,14 +973,15 @@ async function generatePdfDocument(endpoint, id, { adminKey, payload } = {}) {
     const providerBodyPreview = String(parsed?.provider_body_preview || '').trim();
     const providerEndpoint = String(parsed?.provider_endpoint || '').trim();
     const providerAuthMode = String(parsed?.provider_auth_mode || '').trim();
-    const rawSnippet = String(rawText || '').trim().slice(0, 300);
     const detail = String(
       parsed?.detail
       || parsed?.message
       || parsed?.error_description
-      || rawSnippet
       || ''
     ).trim();
+    const detailForMessage = /<!doctype html|<html|<head|<body|<script/i.test(detail) || detail.length > 500
+      ? ''
+      : detail;
 
     console.error('[PDF][Runtime]', {
       endpoint,
@@ -981,12 +1006,11 @@ async function generatePdfDocument(endpoint, id, { adminKey, payload } = {}) {
       if (stage) parts.push(`Etapa: ${stage}.`);
       if (requestId) parts.push(`RID: ${requestId}.`);
       if (uploadReason) parts.push(`Upload: ${uploadReason}.`);
-      if (detail) parts.push(`Detalhe: ${detail}.`);
+      if (detailForMessage) parts.push(`Detalhe: ${detailForMessage}.`);
       if (providerEndpoint) parts.push(`Provider: ${providerEndpoint}.`);
       if (providerAuthMode) parts.push(`Auth: ${providerAuthMode}.`);
       if (providerStatus) parts.push(`HTTP provider: ${providerStatus}.`);
       if (providerContentType) parts.push(`Content-Type provider: ${providerContentType}.`);
-      if (providerBodyPreview) parts.push(`Preview provider: ${providerBodyPreview}.`);
       return parts.join(' ');
     };
 

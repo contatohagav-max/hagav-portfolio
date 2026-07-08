@@ -214,6 +214,49 @@ function canUseContractPdf(row) {
   return isHtmlPdfReady(meta);
 }
 
+const CONTRACT_PDF_INCOMPLETE_MESSAGE = 'Preencha os dados mínimos do contrato antes de gerar o PDF: nome, serviço, valor e datas.';
+const CONTRACT_PDF_UNEXPECTED_RESPONSE_MESSAGE = 'Falha ao gerar contrato PDF. A resposta do servidor não veio no formato esperado. Verifique o deploy/logs da função de contrato.';
+
+function hasValidContractName(value) {
+  const name = String(value || '').trim();
+  return Boolean(name) && !/^sem nome$/i.test(name);
+}
+
+function isUnsafeFeedbackMessage(value) {
+  const message = String(value || '').trim();
+  return (
+    /<!doctype html|<html|<head|<body|<script/i.test(message)
+    || message.length > 500
+  );
+}
+
+function sanitizeContractPdfFeedbackError(err, fallbackMessage = 'Falha ao gerar contrato PDF.') {
+  const originalMessage = String(err?.message || '').trim();
+  if (!originalMessage) return fallbackMessage;
+  if (
+    isUnsafeFeedbackMessage(originalMessage)
+    || originalMessage.toLowerCase().includes('resposta inesperada do servidor')
+  ) {
+    return CONTRACT_PDF_UNEXPECTED_RESPONSE_MESSAGE;
+  }
+
+  const technicalMarkerIndex = originalMessage.search(/\s(?:Etapa|RID|Upload|Provider|Auth|HTTP provider|Content-Type provider|Preview provider):/);
+  const userMessage = technicalMarkerIndex >= 0
+    ? originalMessage.slice(0, technicalMarkerIndex).trim()
+    : originalMessage;
+  return userMessage || fallbackMessage;
+}
+
+function isContractPdfPayloadIncomplete(payload) {
+  return (
+    !hasValidContractName(payload?.nome_cliente)
+    || !String(payload?.resumo_servico || '').trim()
+    || !(Number(payload?.valor_total) > 0)
+    || !isoDate(payload?.data_inicio)
+    || !isoDate(payload?.data_fim)
+  );
+}
+
 function BadgeContrato({ status }) {
   const key = String(status || '').toLowerCase();
   const label = STATUS_CONTRATO_LABELS[key] || 'Ativo';
@@ -511,8 +554,20 @@ export default function ClientesPage() {
     const duracaoSafe = isSelectedRow
       ? Math.max(1, Number.parseInt(String(duracaoMeses || contratoBase?.duracao_meses || 12), 10) || 12)
       : Math.max(1, Number.parseInt(String(contratoBase?.duracao_meses || 12), 10) || 12);
-    const inicioGeracao = hojeIso;
-    const fimGeracao = addMonthsIso(inicioGeracao, duracaoSafe) || inicioGeracao;
+    const inicioGeracao = isSelectedRow
+      ? (isoDate(dataInicio) || isoDate(contratoBase?.data_inicio || currentRow?.inicio_contrato) || hojeIso)
+      : isoDate(contratoBase?.data_inicio || currentRow?.inicio_contrato);
+    const fimGeracao = isSelectedRow
+      ? (
+        isoDate(vencimento)
+        || isoDate(contratoBase?.data_fim || contratoBase?.vencimento || currentRow?.vencimento_contrato || currentRow?.validade_ate)
+        || addMonthsIso(inicioGeracao, duracaoSafe)
+        || inicioGeracao
+      )
+      : (
+        isoDate(contratoBase?.data_fim || contratoBase?.vencimento || currentRow?.vencimento_contrato || currentRow?.validade_ate)
+        || (inicioGeracao ? addMonthsIso(inicioGeracao, duracaoSafe) : '')
+      );
     const valorInput = isSelectedRow ? Number(valorFinal) : Number(contratoBase?.valor_final ?? currentRow?.valor_contrato ?? currentRow?.preco_final ?? currentRow?.valor_sugerido ?? 0);
     const valorSafe = Number.isFinite(valorInput) && valorInput > 0
       ? valorInput
@@ -543,6 +598,12 @@ export default function ClientesPage() {
         ? String(statusEdicao || '').trim().toLowerCase()
         : String(contratoBase?.status || currentRow?.status_contrato || 'aguardando_contrato').trim().toLowerCase(),
     };
+
+    if (isContractPdfPayloadIncomplete(payloadContrato)) {
+      setFeedback(CONTRACT_PDF_INCOMPLETE_MESSAGE);
+      setTimeout(() => setFeedback(''), 4200);
+      return;
+    }
 
     try {
       setFeedback('Gerando PDF do contrato...');
@@ -675,8 +736,10 @@ export default function ClientesPage() {
       console.error('[Clientes][ContratoPDF][Erro]', {
         deal_id: row.id,
         message: String(err?.message || ''),
+        stack: String(err?.stack || ''),
+        error: err,
       });
-      setFeedback(err.message || 'Falha ao gerar contrato PDF.');
+      setFeedback(sanitizeContractPdfFeedbackError(err));
       setTimeout(() => setFeedback(''), 3200);
     }
   }

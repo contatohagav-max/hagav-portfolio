@@ -42,6 +42,8 @@ const FINANCEIRO_META_END = '[/HAGAV_FINANCEIRO_META]';
 const FINANCEIRO_META_REGEX = /\[HAGAV_FINANCEIRO_META\][\s\S]*?\[\/HAGAV_FINANCEIRO_META\]/g;
 const NATUREZA_OPTIONS = ['Empresa', 'Pessoal'];
 const FORMA_PAGAMENTO_OPTIONS = ['Pix', 'Cartão de crédito', 'Cartão de débito', 'Dinheiro', 'Boleto', 'Transferência', 'Outro'];
+const META_MINIMA_MENSAL = 6000;
+const TICKET_MEDIO_CLIENTE = 1500;
 
 function normalizeNatureza(value) {
   return String(value || '').trim().toLowerCase() === 'pessoal' ? 'Pessoal' : 'Empresa';
@@ -143,6 +145,90 @@ function emptyForm() {
 
 function getEntryMeta(entry) {
   return readFinancialMetadata(entry?.observacoes);
+}
+
+function parseDateSafe(value) {
+  if (!value) return null;
+  const text = String(value);
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(text)
+    ? new Date(`${text}T00:00:00`)
+    : new Date(text);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function isSameMonth(date, referenceDate) {
+  return Boolean(date)
+    && date.getMonth() === referenceDate.getMonth()
+    && date.getFullYear() === referenceDate.getFullYear();
+}
+
+function isBeforeToday(date, referenceDate) {
+  if (!date) return false;
+  const today = new Date(referenceDate);
+  today.setHours(0, 0, 0, 0);
+  const compare = new Date(date);
+  compare.setHours(0, 0, 0, 0);
+  return compare.getTime() < today.getTime();
+}
+
+function getDueDate(entry) {
+  return parseDateSafe(entry?.vencimento);
+}
+
+function getPaidDate(entry) {
+  return parseDateSafe(entry?.pago_em) || getDueDate(entry);
+}
+
+function getNatureza(entry) {
+  return getEntryMeta(entry).natureza;
+}
+
+function isEmpresa(entry) {
+  return getNatureza(entry) === 'Empresa';
+}
+
+function isPessoal(entry) {
+  return getNatureza(entry) === 'Pessoal';
+}
+
+function isReceber(entry) {
+  return entry?.tipo === 'receber';
+}
+
+function isPagar(entry) {
+  return entry?.tipo === 'pagar';
+}
+
+function isCancelled(entry) {
+  return effectiveFinancialStatus(entry) === 'cancelado';
+}
+
+function isPaid(entry) {
+  return effectiveFinancialStatus(entry) === 'pago';
+}
+
+function getEntryValue(entry) {
+  const value = Number(entry?.valor || 0);
+  return Number.isFinite(value) ? Math.max(0, value) : 0;
+}
+
+function getRawPaidValue(entry) {
+  const paid = Number(entry?.valor_pago || 0);
+  return Number.isFinite(paid) ? Math.max(0, paid) : 0;
+}
+
+function getPaidAmount(entry) {
+  const value = getEntryValue(entry);
+  const paid = getRawPaidValue(entry);
+  return isPaid(entry) ? (paid > 0 ? paid : value) : paid;
+}
+
+function getOpenAmount(entry) {
+  return Math.max(0, getEntryValue(entry) - getRawPaidValue(entry));
+}
+
+function getCostAmount(entry) {
+  return isPaid(entry) ? getPaidAmount(entry) : getOpenAmount(entry);
 }
 
 function FinancialEditor({ entry, createMode, onClose, onSaved, onDeleted }) {
@@ -427,32 +513,56 @@ export default function FinanceiroPage() {
   }, [load]);
 
   const metrics = useMemo(() => {
-    const now = new Date();
-    const month = now.getMonth();
-    const year = now.getFullYear();
+    const referenceDate = new Date();
     let received = 0;
     let pending = 0;
     let overdue = 0;
-    let costs = 0;
+    let costsHagav = 0;
+    let personalCosts = 0;
 
     entries.forEach((entry) => {
-      const value = Number(entry.valor || 0);
-      const paid = Number(entry.valor_pago || 0);
-      const effective = effectiveFinancialStatus(entry);
-      const paidDate = entry.pago_em ? new Date(entry.pago_em) : null;
+      if (isCancelled(entry)) return;
 
-      if (entry.tipo === 'receber') {
-        if (effective === 'pago' && paidDate && paidDate.getMonth() === month && paidDate.getFullYear() === year) {
-          received += paid || value;
+      const dueDate = getDueDate(entry);
+      const paidDate = getPaidDate(entry);
+      const openAmount = getOpenAmount(entry);
+
+      if (isReceber(entry)) {
+        if (isPaid(entry) && isSameMonth(paidDate, referenceDate)) {
+          received += getPaidAmount(entry);
         }
-        if (['pendente', 'parcial'].includes(effective)) pending += Math.max(0, value - paid);
-        if (effective === 'atrasado') overdue += Math.max(0, value - paid);
-      } else if (entry.tipo === 'pagar' && effective !== 'cancelado') {
-        costs += value;
+        if (!isPaid(entry) && isSameMonth(dueDate, referenceDate)) {
+          pending += openAmount;
+        }
+        if (!isPaid(entry) && isBeforeToday(dueDate, referenceDate)) {
+          overdue += openAmount;
+        }
+      }
+
+      if (isPagar(entry) && isSameMonth(dueDate, referenceDate)) {
+        if (isEmpresa(entry)) costsHagav += getCostAmount(entry);
+        if (isPessoal(entry)) personalCosts += getCostAmount(entry);
       }
     });
 
-    return { received, pending, overdue, costs, margin: received - costs };
+    const margin = received - costsHagav;
+    const realSurplus = received - costsHagav - personalCosts;
+    const projectedResult = received + pending - costsHagav - personalCosts;
+    const targetGap = Math.max(0, META_MINIMA_MENSAL - projectedResult);
+    const neededClients = targetGap <= 0 ? 0 : Math.ceil(targetGap / TICKET_MEDIO_CLIENTE);
+
+    return {
+      received,
+      pending,
+      overdue,
+      costsHagav,
+      personalCosts,
+      margin,
+      realSurplus,
+      projectedResult,
+      targetGap,
+      neededClients,
+    };
   }, [entries]);
 
   function saveLocal(saved) {
@@ -482,12 +592,20 @@ export default function FinanceiroPage() {
   const metricCards = [
     { label: 'Recebido no mês', value: metrics.received, helper: 'Entradas pagas', icon: ArrowDownCircle, tone: 'text-emerald-300' },
     { label: 'A receber no mês', value: metrics.pending, helper: 'Pendentes e parciais', icon: CalendarClock, tone: 'text-blue-300' },
-    { label: 'Em atraso', value: metrics.overdue, helper: 'Vencimentos em aberto', icon: CircleDollarSign, tone: 'text-red-300' },
-    { label: 'Custos HAGAV', value: metrics.costs, helper: 'Saídas registradas', icon: ArrowUpCircle, tone: 'text-amber-300' },
-    { label: 'Custos pessoais', valueLabel: '—', helper: 'Próxima etapa', icon: UserRound, tone: 'text-orange-300' },
+    { label: 'Em atraso', value: metrics.overdue, helper: 'Recebimentos vencidos', icon: CircleDollarSign, tone: 'text-red-300' },
+    { label: 'Custos HAGAV', value: metrics.costsHagav, helper: 'Natureza Empresa', icon: ArrowUpCircle, tone: 'text-amber-300' },
+    { label: 'Custos pessoais', value: metrics.personalCosts, helper: 'Natureza Pessoal', icon: UserRound, tone: 'text-orange-300' },
     { label: 'Lucro HAGAV', value: metrics.margin, helper: 'Resultado operacional', icon: TrendingUp, tone: metrics.margin >= 0 ? 'text-emerald-300' : 'text-red-300' },
-    { label: 'Sobra real', valueLabel: '—', helper: 'Próxima etapa', icon: Building2, tone: 'text-emerald-300' },
-    { label: 'Clientes necessários', valueLabel: '—', helper: 'Próxima etapa', icon: UserRound, tone: 'text-blue-200' },
+    { label: 'Sobra real', value: metrics.realSurplus, helper: `Projetado: ${fmtBRL(metrics.projectedResult)}`, icon: Building2, tone: metrics.realSurplus >= 0 ? 'text-emerald-300' : 'text-red-300' },
+    {
+      label: 'Clientes necessários',
+      valueLabel: metrics.neededClients === 0
+        ? '0'
+        : `${metrics.neededClients} ${metrics.neededClients === 1 ? 'cliente' : 'clientes'}`,
+      helper: metrics.targetGap <= 0 ? 'Meta coberta' : `Baseado em ticket médio de ${fmtBRL(TICKET_MEDIO_CLIENTE)}`,
+      icon: UserRound,
+      tone: 'text-blue-200',
+    },
   ];
 
   const visibleEntries = useMemo(() => (

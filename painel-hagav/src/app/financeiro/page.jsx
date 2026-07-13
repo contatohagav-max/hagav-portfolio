@@ -41,10 +41,7 @@ const FINANCEIRO_META_START = '[HAGAV_FINANCEIRO_META]';
 const FINANCEIRO_META_END = '[/HAGAV_FINANCEIRO_META]';
 const FINANCEIRO_META_REGEX = /\[HAGAV_FINANCEIRO_META\][\s\S]*?\[\/HAGAV_FINANCEIRO_META\]/g;
 const NATUREZA_OPTIONS = ['Empresa', 'Pessoal'];
-
-function todayIsoDate() {
-  return new Date().toISOString().slice(0, 10);
-}
+const FORMA_PAGAMENTO_OPTIONS = ['Pix', 'Cartão de crédito', 'Cartão de débito', 'Dinheiro', 'Boleto', 'Transferência', 'Outro'];
 
 function normalizeNatureza(value) {
   return String(value || '').trim().toLowerCase() === 'pessoal' ? 'Pessoal' : 'Empresa';
@@ -102,6 +99,30 @@ function updateFinancialObservacoes(observacaoLivre, meta) {
   return cleanText ? `${block}\n\n${cleanText}` : block;
 }
 
+function parseCurrencyValue(value) {
+  const raw = String(value || '').replace(/[^\d,.-]/g, '').trim();
+  if (!raw) return 0;
+  const normalized = raw.includes(',')
+    ? raw.replace(/\./g, '').replace(',', '.')
+    : raw;
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function formatCurrencyInput(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  return fmtBRL(parseCurrencyValue(raw));
+}
+
+function resolveFormaPagamento(value) {
+  const current = String(value || '').trim();
+  if (!current || FORMA_PAGAMENTO_OPTIONS.includes(current)) {
+    return { forma_pagamento: current, forma_pagamento_outro: '' };
+  }
+  return { forma_pagamento: 'Outro', forma_pagamento_outro: current };
+}
+
 function emptyForm() {
   return {
     tipo: 'receber',
@@ -110,26 +131,12 @@ function emptyForm() {
     categoria: 'projeto',
     descricao: '',
     cliente_fornecedor: '',
-    valor: '0',
-    valor_pago: '0',
+    valor: '',
+    valor_pago: '',
     status: 'pendente',
     vencimento: '',
     forma_pagamento: '',
-    observacoes: '',
-  };
-}
-
-function emptyQuickForm() {
-  return {
-    tipo: 'receber',
-    natureza: 'Empresa',
-    recorrente_mensal: false,
-    descricao: '',
-    categoria: 'projeto',
-    valor: '',
-    vencimento: todayIsoDate(),
-    forma_pagamento: '',
-    status: 'pendente',
+    forma_pagamento_outro: '',
     observacoes: '',
   };
 }
@@ -152,6 +159,7 @@ function FinancialEditor({ entry, createMode, onClose, onSaved, onDeleted }) {
     }
 
     const meta = readFinancialMetadata(entry.observacoes);
+    const payment = resolveFormaPagamento(entry.forma_pagamento);
     setForm({
       tipo: entry.tipo || 'receber',
       natureza: meta.natureza,
@@ -159,11 +167,12 @@ function FinancialEditor({ entry, createMode, onClose, onSaved, onDeleted }) {
       categoria: entry.categoria || 'projeto',
       descricao: entry.descricao || '',
       cliente_fornecedor: entry.cliente_fornecedor || '',
-      valor: String(entry.valor || 0),
-      valor_pago: String(entry.valor_pago || 0),
+      valor: formatCurrencyInput(entry.valor),
+      valor_pago: formatCurrencyInput(entry.valor_pago),
       status: effectiveFinancialStatus(entry),
       vencimento: entry.vencimento || '',
-      forma_pagamento: entry.forma_pagamento || '',
+      forma_pagamento: payment.forma_pagamento,
+      forma_pagamento_outro: payment.forma_pagamento_outro,
       observacoes: stripFinancialMetadata(entry.observacoes),
     });
     setError('');
@@ -173,11 +182,26 @@ function FinancialEditor({ entry, createMode, onClose, onSaved, onDeleted }) {
     setForm((current) => ({ ...current, [name]: value }));
   }
 
+  function markAsPaid() {
+    setForm((current) => ({
+      ...current,
+      status: 'pago',
+      valor_pago: formatCurrencyInput(current.valor),
+    }));
+  }
+
   async function save() {
     if (!String(form.descricao || '').trim()) {
       setError('Informe uma descrição.');
       return;
     }
+    const valor = Math.max(0, parseCurrencyValue(form.valor));
+    const valorPago = form.status === 'pago'
+      ? valor
+      : (form.status === 'parcial' ? Math.max(0, parseCurrencyValue(form.valor_pago)) : 0);
+    const formaPagamento = form.forma_pagamento === 'Outro'
+      ? String(form.forma_pagamento_outro || 'Outro').trim()
+      : String(form.forma_pagamento || '').trim();
     setSaving(true);
     setError('');
     try {
@@ -186,14 +210,12 @@ function FinancialEditor({ entry, createMode, onClose, onSaved, onDeleted }) {
         categoria: String(form.categoria || 'projeto').trim() || 'projeto',
         descricao: String(form.descricao || '').trim(),
         cliente_fornecedor: String(form.cliente_fornecedor || '').trim(),
-        valor: Math.max(0, Number(form.valor || 0)),
-        valor_pago: form.status === 'pago'
-          ? Math.max(0, Number(form.valor || 0))
-          : Math.max(0, Number(form.valor_pago || 0)),
+        valor,
+        valor_pago: valorPago,
         status: form.status,
         vencimento: form.vencimento || null,
         pago_em: form.status === 'pago' ? new Date().toISOString() : null,
-        forma_pagamento: String(form.forma_pagamento || '').trim(),
+        forma_pagamento: formaPagamento,
         observacoes: updateFinancialObservacoes(form.observacoes, {
           natureza: form.natureza,
           recorrente_mensal: form.recorrente_mensal,
@@ -273,8 +295,8 @@ function FinancialEditor({ entry, createMode, onClose, onSaved, onDeleted }) {
             Recorrente mensal
           </label>
           <label className="text-xs text-hagav-gray md:col-span-2">
-            Descrição
-            <input value={form.descricao} onChange={(e) => field('descricao', e.target.value)} className="hinput w-full mt-1.5" />
+            Nome do lançamento
+            <input value={form.descricao} onChange={(e) => field('descricao', e.target.value)} className="hinput w-full mt-1.5" placeholder="Ex.: ChatGPT Plus" />
           </label>
           <label className="text-xs text-hagav-gray">
             Cliente ou fornecedor
@@ -286,20 +308,49 @@ function FinancialEditor({ entry, createMode, onClose, onSaved, onDeleted }) {
           </label>
           <label className="text-xs text-hagav-gray">
             Valor
-            <input type="number" min="0" step="0.01" value={form.valor} onChange={(e) => field('valor', e.target.value)} className="hinput w-full mt-1.5" />
+            <input
+              type="text"
+              inputMode="decimal"
+              value={form.valor}
+              onChange={(e) => field('valor', e.target.value)}
+              onBlur={(e) => field('valor', formatCurrencyInput(e.target.value))}
+              className="hinput w-full mt-1.5"
+              placeholder="R$ 99,00"
+            />
           </label>
-          <label className="text-xs text-hagav-gray">
-            Valor pago
-            <input type="number" min="0" step="0.01" value={form.valor_pago} onChange={(e) => field('valor_pago', e.target.value)} className="hinput w-full mt-1.5" disabled={form.status === 'pago'} />
-          </label>
+          {form.status === 'parcial' && (
+            <label className="text-xs text-hagav-gray">
+              Valor pago
+              <input
+                type="text"
+                inputMode="decimal"
+                value={form.valor_pago}
+                onChange={(e) => field('valor_pago', e.target.value)}
+                onBlur={(e) => field('valor_pago', formatCurrencyInput(e.target.value))}
+                className="hinput w-full mt-1.5"
+                placeholder="R$ 0,00"
+              />
+            </label>
+          )}
           <label className="text-xs text-hagav-gray">
             Vencimento/Data
             <input type="date" value={form.vencimento} onChange={(e) => field('vencimento', e.target.value)} className="hinput w-full mt-1.5" />
           </label>
           <label className="text-xs text-hagav-gray">
             Forma de pagamento
-            <input value={form.forma_pagamento} onChange={(e) => field('forma_pagamento', e.target.value)} className="hinput w-full mt-1.5" />
+            <select value={form.forma_pagamento} onChange={(e) => field('forma_pagamento', e.target.value)} className="hselect w-full mt-1.5">
+              <option value="">Selecione...</option>
+              {FORMA_PAGAMENTO_OPTIONS.map((item) => (
+                <option key={item} value={item}>{item}</option>
+              ))}
+            </select>
           </label>
+          {form.forma_pagamento === 'Outro' && (
+            <label className="text-xs text-hagav-gray">
+              Outra forma de pagamento
+              <input value={form.forma_pagamento_outro} onChange={(e) => field('forma_pagamento_outro', e.target.value)} className="hinput w-full mt-1.5" />
+            </label>
+          )}
           <label className="text-xs text-hagav-gray md:col-span-2">
             Observações
             <textarea rows={3} value={form.observacoes} onChange={(e) => field('observacoes', e.target.value)} className="hinput w-full mt-1.5 resize-none" />
@@ -310,15 +361,22 @@ function FinancialEditor({ entry, createMode, onClose, onSaved, onDeleted }) {
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             {!createMode && entry?.id && (
-              <button
-                type="button"
-                onClick={removeEntry}
-                disabled={saving || deleting}
-                className="btn-ghost text-red-300 border-red-500/25 hover:bg-red-500/10 hover:text-red-200"
-              >
-                {deleting && <RefreshCw size={13} className="animate-spin" />}
-                Apagar lançamento
-              </button>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={removeEntry}
+                  disabled={saving || deleting}
+                  className="btn-ghost text-red-300 border-red-500/25 hover:bg-red-500/10 hover:text-red-200"
+                >
+                  {deleting && <RefreshCw size={13} className="animate-spin" />}
+                  Apagar lançamento
+                </button>
+                {form.status !== 'pago' && (
+                  <button type="button" onClick={markAsPaid} disabled={saving || deleting} className="btn-ghost">
+                    Marcar como pago
+                  </button>
+                )}
+              </div>
             )}
           </div>
           <div className="flex justify-end gap-2">
@@ -342,11 +400,9 @@ export default function FinanceiroPage() {
   const [search, setSearch] = useState('');
   const [tipo, setTipo] = useState('');
   const [status, setStatus] = useState('');
+  const [naturezaFilter, setNaturezaFilter] = useState('');
   const [selected, setSelected] = useState(null);
   const [creating, setCreating] = useState(false);
-  const [quickForm, setQuickForm] = useState(emptyQuickForm);
-  const [quickSaving, setQuickSaving] = useState(false);
-  const [quickError, setQuickError] = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -399,10 +455,6 @@ export default function FinanceiroPage() {
     return { received, pending, overdue, costs, margin: received - costs };
   }, [entries]);
 
-  function quickField(name, value) {
-    setQuickForm((current) => ({ ...current, [name]: value }));
-  }
-
   function saveLocal(saved) {
     setEntries((current) => {
       const exists = current.some((entry) => entry.id === saved.id);
@@ -420,65 +472,36 @@ export default function FinanceiroPage() {
     setTimeout(() => setFeedback(''), 2200);
   }
 
-  async function saveQuickEntry() {
-    const descricao = String(quickForm.descricao || '').trim();
-    const valor = Number(quickForm.valor || 0);
-    if (!descricao) {
-      setQuickError('Informe uma descrição.');
-      return;
-    }
-    if (!Number.isFinite(valor) || valor <= 0) {
-      setQuickError('Informe um valor maior que zero.');
-      return;
-    }
-
-    setQuickSaving(true);
-    setQuickError('');
-    try {
-      const payload = {
-        tipo: quickForm.tipo,
-        categoria: String(quickForm.categoria || 'projeto').trim() || 'projeto',
-        descricao,
-        cliente_fornecedor: '',
-        valor: Math.max(0, valor),
-        valor_pago: quickForm.status === 'pago' ? Math.max(0, valor) : 0,
-        status: quickForm.status,
-        vencimento: quickForm.vencimento || null,
-        pago_em: quickForm.status === 'pago' ? new Date().toISOString() : null,
-        forma_pagamento: String(quickForm.forma_pagamento || '').trim(),
-        observacoes: updateFinancialObservacoes(quickForm.observacoes, {
-          natureza: quickForm.natureza,
-          recorrente_mensal: quickForm.recorrente_mensal,
-        }),
-      };
-      const saved = await createFinancialEntry(payload);
-      saveLocal(saved);
-      setQuickForm(emptyQuickForm());
-    } catch (err) {
-      console.error('[Financeiro][LançamentoRápido]', err);
-      setQuickError('Não foi possível salvar o lançamento rápido.');
-    } finally {
-      setQuickSaving(false);
-    }
+  function clearFilters() {
+    setSearch('');
+    setTipo('');
+    setStatus('');
+    setNaturezaFilter('');
   }
 
   const metricCards = [
-    { label: 'Recebido no mês', value: metrics.received, icon: ArrowDownCircle, tone: 'text-emerald-300' },
-    { label: 'A receber no mês', value: metrics.pending, icon: CalendarClock, tone: 'text-blue-300' },
-    { label: 'Em atraso', value: metrics.overdue, icon: CircleDollarSign, tone: 'text-red-300' },
-    { label: 'Custos HAGAV', value: metrics.costs, icon: ArrowUpCircle, tone: 'text-amber-300' },
-    { label: 'Lucro HAGAV', value: metrics.margin, icon: TrendingUp, tone: metrics.margin >= 0 ? 'text-emerald-300' : 'text-red-300' },
-    { label: 'Custos pessoais', valueLabel: '—', helper: 'cálculo na próxima etapa', icon: UserRound, tone: 'text-orange-300' },
-    { label: 'Sobra real', valueLabel: '—', helper: 'cálculo na próxima etapa', icon: Building2, tone: 'text-hagav-light' },
-    { label: 'Clientes necessários', valueLabel: '—', helper: 'cálculo na próxima etapa', icon: CircleDollarSign, tone: 'text-hagav-gold' },
+    { label: 'Recebido no mês', value: metrics.received, helper: 'Entradas pagas', icon: ArrowDownCircle, tone: 'text-emerald-300' },
+    { label: 'A receber no mês', value: metrics.pending, helper: 'Pendentes e parciais', icon: CalendarClock, tone: 'text-blue-300' },
+    { label: 'Em atraso', value: metrics.overdue, helper: 'Vencimentos em aberto', icon: CircleDollarSign, tone: 'text-red-300' },
+    { label: 'Custos HAGAV', value: metrics.costs, helper: 'Saídas registradas', icon: ArrowUpCircle, tone: 'text-amber-300' },
+    { label: 'Custos pessoais', valueLabel: '—', helper: 'Próxima etapa', icon: UserRound, tone: 'text-orange-300' },
+    { label: 'Lucro HAGAV', value: metrics.margin, helper: 'Resultado operacional', icon: TrendingUp, tone: metrics.margin >= 0 ? 'text-emerald-300' : 'text-red-300' },
+    { label: 'Sobra real', valueLabel: '—', helper: 'Próxima etapa', icon: Building2, tone: 'text-emerald-300' },
+    { label: 'Clientes necessários', valueLabel: '—', helper: 'Próxima etapa', icon: UserRound, tone: 'text-blue-200' },
   ];
+
+  const visibleEntries = useMemo(() => (
+    naturezaFilter
+      ? entries.filter((entry) => getEntryMeta(entry).natureza === naturezaFilter)
+      : entries
+  ), [entries, naturezaFilter]);
 
   return (
     <div className="space-y-5 animate-fade-in">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="page-title">Financeiro</h1>
-          <p className="page-subtitle">Caixa operacional, vencimentos e margem da HAGAV.</p>
+          <p className="page-subtitle">Acompanhe entradas, custos, lucro e o que falta para bater a meta do mês.</p>
         </div>
         <div className="flex gap-2">
           <button type="button" onClick={load} disabled={loading} className="btn-ghost btn-sm">
@@ -491,13 +514,13 @@ export default function FinanceiroPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-8 gap-3">
         {metricCards.map(({ label, value, valueLabel, helper, icon: Icon, tone }) => (
-          <div key={label} className="hcard p-4">
+          <div key={label} className="hcard p-3 min-h-[112px]">
             <p className="text-[10px] uppercase tracking-wider text-hagav-gray flex items-center gap-1.5">
               <Icon size={12} className={tone} /> {label}
             </p>
-            <p className={classNames('text-xl font-bold mt-2', tone)}>
+            <p className={classNames('text-lg xl:text-xl font-bold mt-3', tone)}>
               {valueLabel || fmtBRL(value)}
             </p>
             {helper && <p className="text-[11px] text-hagav-gray mt-1">{helper}</p>}
@@ -505,89 +528,10 @@ export default function FinanceiroPage() {
         ))}
       </div>
 
-      <div className="hcard p-4 space-y-4">
-        <div className="flex flex-wrap items-start justify-between gap-2">
-          <div>
-            <h2 className="text-sm font-semibold text-hagav-white">Lançamento rápido</h2>
-            <p className="text-xs text-hagav-gray mt-1">Registre entradas e saídas sem abrir o cadastro completo.</p>
-          </div>
-          <span className="badge bg-hagav-gold/15 text-hagav-gold border-hagav-gold/30">
-            V1 segura
-          </span>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
-          <label className="text-xs text-hagav-gray">
-            Tipo
-            <select value={quickForm.tipo} onChange={(e) => quickField('tipo', e.target.value)} className="hselect w-full mt-1.5">
-              <option value="receber">Entrada</option>
-              <option value="pagar">Saída</option>
-            </select>
-          </label>
-          <label className="text-xs text-hagav-gray">
-            Natureza
-            <select value={quickForm.natureza} onChange={(e) => quickField('natureza', e.target.value)} className="hselect w-full mt-1.5">
-              {NATUREZA_OPTIONS.map((item) => (
-                <option key={item} value={item}>{item}</option>
-              ))}
-            </select>
-          </label>
-          <label className="text-xs text-hagav-gray xl:col-span-2">
-            Descrição
-            <input value={quickForm.descricao} onChange={(e) => quickField('descricao', e.target.value)} className="hinput w-full mt-1.5" placeholder="Ex.: assinatura, pagamento de cliente, tráfego..." />
-          </label>
-          <label className="text-xs text-hagav-gray">
-            Categoria
-            <input value={quickForm.categoria} onChange={(e) => quickField('categoria', e.target.value)} className="hinput w-full mt-1.5" />
-          </label>
-          <label className="text-xs text-hagav-gray">
-            Valor
-            <input type="number" min="0" step="0.01" value={quickForm.valor} onChange={(e) => quickField('valor', e.target.value)} className="hinput w-full mt-1.5" />
-          </label>
-          <label className="text-xs text-hagav-gray">
-            Data
-            <input type="date" value={quickForm.vencimento} onChange={(e) => quickField('vencimento', e.target.value)} className="hinput w-full mt-1.5" />
-          </label>
-          <label className="text-xs text-hagav-gray">
-            Forma de pagamento
-            <input value={quickForm.forma_pagamento} onChange={(e) => quickField('forma_pagamento', e.target.value)} className="hinput w-full mt-1.5" placeholder="PIX, cartão, boleto..." />
-          </label>
-          <label className="text-xs text-hagav-gray">
-            Status
-            <select value={quickForm.status} onChange={(e) => quickField('status', e.target.value)} className="hselect w-full mt-1.5">
-              {Object.entries(FINANCIAL_STATUS_LABELS).map(([value, label]) => (
-                <option key={value} value={value}>{label}</option>
-              ))}
-            </select>
-          </label>
-          <label className="text-xs text-hagav-gray flex items-center gap-2 md:mt-7">
-            <input
-              type="checkbox"
-              checked={Boolean(quickForm.recorrente_mensal)}
-              onChange={(e) => quickField('recorrente_mensal', e.target.checked)}
-              className="accent-hagav-gold"
-            />
-            Recorrente mensal
-          </label>
-          <label className="text-xs text-hagav-gray md:col-span-2">
-            Observações
-            <input value={quickForm.observacoes} onChange={(e) => quickField('observacoes', e.target.value)} className="hinput w-full mt-1.5" placeholder="Opcional" />
-          </label>
-          <div className="flex items-end">
-            <button type="button" onClick={saveQuickEntry} disabled={quickSaving} className="btn-gold w-full justify-center">
-              {quickSaving ? <RefreshCw size={13} className="animate-spin" /> : <Plus size={13} />}
-              Salvar lançamento rápido
-            </button>
-          </div>
-        </div>
-
-        {quickError && <p className="text-xs text-red-300 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{quickError}</p>}
-      </div>
-
-      <div className="hcard p-3 grid grid-cols-1 md:grid-cols-[1fr_180px_180px] gap-2">
+      <div className="hcard p-3 grid grid-cols-1 md:grid-cols-[1fr_180px_180px_160px_150px] gap-2">
         <div className="relative">
           <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-hagav-gray" />
-          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar descrição, cliente ou categoria..." className="hinput w-full pl-8" />
+          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar nome, cliente ou categoria..." className="hinput w-full pl-8" />
         </div>
         <select value={tipo} onChange={(e) => setTipo(e.target.value)} className="hselect">
           <option value="">Entradas e saídas</option>
@@ -600,6 +544,15 @@ export default function FinanceiroPage() {
             <option key={value} value={value}>{label}</option>
           ))}
         </select>
+        <select value={naturezaFilter} onChange={(e) => setNaturezaFilter(e.target.value)} className="hselect">
+          <option value="">Natureza</option>
+          {NATUREZA_OPTIONS.map((item) => (
+            <option key={item} value={item}>{item}</option>
+          ))}
+        </select>
+        <button type="button" onClick={clearFilters} className="btn-ghost btn-sm justify-center">
+          Limpar filtros
+        </button>
       </div>
 
       {loadError && <p className="text-xs text-red-300 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{loadError}</p>}
@@ -607,30 +560,35 @@ export default function FinanceiroPage() {
 
       {loading ? (
         <div className="py-20 flex justify-center"><RefreshCw className="animate-spin text-hagav-gold" /></div>
-      ) : entries.length === 0 ? (
+      ) : visibleEntries.length === 0 ? (
         <EmptyState icon={CircleDollarSign} title="Nenhum lançamento encontrado" description="Aprovações criarão contas a receber automaticamente. Custos podem ser adicionados manualmente." />
       ) : (
-        <div className="hcard overflow-x-auto">
-          <table className="w-full text-sm min-w-[1120px]">
-            <thead>
-              <tr className="border-b border-hagav-border text-left text-[10px] uppercase tracking-wider text-hagav-gray">
-                <th className="px-4 py-3">Tipo</th>
-                <th className="px-4 py-3">Natureza</th>
-                <th className="px-4 py-3">Descrição</th>
-                <th className="px-4 py-3">Categoria</th>
-                <th className="px-4 py-3">Vencimento/Data</th>
-                <th className="px-4 py-3">Valor</th>
-                <th className="px-4 py-3">Pago</th>
-                <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3 text-right">Ações</th>
-              </tr>
-            </thead>
-            <tbody>
-              {entries.map((entry) => {
+        <div className="hcard overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[1120px]">
+              <thead>
+                <tr className="border-b border-hagav-border text-left text-[10px] uppercase tracking-wider text-hagav-gray">
+                  <th className="px-4 py-3">Tipo</th>
+                  <th className="px-4 py-3">Natureza</th>
+                  <th className="px-4 py-3">Nome do lançamento</th>
+                  <th className="px-4 py-3">Categoria</th>
+                  <th className="px-4 py-3">Vencimento/Data</th>
+                  <th className="px-4 py-3">Valor</th>
+                  <th className="px-4 py-3">Pago</th>
+                  <th className="px-4 py-3">Status</th>
+                  <th className="px-4 py-3 text-right">Ações</th>
+                </tr>
+              </thead>
+              <tbody>
+              {visibleEntries.map((entry) => {
                 const effective = effectiveFinancialStatus(entry);
                 const meta = getEntryMeta(entry);
                 const observation = stripFinancialMetadata(entry.observacoes);
                 const NaturezaIcon = meta.natureza === 'Pessoal' ? UserRound : Building2;
+                const paidValue = Number(entry.valor_pago || 0);
+                const displayPaid = effective === 'pago'
+                  ? fmtBRL(paidValue || entry.valor)
+                  : (paidValue > 0 ? fmtBRL(paidValue) : '—');
                 return (
                   <tr
                     key={entry.id}
@@ -638,7 +596,7 @@ export default function FinanceiroPage() {
                     className="border-b border-hagav-border/70 hover:bg-hagav-muted/20 cursor-pointer"
                   >
                     <td className="px-4 py-3">
-                      <span className={entry.tipo === 'receber' ? 'text-emerald-300' : 'text-amber-300'}>
+                      <span className={entry.tipo === 'receber' ? 'text-emerald-300' : 'text-red-300'}>
                         {entry.tipo === 'receber' ? 'Entrada' : 'Saída'}
                       </span>
                     </td>
@@ -662,8 +620,8 @@ export default function FinanceiroPage() {
                     </td>
                     <td className="px-4 py-3 text-hagav-light">{entry.categoria || '-'}</td>
                     <td className="px-4 py-3 text-hagav-light">{entry.vencimento ? fmtDate(entry.vencimento) : '-'}</td>
-                    <td className="px-4 py-3 text-hagav-white font-semibold">{fmtBRL(entry.valor)}</td>
-                    <td className="px-4 py-3 text-hagav-light">{fmtBRL(entry.valor_pago)}</td>
+                    <td className={classNames('px-4 py-3 font-semibold', entry.tipo === 'receber' ? 'text-emerald-300' : 'text-red-300')}>{fmtBRL(entry.valor)}</td>
+                    <td className="px-4 py-3 text-hagav-light">{displayPaid}</td>
                     <td className="px-4 py-3">
                       <span className={classNames('badge', STATUS_COLORS[effective] || STATUS_COLORS.pendente)}>
                         {FINANCIAL_STATUS_LABELS[effective] || effective}
@@ -687,8 +645,13 @@ export default function FinanceiroPage() {
                   </tr>
                 );
               })}
-            </tbody>
-          </table>
+              </tbody>
+            </table>
+          </div>
+          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-hagav-border px-4 py-3 text-xs text-hagav-gray">
+            <span>Mostrando {visibleEntries.length} de {entries.length} registros</span>
+            <span>Use os filtros acima para ajustar a lista.</span>
+          </div>
         </div>
       )}
 

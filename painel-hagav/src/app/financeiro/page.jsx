@@ -4,12 +4,16 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ArrowDownCircle,
   ArrowUpCircle,
+  Building2,
   CalendarClock,
   CircleDollarSign,
+  Pencil,
   Plus,
   RefreshCw,
+  Repeat,
   Search,
   TrendingUp,
+  UserRound,
 } from 'lucide-react';
 import Modal from '@/components/ui/Modal';
 import EmptyState from '@/components/ui/EmptyState';
@@ -32,9 +36,76 @@ const STATUS_COLORS = {
   cancelado: 'bg-zinc-500/15 text-zinc-300 border-zinc-500/30',
 };
 
+const FINANCEIRO_META_START = '[HAGAV_FINANCEIRO_META]';
+const FINANCEIRO_META_END = '[/HAGAV_FINANCEIRO_META]';
+const FINANCEIRO_META_REGEX = /\[HAGAV_FINANCEIRO_META\][\s\S]*?\[\/HAGAV_FINANCEIRO_META\]/g;
+const NATUREZA_OPTIONS = ['Empresa', 'Pessoal'];
+
+function todayIsoDate() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function normalizeNatureza(value) {
+  return String(value || '').trim().toLowerCase() === 'pessoal' ? 'Pessoal' : 'Empresa';
+}
+
+function parseBooleanMeta(value) {
+  return ['true', '1', 'sim', 'yes'].includes(String(value || '').trim().toLowerCase());
+}
+
+function readFinancialMetadata(observacoes) {
+  const raw = String(observacoes || '');
+  const match = raw.match(FINANCEIRO_META_REGEX);
+  const meta = {
+    natureza: 'Empresa',
+    recorrente_mensal: false,
+    hasMeta: Boolean(match?.[0]),
+  };
+  if (!match?.[0]) return meta;
+
+  match[0]
+    .replace(FINANCEIRO_META_START, '')
+    .replace(FINANCEIRO_META_END, '')
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .forEach((line) => {
+      const [key, ...rest] = line.split('=');
+      const value = rest.join('=').trim();
+      if (key === 'natureza') meta.natureza = normalizeNatureza(value);
+      if (key === 'recorrente_mensal') meta.recorrente_mensal = parseBooleanMeta(value);
+    });
+
+  return meta;
+}
+
+function stripFinancialMetadata(observacoes) {
+  return String(observacoes || '')
+    .replace(FINANCEIRO_META_REGEX, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+function buildFinancialMetadataBlock(meta) {
+  return [
+    FINANCEIRO_META_START,
+    `natureza=${normalizeNatureza(meta?.natureza)}`,
+    `recorrente_mensal=${Boolean(meta?.recorrente_mensal) ? 'true' : 'false'}`,
+    FINANCEIRO_META_END,
+  ].join('\n');
+}
+
+function updateFinancialObservacoes(observacaoLivre, meta) {
+  const cleanText = stripFinancialMetadata(observacaoLivre);
+  const block = buildFinancialMetadataBlock(meta);
+  return cleanText ? `${block}\n\n${cleanText}` : block;
+}
+
 function emptyForm() {
   return {
     tipo: 'receber',
+    natureza: 'Empresa',
+    recorrente_mensal: false,
     categoria: 'projeto',
     descricao: '',
     cliente_fornecedor: '',
@@ -47,14 +118,42 @@ function emptyForm() {
   };
 }
 
+function emptyQuickForm() {
+  return {
+    tipo: 'receber',
+    natureza: 'Empresa',
+    recorrente_mensal: false,
+    descricao: '',
+    categoria: 'projeto',
+    valor: '',
+    vencimento: todayIsoDate(),
+    forma_pagamento: '',
+    status: 'pendente',
+    observacoes: '',
+  };
+}
+
+function getEntryMeta(entry) {
+  return readFinancialMetadata(entry?.observacoes);
+}
+
 function FinancialEditor({ entry, createMode, onClose, onSaved }) {
   const [form, setForm] = useState(emptyForm());
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    setForm(entry ? {
+    if (!entry) {
+      setForm(emptyForm());
+      setError('');
+      return;
+    }
+
+    const meta = readFinancialMetadata(entry.observacoes);
+    setForm({
       tipo: entry.tipo || 'receber',
+      natureza: meta.natureza,
+      recorrente_mensal: meta.recorrente_mensal,
       categoria: entry.categoria || 'projeto',
       descricao: entry.descricao || '',
       cliente_fornecedor: entry.cliente_fornecedor || '',
@@ -63,8 +162,8 @@ function FinancialEditor({ entry, createMode, onClose, onSaved }) {
       status: effectiveFinancialStatus(entry),
       vencimento: entry.vencimento || '',
       forma_pagamento: entry.forma_pagamento || '',
-      observacoes: entry.observacoes || '',
-    } : emptyForm());
+      observacoes: stripFinancialMetadata(entry.observacoes),
+    });
     setError('');
   }, [entry, createMode]);
 
@@ -74,19 +173,29 @@ function FinancialEditor({ entry, createMode, onClose, onSaved }) {
 
   async function save() {
     if (!String(form.descricao || '').trim()) {
-      setError('Informe uma descricao.');
+      setError('Informe uma descrição.');
       return;
     }
     setSaving(true);
     setError('');
     try {
       const payload = {
-        ...form,
+        tipo: form.tipo,
+        categoria: String(form.categoria || 'projeto').trim() || 'projeto',
+        descricao: String(form.descricao || '').trim(),
+        cliente_fornecedor: String(form.cliente_fornecedor || '').trim(),
         valor: Math.max(0, Number(form.valor || 0)),
         valor_pago: form.status === 'pago'
           ? Math.max(0, Number(form.valor || 0))
           : Math.max(0, Number(form.valor_pago || 0)),
+        status: form.status,
+        vencimento: form.vencimento || null,
         pago_em: form.status === 'pago' ? new Date().toISOString() : null,
+        forma_pagamento: String(form.forma_pagamento || '').trim(),
+        observacoes: updateFinancialObservacoes(form.observacoes, {
+          natureza: form.natureza,
+          recorrente_mensal: form.recorrente_mensal,
+        }),
       };
       const saved = createMode
         ? await createFinancialEntry(payload)
@@ -105,7 +214,7 @@ function FinancialEditor({ entry, createMode, onClose, onSaved }) {
     <Modal
       open={Boolean(createMode || entry)}
       onClose={onClose}
-      title={createMode ? 'Novo lancamento' : 'Editar lancamento'}
+      title={createMode ? 'Novo lançamento' : 'Editar lançamento'}
       width="max-w-2xl"
     >
       <div className="space-y-4">
@@ -113,8 +222,16 @@ function FinancialEditor({ entry, createMode, onClose, onSaved }) {
           <label className="text-xs text-hagav-gray">
             Tipo
             <select value={form.tipo} onChange={(e) => field('tipo', e.target.value)} className="hselect w-full mt-1.5">
-              <option value="receber">Conta a receber</option>
-              <option value="pagar">Conta a pagar</option>
+              <option value="receber">Entrada</option>
+              <option value="pagar">Saída</option>
+            </select>
+          </label>
+          <label className="text-xs text-hagav-gray">
+            Natureza
+            <select value={form.natureza} onChange={(e) => field('natureza', e.target.value)} className="hselect w-full mt-1.5">
+              {NATUREZA_OPTIONS.map((item) => (
+                <option key={item} value={item}>{item}</option>
+              ))}
             </select>
           </label>
           <label className="text-xs text-hagav-gray">
@@ -125,8 +242,17 @@ function FinancialEditor({ entry, createMode, onClose, onSaved }) {
               ))}
             </select>
           </label>
+          <label className="text-xs text-hagav-gray flex items-center gap-2 mt-6">
+            <input
+              type="checkbox"
+              checked={Boolean(form.recorrente_mensal)}
+              onChange={(e) => field('recorrente_mensal', e.target.checked)}
+              className="accent-hagav-gold"
+            />
+            Recorrente mensal
+          </label>
           <label className="text-xs text-hagav-gray md:col-span-2">
-            Descricao
+            Descrição
             <input value={form.descricao} onChange={(e) => field('descricao', e.target.value)} className="hinput w-full mt-1.5" />
           </label>
           <label className="text-xs text-hagav-gray">
@@ -146,7 +272,7 @@ function FinancialEditor({ entry, createMode, onClose, onSaved }) {
             <input type="number" min="0" step="0.01" value={form.valor_pago} onChange={(e) => field('valor_pago', e.target.value)} className="hinput w-full mt-1.5" disabled={form.status === 'pago'} />
           </label>
           <label className="text-xs text-hagav-gray">
-            Vencimento
+            Vencimento/Data
             <input type="date" value={form.vencimento} onChange={(e) => field('vencimento', e.target.value)} className="hinput w-full mt-1.5" />
           </label>
           <label className="text-xs text-hagav-gray">
@@ -164,7 +290,7 @@ function FinancialEditor({ entry, createMode, onClose, onSaved }) {
           <button type="button" onClick={onClose} className="btn-ghost">Cancelar</button>
           <button type="button" onClick={save} disabled={saving} className="btn-gold">
             {saving && <RefreshCw size={13} className="animate-spin" />}
-            Salvar lancamento
+            Salvar lançamento
           </button>
         </div>
       </div>
@@ -182,6 +308,9 @@ export default function FinanceiroPage() {
   const [status, setStatus] = useState('');
   const [selected, setSelected] = useState(null);
   const [creating, setCreating] = useState(false);
+  const [quickForm, setQuickForm] = useState(emptyQuickForm);
+  const [quickSaving, setQuickSaving] = useState(false);
+  const [quickError, setQuickError] = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -234,6 +363,10 @@ export default function FinanceiroPage() {
     return { received, pending, overdue, costs, margin: received - costs };
   }, [entries]);
 
+  function quickField(name, value) {
+    setQuickForm((current) => ({ ...current, [name]: value }));
+  }
+
   function saveLocal(saved) {
     setEntries((current) => {
       const exists = current.some((entry) => entry.id === saved.id);
@@ -241,9 +374,59 @@ export default function FinanceiroPage() {
         ? current.map((entry) => entry.id === saved.id ? saved : entry)
         : [saved, ...current];
     });
-    setFeedback('Lancamento salvo.');
+    setFeedback('Lançamento salvo.');
     setTimeout(() => setFeedback(''), 2200);
   }
+
+  async function saveQuickEntry() {
+    const descricao = String(quickForm.descricao || '').trim();
+    const valor = Number(quickForm.valor || 0);
+    if (!descricao) {
+      setQuickError('Informe uma descrição.');
+      return;
+    }
+    if (!Number.isFinite(valor) || valor <= 0) {
+      setQuickError('Informe um valor maior que zero.');
+      return;
+    }
+
+    setQuickSaving(true);
+    setQuickError('');
+    try {
+      const payload = {
+        tipo: quickForm.tipo,
+        categoria: String(quickForm.categoria || 'projeto').trim() || 'projeto',
+        descricao,
+        cliente_fornecedor: '',
+        valor: Math.max(0, valor),
+        valor_pago: quickForm.status === 'pago' ? Math.max(0, valor) : 0,
+        status: quickForm.status,
+        vencimento: quickForm.vencimento || null,
+        pago_em: quickForm.status === 'pago' ? new Date().toISOString() : null,
+        forma_pagamento: String(quickForm.forma_pagamento || '').trim(),
+        observacoes: updateFinancialObservacoes(quickForm.observacoes, {
+          natureza: quickForm.natureza,
+          recorrente_mensal: quickForm.recorrente_mensal,
+        }),
+      };
+      const saved = await createFinancialEntry(payload);
+      saveLocal(saved);
+      setQuickForm(emptyQuickForm());
+    } catch (err) {
+      console.error('[Financeiro][LançamentoRápido]', err);
+      setQuickError('Não foi possível salvar o lançamento rápido.');
+    } finally {
+      setQuickSaving(false);
+    }
+  }
+
+  const metricCards = [
+    { label: 'Recebido no mês', value: metrics.received, icon: ArrowDownCircle, tone: 'text-emerald-300' },
+    { label: 'A receber', value: metrics.pending, icon: CalendarClock, tone: 'text-blue-300' },
+    { label: 'Em atraso', value: metrics.overdue, icon: CircleDollarSign, tone: 'text-red-300' },
+    { label: 'Custos', value: metrics.costs, icon: ArrowUpCircle, tone: 'text-amber-300' },
+    { label: 'Saldo / Resultado do mês', value: metrics.margin, icon: TrendingUp, tone: metrics.margin >= 0 ? 'text-emerald-300' : 'text-red-300' },
+  ];
 
   return (
     <div className="space-y-5 animate-fade-in">
@@ -258,19 +441,13 @@ export default function FinanceiroPage() {
             Atualizar
           </button>
           <button type="button" onClick={() => setCreating(true)} className="btn-gold btn-sm">
-            <Plus size={13} /> Novo lancamento
+            <Plus size={13} /> Novo lançamento
           </button>
         </div>
       </div>
 
-      <div className="grid grid-cols-2 xl:grid-cols-5 gap-3">
-        {[
-          { label: 'Recebido no mês', value: metrics.received, icon: ArrowDownCircle, tone: 'text-emerald-300' },
-          { label: 'A receber', value: metrics.pending, icon: CalendarClock, tone: 'text-blue-300' },
-          { label: 'Em atraso', value: metrics.overdue, icon: CircleDollarSign, tone: 'text-red-300' },
-          { label: 'Custos', value: metrics.costs, icon: ArrowUpCircle, tone: 'text-amber-300' },
-          { label: 'Margem de caixa', value: metrics.margin, icon: TrendingUp, tone: metrics.margin >= 0 ? 'text-emerald-300' : 'text-red-300' },
-        ].map(({ label, value, icon: Icon, tone }) => (
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-3">
+        {metricCards.map(({ label, value, icon: Icon, tone }) => (
           <div key={label} className="hcard p-4">
             <p className="text-[10px] uppercase tracking-wider text-hagav-gray flex items-center gap-1.5">
               <Icon size={12} className={tone} /> {label}
@@ -280,15 +457,94 @@ export default function FinanceiroPage() {
         ))}
       </div>
 
+      <div className="hcard p-4 space-y-4">
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div>
+            <h2 className="text-sm font-semibold text-hagav-white">Lançamento rápido</h2>
+            <p className="text-xs text-hagav-gray mt-1">Registre entradas e saídas sem abrir o cadastro completo.</p>
+          </div>
+          <span className="badge bg-hagav-gold/15 text-hagav-gold border-hagav-gold/30">
+            V1 segura
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+          <label className="text-xs text-hagav-gray">
+            Tipo
+            <select value={quickForm.tipo} onChange={(e) => quickField('tipo', e.target.value)} className="hselect w-full mt-1.5">
+              <option value="receber">Entrada</option>
+              <option value="pagar">Saída</option>
+            </select>
+          </label>
+          <label className="text-xs text-hagav-gray">
+            Natureza
+            <select value={quickForm.natureza} onChange={(e) => quickField('natureza', e.target.value)} className="hselect w-full mt-1.5">
+              {NATUREZA_OPTIONS.map((item) => (
+                <option key={item} value={item}>{item}</option>
+              ))}
+            </select>
+          </label>
+          <label className="text-xs text-hagav-gray xl:col-span-2">
+            Descrição
+            <input value={quickForm.descricao} onChange={(e) => quickField('descricao', e.target.value)} className="hinput w-full mt-1.5" placeholder="Ex.: assinatura, pagamento de cliente, tráfego..." />
+          </label>
+          <label className="text-xs text-hagav-gray">
+            Categoria
+            <input value={quickForm.categoria} onChange={(e) => quickField('categoria', e.target.value)} className="hinput w-full mt-1.5" />
+          </label>
+          <label className="text-xs text-hagav-gray">
+            Valor
+            <input type="number" min="0" step="0.01" value={quickForm.valor} onChange={(e) => quickField('valor', e.target.value)} className="hinput w-full mt-1.5" />
+          </label>
+          <label className="text-xs text-hagav-gray">
+            Data
+            <input type="date" value={quickForm.vencimento} onChange={(e) => quickField('vencimento', e.target.value)} className="hinput w-full mt-1.5" />
+          </label>
+          <label className="text-xs text-hagav-gray">
+            Forma de pagamento
+            <input value={quickForm.forma_pagamento} onChange={(e) => quickField('forma_pagamento', e.target.value)} className="hinput w-full mt-1.5" placeholder="PIX, cartão, boleto..." />
+          </label>
+          <label className="text-xs text-hagav-gray">
+            Status
+            <select value={quickForm.status} onChange={(e) => quickField('status', e.target.value)} className="hselect w-full mt-1.5">
+              {Object.entries(FINANCIAL_STATUS_LABELS).map(([value, label]) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
+            </select>
+          </label>
+          <label className="text-xs text-hagav-gray flex items-center gap-2 md:mt-7">
+            <input
+              type="checkbox"
+              checked={Boolean(quickForm.recorrente_mensal)}
+              onChange={(e) => quickField('recorrente_mensal', e.target.checked)}
+              className="accent-hagav-gold"
+            />
+            Recorrente mensal
+          </label>
+          <label className="text-xs text-hagav-gray md:col-span-2">
+            Observações
+            <input value={quickForm.observacoes} onChange={(e) => quickField('observacoes', e.target.value)} className="hinput w-full mt-1.5" placeholder="Opcional" />
+          </label>
+          <div className="flex items-end">
+            <button type="button" onClick={saveQuickEntry} disabled={quickSaving} className="btn-gold w-full justify-center">
+              {quickSaving ? <RefreshCw size={13} className="animate-spin" /> : <Plus size={13} />}
+              Salvar lançamento rápido
+            </button>
+          </div>
+        </div>
+
+        {quickError && <p className="text-xs text-red-300 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{quickError}</p>}
+      </div>
+
       <div className="hcard p-3 grid grid-cols-1 md:grid-cols-[1fr_180px_180px] gap-2">
         <div className="relative">
           <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-hagav-gray" />
-          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar descricao, cliente ou categoria..." className="hinput w-full pl-8" />
+          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar descrição, cliente ou categoria..." className="hinput w-full pl-8" />
         </div>
         <select value={tipo} onChange={(e) => setTipo(e.target.value)} className="hselect">
-          <option value="">Entradas e saidas</option>
-          <option value="receber">A receber</option>
-          <option value="pagar">A pagar</option>
+          <option value="">Entradas e saídas</option>
+          <option value="receber">Entradas</option>
+          <option value="pagar">Saídas</option>
         </select>
         <select value={status} onChange={(e) => setStatus(e.target.value)} className="hselect">
           <option value="">Todos os status</option>
@@ -304,24 +560,29 @@ export default function FinanceiroPage() {
       {loading ? (
         <div className="py-20 flex justify-center"><RefreshCw className="animate-spin text-hagav-gold" /></div>
       ) : entries.length === 0 ? (
-        <EmptyState icon={CircleDollarSign} title="Nenhum lancamento encontrado" description="Aprovacoes criarao contas a receber automaticamente. Custos podem ser adicionados manualmente." />
+        <EmptyState icon={CircleDollarSign} title="Nenhum lançamento encontrado" description="Aprovações criarão contas a receber automaticamente. Custos podem ser adicionados manualmente." />
       ) : (
         <div className="hcard overflow-x-auto">
-          <table className="w-full text-sm min-w-[920px]">
+          <table className="w-full text-sm min-w-[1120px]">
             <thead>
               <tr className="border-b border-hagav-border text-left text-[10px] uppercase tracking-wider text-hagav-gray">
                 <th className="px-4 py-3">Tipo</th>
-                <th className="px-4 py-3">Descricao</th>
-                <th className="px-4 py-3">Cliente / fornecedor</th>
-                <th className="px-4 py-3">Vencimento</th>
+                <th className="px-4 py-3">Natureza</th>
+                <th className="px-4 py-3">Descrição</th>
+                <th className="px-4 py-3">Categoria</th>
+                <th className="px-4 py-3">Vencimento/Data</th>
                 <th className="px-4 py-3">Valor</th>
                 <th className="px-4 py-3">Pago</th>
                 <th className="px-4 py-3">Status</th>
+                <th className="px-4 py-3 text-right">Ações</th>
               </tr>
             </thead>
             <tbody>
               {entries.map((entry) => {
                 const effective = effectiveFinancialStatus(entry);
+                const meta = getEntryMeta(entry);
+                const observation = stripFinancialMetadata(entry.observacoes);
+                const NaturezaIcon = meta.natureza === 'Pessoal' ? UserRound : Building2;
                 return (
                   <tr
                     key={entry.id}
@@ -330,11 +591,28 @@ export default function FinanceiroPage() {
                   >
                     <td className="px-4 py-3">
                       <span className={entry.tipo === 'receber' ? 'text-emerald-300' : 'text-amber-300'}>
-                        {entry.tipo === 'receber' ? 'Receber' : 'Pagar'}
+                        {entry.tipo === 'receber' ? 'Entrada' : 'Saída'}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-hagav-white">{entry.descricao}</td>
-                    <td className="px-4 py-3 text-hagav-light">{entry.cliente_fornecedor || '-'}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="badge bg-hagav-muted/40 text-hagav-light border-hagav-border">
+                          <NaturezaIcon size={11} />
+                          {meta.natureza}
+                        </span>
+                        {meta.recorrente_mensal && (
+                          <span className="badge bg-blue-500/15 text-blue-300 border-blue-500/30">
+                            <Repeat size={11} />
+                            Mensal
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <p className="text-hagav-white font-medium">{entry.descricao}</p>
+                      {observation && <p className="text-[11px] text-hagav-gray mt-1 line-clamp-1">{observation}</p>}
+                    </td>
+                    <td className="px-4 py-3 text-hagav-light">{entry.categoria || '-'}</td>
                     <td className="px-4 py-3 text-hagav-light">{entry.vencimento ? fmtDate(entry.vencimento) : '-'}</td>
                     <td className="px-4 py-3 text-hagav-white font-semibold">{fmtBRL(entry.valor)}</td>
                     <td className="px-4 py-3 text-hagav-light">{fmtBRL(entry.valor_pago)}</td>
@@ -342,6 +620,21 @@ export default function FinanceiroPage() {
                       <span className={classNames('badge', STATUS_COLORS[effective] || STATUS_COLORS.pendente)}>
                         {FINANCIAL_STATUS_LABELS[effective] || effective}
                       </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex justify-end">
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setSelected(entry);
+                          }}
+                          className="btn-ghost btn-sm"
+                        >
+                          <Pencil size={12} />
+                          Editar
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );

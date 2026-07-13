@@ -464,10 +464,13 @@ export default function FinanceiroPage() {
 
   const metricCards = [
     { label: 'Recebido no mês', value: metrics.received, icon: ArrowDownCircle, tone: 'text-emerald-300' },
-    { label: 'A receber', value: metrics.pending, icon: CalendarClock, tone: 'text-blue-300' },
+    { label: 'A receber no mês', value: metrics.pending, icon: CalendarClock, tone: 'text-blue-300' },
     { label: 'Em atraso', value: metrics.overdue, icon: CircleDollarSign, tone: 'text-red-300' },
-    { label: 'Custos', value: metrics.costs, icon: ArrowUpCircle, tone: 'text-amber-300' },
-    { label: 'Saldo / Resultado do mês', value: metrics.margin, icon: TrendingUp, tone: metrics.margin >= 0 ? 'text-emerald-300' : 'text-red-300' },
+    { label: 'Custos HAGAV', value: metrics.costs, icon: ArrowUpCircle, tone: 'text-amber-300' },
+    { label: 'Lucro HAGAV', value: metrics.margin, icon: TrendingUp, tone: metrics.margin >= 0 ? 'text-emerald-300' : 'text-red-300' },
+    { label: 'Custos pessoais', valueLabel: '—', helper: 'cálculo na próxima etapa', icon: UserRound, tone: 'text-orange-300' },
+    { label: 'Sobra real', valueLabel: '—', helper: 'cálculo na próxima etapa', icon: Building2, tone: 'text-hagav-light' },
+    { label: 'Clientes necessários', valueLabel: '—', helper: 'cálculo na próxima etapa', icon: CircleDollarSign, tone: 'text-hagav-gold' },
   ];
 
   return (
@@ -488,13 +491,16 @@ export default function FinanceiroPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-3">
-        {metricCards.map(({ label, value, icon: Icon, tone }) => (
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+        {metricCards.map(({ label, value, valueLabel, helper, icon: Icon, tone }) => (
           <div key={label} className="hcard p-4">
             <p className="text-[10px] uppercase tracking-wider text-hagav-gray flex items-center gap-1.5">
               <Icon size={12} className={tone} /> {label}
             </p>
-            <p className={classNames('text-xl font-bold mt-2', tone)}>{fmtBRL(value)}</p>
+            <p className={classNames('text-xl font-bold mt-2', tone)}>
+              {valueLabel || fmtBRL(value)}
+            </p>
+            {helper && <p className="text-[11px] text-hagav-gray mt-1">{helper}</p>}
           </div>
         ))}
       </div>

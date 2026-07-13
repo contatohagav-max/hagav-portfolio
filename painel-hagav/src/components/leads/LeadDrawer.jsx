@@ -14,7 +14,7 @@ import { updateLead } from '@/lib/supabase';
 import { enrichLeadRecord } from '@/lib/commercial';
 import { fmtDateTime, whatsappLink, LEAD_STATUS_LABELS, fmtBRL } from '@/lib/utils';
 
-const LEAD_STATUSES = ['novo', 'contatado', 'qualificado', 'descartado'];
+const LEAD_STATUSES = ['novo', 'contatado', 'qualificado'];
 const WHATSAPP_TOOLTIP = {
   title: 'WhatsApp',
   whatIs: 'Abre conversa direta com o contato no WhatsApp.',
@@ -133,10 +133,7 @@ export default function LeadDrawer({ lead, onClose, onUpdated }) {
     }
   }
 
-  const statusOptions = Array.from(new Set([
-    ...LEAD_STATUSES,
-    status || 'novo',
-  ]));
+  const statusOptions = LEAD_STATUSES;
   const canGenerateOrcamento = String(status || '').toLowerCase() === 'qualificado';
   const liveLead = useMemo(() => enrichLeadRecord({
     ...lead,

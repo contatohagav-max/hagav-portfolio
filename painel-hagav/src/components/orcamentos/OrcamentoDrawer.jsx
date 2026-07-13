@@ -1477,6 +1477,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
         ) > 0.009
       );
       setInfo('Orçamento salvo com campos financeiros atualizados.');
+      onClose();
     } catch (err) {
       setError(err.message ?? 'Erro ao salvar.');
     } finally {
@@ -2420,15 +2421,6 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
               </button>
               <button
                 type="button"
-                onClick={handleSaveProposalDraft}
-                disabled={saving || pdfLoading || draftSaving}
-                className="btn-ghost btn-sm"
-              >
-                {draftSaving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
-                Salvar rascunho
-              </button>
-              <button
-                type="button"
                 onClick={() => setShowLiveProposalPreview((prev) => !prev)}
                 disabled={saving || pdfLoading || draftSaving}
                 className={`btn-ghost btn-sm ${showLiveProposalPreview ? 'border-hagav-gold/70 text-hagav-gold bg-hagav-gold/10' : ''}`}
@@ -2438,30 +2430,12 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
               </button>
               <button
                 type="button"
-                onClick={handleOpenProposalPreview}
-                disabled={saving || pdfLoading || draftSaving}
-                className="btn-ghost btn-sm"
-              >
-                <Eye size={13} />
-                Abrir preview externo
-              </button>
-              <button
-                type="button"
                 onClick={handleGeneratePdf}
                 disabled={pdfLoading || saving || draftSaving}
                 className="btn-ghost btn-sm"
               >
                 {pdfLoading ? <Loader2 size={13} className="animate-spin" /> : <ExternalLink size={13} />}
                 Gerar PDF
-              </button>
-              <button
-                type="button"
-                onClick={handleDownloadPropostaPdf}
-                disabled={!propostaLink || !propostaPdfLiberada || pdfLoading || saving || draftSaving}
-                className={`btn-ghost btn-sm ${!propostaLink || !propostaPdfLiberada ? 'opacity-60 cursor-not-allowed' : ''}`}
-              >
-                <Download size={13} />
-                Baixar PDF
               </button>
             </div>
           </div>
@@ -2579,15 +2553,6 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
             onToggle={() => setProposalContactCollapsed((prev) => !prev)}
             contentClassName="orcamento-action-grid"
           >
-              <button
-                type="button"
-                onClick={handleDownloadPropostaPdf}
-                disabled={!propostaLink || !propostaPdfLiberada || saving || pdfLoading || draftSaving}
-                className={`btn-ghost btn-sm orcamento-action-button ${!propostaLink || !propostaPdfLiberada ? 'opacity-60 cursor-not-allowed' : ''}`}
-              >
-                <Download size={13} />
-                Baixar PDF
-              </button>
               <EduTooltip {...SEND_PROPOSTA_TOOLTIP} className="w-full">
                 <span className="inline-flex w-full">
                   <button

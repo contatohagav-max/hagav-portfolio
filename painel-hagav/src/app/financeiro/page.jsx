@@ -19,6 +19,7 @@ import Modal from '@/components/ui/Modal';
 import EmptyState from '@/components/ui/EmptyState';
 import {
   createFinancialEntry,
+  deleteFinancialEntry,
   fetchFinancialEntries,
   updateFinancialEntry,
 } from '@/lib/supabase';
@@ -137,9 +138,10 @@ function getEntryMeta(entry) {
   return readFinancialMetadata(entry?.observacoes);
 }
 
-function FinancialEditor({ entry, createMode, onClose, onSaved }) {
+function FinancialEditor({ entry, createMode, onClose, onSaved, onDeleted }) {
   const [form, setForm] = useState(emptyForm());
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -207,6 +209,25 @@ function FinancialEditor({ entry, createMode, onClose, onSaved }) {
       setError('Não foi possível salvar o lançamento.');
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function removeEntry() {
+    if (!entry?.id || createMode) return;
+    const confirmed = window.confirm('Tem certeza que deseja apagar este lançamento? Essa ação não pode ser desfeita.');
+    if (!confirmed) return;
+
+    setDeleting(true);
+    setError('');
+    try {
+      await deleteFinancialEntry(entry.id);
+      onDeleted?.(entry.id);
+      onClose?.();
+    } catch (err) {
+      console.error('[Financeiro][Apagar]', err);
+      setError('Não foi possível apagar o lançamento.');
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -286,12 +307,27 @@ function FinancialEditor({ entry, createMode, onClose, onSaved }) {
         </div>
 
         {error && <p className="text-xs text-red-300">{error}</p>}
-        <div className="flex justify-end gap-2">
-          <button type="button" onClick={onClose} className="btn-ghost">Cancelar</button>
-          <button type="button" onClick={save} disabled={saving} className="btn-gold">
-            {saving && <RefreshCw size={13} className="animate-spin" />}
-            Salvar lançamento
-          </button>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            {!createMode && entry?.id && (
+              <button
+                type="button"
+                onClick={removeEntry}
+                disabled={saving || deleting}
+                className="btn-ghost text-red-300 border-red-500/25 hover:bg-red-500/10 hover:text-red-200"
+              >
+                {deleting && <RefreshCw size={13} className="animate-spin" />}
+                Apagar lançamento
+              </button>
+            )}
+          </div>
+          <div className="flex justify-end gap-2">
+            <button type="button" onClick={onClose} disabled={saving || deleting} className="btn-ghost">Cancelar</button>
+            <button type="button" onClick={save} disabled={saving || deleting} className="btn-gold">
+              {saving && <RefreshCw size={13} className="animate-spin" />}
+              Salvar lançamento
+            </button>
+          </div>
         </div>
       </div>
     </Modal>
@@ -375,6 +411,12 @@ export default function FinanceiroPage() {
         : [saved, ...current];
     });
     setFeedback('Lançamento salvo.');
+    setTimeout(() => setFeedback(''), 2200);
+  }
+
+  function deleteLocal(id) {
+    setEntries((current) => current.filter((entry) => entry.id !== id));
+    setFeedback('Lançamento apagado.');
     setTimeout(() => setFeedback(''), 2200);
   }
 
@@ -649,6 +691,7 @@ export default function FinanceiroPage() {
         createMode={creating}
         onClose={() => { setSelected(null); setCreating(false); }}
         onSaved={saveLocal}
+        onDeleted={deleteLocal}
       />
     </div>
   );

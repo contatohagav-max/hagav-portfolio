@@ -1403,3 +1403,16 @@ export async function updateFinancialEntry(id, patch) {
   if (error) throw error;
   return data;
 }
+
+export async function deleteFinancialEntry(id) {
+  const client = getSupabase();
+  if (!client) throw new Error('Supabase não configurado');
+
+  const { error } = await client
+    .from('financial_entries')
+    .delete()
+    .eq('id', id);
+
+  if (error) throw error;
+  return true;
+}

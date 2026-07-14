@@ -1638,9 +1638,9 @@ function buildTemplateValues(row, env, options = {}) {
     resumo_quantidade_breakdown: quantitySummary.breakdown,
     modo_proposta: proposalMode,
     modo_proposta_label: proposalModeLabel(proposalMode),
-    opcoes_bloco_style: proposalMode === "opcoes" ? "display:block;" : "display:none;",
+    opcoes_bloco_style: proposalMode === "opcoes" || proposalMode === "mensal" ? "display:block;" : "display:none;",
     investimento_bloco_style: proposalMode === "opcoes" || proposalMode === "mensal" ? "display:none;" : "display:block;",
-    mensal_bloco_style: proposalMode === "mensal" ? "display:block;" : "display:none;",
+    mensal_bloco_style: "display:none;",
     personalizada_bloco_style: proposalMode === "personalizada" ? "display:block;" : "display:none;",
     empresa_bloco_style: empresa ? "display:block;" : "display:none;",
     instagram_bloco_style: instagram ? "display:block;" : "display:none;",
@@ -1692,9 +1692,6 @@ function buildTemplateValues(row, env, options = {}) {
     base.escopo = base.escopo_comercial;
     base.descricao_escopo = base.escopo_comercial;
     base.resumo_orcamento = base.escopo_comercial;
-  }
-  if (String(base.modo_proposta || "") === "mensal" && base.valor_mensal_moeda) {
-    base.valor_total_moeda = base.valor_mensal_moeda;
   }
   if (String(base.modo_proposta || "") === "personalizada" && base.valor_personalizado_moeda) {
     base.valor_total_moeda = base.valor_personalizado_moeda;

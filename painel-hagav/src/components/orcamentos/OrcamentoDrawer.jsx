@@ -2101,11 +2101,10 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
     setInfo('Gerando proposta PDF em modo teste...');
     try {
       const templateOverrides = buildProposalTemplateOverrides();
-      const pdfProposalMode = proposalMode === 'mensal' ? 'opcoes' : proposalMode;
       const result = await generateDealPdf(orc.id, {
         payload: {
           test_mode: true,
-          proposal_mode: pdfProposalMode,
+          proposal_mode: proposalMode,
           template_overrides: templateOverrides,
         },
       });

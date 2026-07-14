@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { X, Save, Loader2, MessageCircle, ExternalLink, AlertTriangle, CheckCircle2, Send, Ban, RotateCw, Eye, Download, Plus, Trash2 } from 'lucide-react';
+import { X, Save, Loader2, MessageCircle, ExternalLink, AlertTriangle, CheckCircle2, Ban, RotateCw, Eye, Download, Plus, Trash2 } from 'lucide-react';
 import { OrcStatusBadge, PrioridadeBadge, UrgenciaBadge, TemperaturaBadge } from '@/components/ui/StatusBadge';
 import EduTooltip from '@/components/ui/EduTooltip';
 import CollapsibleActionBlock from '@/components/ui/CollapsibleActionBlock';
@@ -32,12 +32,6 @@ const WHATSAPP_TOOLTIP = {
   whatIs: 'Abre o contato direto do cliente no WhatsApp.',
   purpose: 'Acelerar negociação e confirmações de proposta.',
   observe: 'Use mensagem objetiva com proximo passo claro.',
-};
-const SEND_PROPOSTA_TOOLTIP = {
-  title: 'Enviar proposta',
-  whatIs: 'Envia a mensagem no WhatsApp com o link da proposta.',
-  purpose: 'Garantir envio comercial padrao e rastreavel.',
-  observe: 'Gere a proposta PDF antes de enviar no WhatsApp.',
 };
 const PROPOSAL_MODE_OPTIONS = [
   { value: 'direta', label: 'Modo 1 - Avulso' },
@@ -1199,7 +1193,6 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
   const hasPropostaGerada = Boolean(propostaLink) || Boolean(propostaGeradaEm);
   const propostaPdfBlockedMessage = getPdfEngineBlockedMessage(propostaPdfMeta);
   const showPropostaPdfBlockedWarning = hasPropostaGerada && !propostaPdfLiberada;
-  const canSendProposta = Boolean(propostaLink) && propostaPdfLiberada && hasWhatsapp;
   const marginStatus = financialMetrics.margem_status || autoPricing.margemStatus || null;
   const priceReferenceForSuspicion = Math.max(
     Number(autoPricing?.precoFinal || 0),
@@ -2235,56 +2228,6 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
     setInfo('PDF aberto para download.');
   }
 
-  async function handleEnviarProposta() {
-    if (!validateProposalState({ blockSuspiciousPrice: true })) return;
-    if (!propostaLink || !propostaPdfLiberada) {
-      setError('Gere a proposta PDF antes de enviar no WhatsApp.');
-      if (!propostaPdfLiberada) {
-        setError(propostaPdfBlockedMessage || 'PDF bloqueado para uso comercial: gere novamente com engine HTML real.');
-      }
-      return;
-    }
-    if (!hasWhatsapp) {
-      setError('WhatsApp do cliente indisponível para envio da proposta.');
-      return;
-    }
-    setSaving(true);
-    setError('');
-    setInfo('');
-    try {
-      const nowIso = new Date().toISOString();
-      const detalhesAtual = parseDetalhes(orc.detalhes);
-      const comercialAtual = parseDetalhes(detalhesAtual?.comercial);
-      const numeroProposta = formatProposalSequence(proposalDraft?.numero_proposta) || '01';
-      const mensagem = `Olá, ${orc.nome || 'cliente'}. Preparei sua proposta comercial HAGAV Nº ${numeroProposta}. Segue o link para visualizar: ${propostaLink}. Qualquer ajuste, me chama aqui.`;
-
-      if (typeof window !== 'undefined') {
-        const target = whatsappLink(orc.whatsapp, mensagem);
-        window.open(target, '_blank', 'noopener,noreferrer');
-      }
-
-      const updated = await updateOrcamento(orc.id, {
-        status_orcamento: 'proposta_enviada',
-        ultimo_contato_em: nowIso,
-        detalhes: {
-          ...detalhesAtual,
-          comercial: {
-            ...comercialAtual,
-            proposta_enviada_em: nowIso,
-            proposta_link: propostaLink,
-          },
-        },
-      });
-      setStatusOrc('proposta_enviada');
-      onUpdated?.(updated);
-      setInfo('Proposta enviada no WhatsApp e status atualizado.');
-    } catch (err) {
-      setError(err.message || 'Falha ao enviar proposta.');
-    } finally {
-      setSaving(false);
-    }
-  }
-
   async function handleRecalculateValues() {
     if (!validateProposalState()) return;
     const nextPrecoFinal = parseCurrencyNumber(autoPricing?.precoFinal || autoPricing?.valorSugerido || autoPricing?.precoBase || precoFinal || 0, 0);
@@ -3215,19 +3158,6 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
             onToggle={() => setProposalContactCollapsed((prev) => !prev)}
             contentClassName="orcamento-action-grid"
           >
-              <EduTooltip {...SEND_PROPOSTA_TOOLTIP} className="w-full">
-                <span className="inline-flex w-full">
-                  <button
-                    type="button"
-                    onClick={handleEnviarProposta}
-                    disabled={saving || pdfLoading || draftSaving || !canSendProposta || hasCommercialCriticalBlock}
-                    className={`btn-ghost btn-sm orcamento-action-button ${!canSendProposta ? 'opacity-60 cursor-not-allowed' : ''}`}
-                  >
-                    <Send size={13} />
-                    Enviar proposta
-                  </button>
-                </span>
-              </EduTooltip>
               <EduTooltip {...WHATSAPP_TOOLTIP} className="w-full">
                 {hasWhatsapp ? (
                   <a href={waLink} target="_blank" rel="noreferrer" className="btn-ghost btn-sm orcamento-action-button">

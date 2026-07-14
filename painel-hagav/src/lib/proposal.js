@@ -72,14 +72,16 @@ function parseQuantityNumber(value, fallback = 1) {
 
 function parseCurrencyNumber(value, fallback = 0) {
   if (typeof value === 'number') return Number.isFinite(value) && value > 0 ? value : fallback;
-  const raw = normalizeText(value);
-  if (!raw) return fallback;
-  const normalized = raw
+  const raw = normalizeText(value)
     .replace(/R\$/gi, '')
     .replace(/\s+/g, '')
-    .replace(/\./g, '')
-    .replace(',', '.')
-    .replace(/[^0-9.-]/g, '');
+    .replace(/\/m(?:e|\u00ea|\u00c3\u00aa)s/ig, '');
+  if (!raw) return fallback;
+  const numeric = raw.replace(/[^0-9,.-]/g, '');
+  const hasComma = numeric.includes(',');
+  const normalized = hasComma
+    ? numeric.replace(/\./g, '').replace(',', '.')
+    : numeric.replace(/\./g, '');
   const parsed = Number(normalized);
   if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
   return parsed;
@@ -461,12 +463,19 @@ function formatDurationMonths(value, fallback = 3) {
   return String(Math.max(1, parsed || fallback));
 }
 
+function normalizeRecurringQuantityLabel(value) {
+  const clean = stripMonthlyQuantitySuffix(value);
+  if (!clean) return '10 vídeos';
+  if (/\b(v[ií]deos?|entregas?|criativos?)\b/i.test(clean)) return clean;
+  return `${clean} vídeos`;
+}
+
 export function buildRecurringCalculatedDraft({ proposalDraft } = {}) {
   const draft = proposalDraft && typeof proposalDraft === 'object' ? proposalDraft : {};
   const durationMonths = Number(formatDurationMonths(draft.duracao_contrato_meses, 3));
-  const discountPercent = parseDiscountPercent(draft.recorrente_desconto_percent || draft.opcao2_desconto, 10);
+  const discountPercent = parseDiscountPercent(draft.recorrente_desconto_percent, 10);
   const monthlyQuantity = normalizeText(draft.quantidade_mensal || draft.quantidade);
-  const baseQuantity = stripMonthlyQuantitySuffix(monthlyQuantity || draft.quantidade) || '10 vídeos';
+  const baseQuantity = normalizeRecurringQuantityLabel(monthlyQuantity || draft.quantidade);
   const oneOffMonthlyValue = parseCurrencyNumber(draft.valor_total_moeda || draft.opcao1_preco, 0);
   const recurringMonthlyValue = oneOffMonthlyValue > 0
     ? oneOffMonthlyValue * (1 - (discountPercent / 100))
@@ -506,9 +515,7 @@ export function buildRecurringCalculatedDraft({ proposalDraft } = {}) {
     opcao2_qtd: `${baseQuantity}/mês por ${durationMonths} meses`,
     opcao2_preco: recurringMonthlyValue > 0 ? `${fmtBRL(recurringMonthlyValue)}/mês` : normalizeText(draft.valor_mensal_moeda),
     opcao2_unitario: totalContract > 0 ? `Total do contrato: ${fmtBRL(totalContract)}` : '',
-    opcao2_desc: totalEconomy > 0
-      ? `${recurringDescription} ${economyLabel}: ${fmtBRL(totalEconomy)}.`
-      : recurringDescription,
+    opcao2_desc: recurringDescription,
     opcao2_desconto: formatPercentBadge(discountPercent),
     opcao3_titulo: economyLabel,
     opcao3_qtd: `Comparado ao avulso por ${durationMonths} meses`,
@@ -517,7 +524,7 @@ export function buildRecurringCalculatedDraft({ proposalDraft } = {}) {
     opcao3_desc: totalContract > 0
       ? `Total recorrente: ${fmtBRL(totalContract)}. Total avulso no período: ${fmtBRL(totalOneOffPeriod)}.`
       : '',
-    opcao3_desconto: '',
+    opcao3_desconto: formatPercentBadge(discountPercent),
     texto_comparativo: normalizeText(draft.texto_comparativo)
       || `Comparativo entre contratação avulsa e plano recorrente de ${durationMonths} meses.`,
   };
@@ -549,7 +556,7 @@ export function buildProposalPreviewModel({ orc, proposalMode, proposalDraft }) 
     const optionQuantity = parseQuantityNumber(quantity, 0);
     const discountPercent = index > 1 ? parseDiscountPercent(manualDiscountText, 0) : 0;
 
-    if (index > 1 && discountPercent > 0 && baseQuantity > 0 && optionQuantity > 0 && baseTotal > 0) {
+    if (mode !== 'mensal' && index > 1 && discountPercent > 0 && baseQuantity > 0 && optionQuantity > 0 && baseTotal > 0) {
       const totalWithoutDiscount = (baseTotal / baseQuantity) * optionQuantity;
       const recalculatedTotal = totalWithoutDiscount * (1 - (discountPercent / 100));
       const unitLabel = inferUnitLabelFromUnitPrice(unitPrice, unitLabels.singular);

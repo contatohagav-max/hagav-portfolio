@@ -473,14 +473,16 @@ function parseQuantityNumber(value, fallback = 10) {
 
 function parseCurrencyNumber(value, fallback = 0) {
   if (typeof value === 'number') return Number.isFinite(value) && value > 0 ? value : fallback;
-  const raw = normalizeText(value);
-  if (!raw) return fallback;
-  const normalized = raw
+  const raw = normalizeText(value)
     .replace(/R\$/gi, '')
     .replace(/\s+/g, '')
-    .replace(/\./g, '')
-    .replace(',', '.')
-    .replace(/[^0-9.-]/g, '');
+    .replace(/\/m(?:e|\u00ea|\u00c3\u00aa)s/ig, '');
+  if (!raw) return fallback;
+  const numeric = raw.replace(/[^0-9,.-]/g, '');
+  const hasComma = numeric.includes(',');
+  const normalized = hasComma
+    ? numeric.replace(/\./g, '').replace(',', '.')
+    : numeric.replace(/\./g, '');
   const parsed = Number(normalized);
   if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
   return parsed;
@@ -1192,7 +1194,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
     && parsedPrecoFinal < 10
     && priceReferenceForSuspicion > 100;
   const hasBlockingProposalIssue = hasInvalidTime || Boolean(comparativeWarning);
-  const hasCommercialCriticalBlock = hasBlockingProposalIssue || hasSuspiciousFinalPrice;
+  const hasFinalPriceCriticalBlock = hasBlockingProposalIssue || hasSuspiciousFinalPrice;
   const comparativeProposalDraft = useMemo(
     () => (proposalMode === 'opcoes'
       ? buildComparativeCalculatedDraft({
@@ -1233,7 +1235,25 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
       ? recurringProposalDraft
       : directProposalDraft;
   const activeProposalPrice = getActiveProposalPrice(proposalMode, activeProposalDraft);
-  const activeProposalPriceLabel = activeProposalPrice > 0 ? fmtBRL(activeProposalPrice) : '—';
+  const recurringOneOffMonthlyValue = proposalMode === 'mensal'
+    ? parseCurrencyNumber(recurringProposalDraft?.opcao1_preco || proposalDraft?.valor_total_moeda, 0)
+    : 0;
+  const recurringMonthlyValue = proposalMode === 'mensal'
+    ? parseCurrencyNumber(recurringProposalDraft?.valor_mensal_moeda, 0)
+    : 0;
+  const recurringContractTotal = proposalMode === 'mensal'
+    ? parseCurrencyNumber(recurringProposalDraft?.recorrente_total_contrato_moeda, 0)
+    : 0;
+  const hasSuspiciousRecurringPrice = proposalMode === 'mensal'
+    && (recurringOneOffMonthlyValue < 10 || recurringMonthlyValue < 10 || recurringContractTotal < 10);
+  const recurringSuspiciousMessage = 'Valor recorrente parece inválido. Revise antes de gerar PDF ou aprovar.';
+  const hasCommercialCriticalBlock = hasFinalPriceCriticalBlock || hasSuspiciousRecurringPrice;
+  const activeProposalPriceLabel = activeProposalPrice > 0
+    ? `${fmtBRL(activeProposalPrice)}${proposalMode === 'mensal' ? '/mês' : ''}`
+    : '—';
+  const activeProposalAuxText = proposalMode === 'mensal' && recurringContractTotal > 0
+    ? `Total do contrato: ${fmtBRL(recurringContractTotal)} em ${recurringProposalDraft?.duracao_contrato_meses || '3'} meses`
+    : 'Este é o valor usado no preview, PDF, aprovação e cliente.';
   const activeProposalOriginLabel = PROPOSAL_MODE_OPTIONS.find((mode) => mode.value === proposalMode)?.label
     || 'Proposta comercial';
   const proposalPreview = useMemo(
@@ -1388,6 +1408,10 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
     }
     if (blockSuspiciousPrice && hasSuspiciousFinalPrice) {
       setError('Preço final parece inválido. Revise antes de aprovar.');
+      return false;
+    }
+    if (blockSuspiciousPrice && hasSuspiciousRecurringPrice) {
+      setError(recurringSuspiciousMessage);
       return false;
     }
     return true;
@@ -1866,7 +1890,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
   }
 
   async function handleSave() {
-    if (!validateProposalState()) return;
+    if (!validateProposalState({ blockSuspiciousPrice: true })) return;
     setSaving(true);
     setError('');
     setInfo('');
@@ -2496,15 +2520,22 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
                 <p className="text-2xl font-bold text-hagav-gold leading-tight">{activeProposalPriceLabel}</p>
                 <p className="mt-1 text-xs text-hagav-light">Origem: {activeProposalOriginLabel}</p>
                 <p className="mt-1 text-[11px] text-hagav-gray">
-                  Este é o valor usado no preview, PDF, aprovação e cliente.
+                  {activeProposalAuxText}
                 </p>
               </div>
               <div className="rounded-lg border border-hagav-border bg-hagav-dark/40 p-3">
                 <p className="text-[10px] text-hagav-gray uppercase tracking-[0.18em] mb-1">Valor usado no PDF</p>
                 <p className="text-lg font-semibold text-hagav-light">{activeProposalPriceLabel}</p>
-                <p className="mt-1 text-[11px] text-hagav-gray">Mesma fonte do preview ao vivo.</p>
+                <p className="mt-1 text-[11px] text-hagav-gray">
+                  {proposalMode === 'mensal' ? activeProposalAuxText : 'Mesma fonte do preview ao vivo.'}
+                </p>
               </div>
             </div>
+            {hasSuspiciousRecurringPrice && (
+              <p className="text-[11px] text-red-200 bg-red-500/10 border border-red-500/25 rounded-lg px-3 py-2">
+                {recurringSuspiciousMessage}
+              </p>
+            )}
             <div className="space-y-3">
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-2">
               <div>
@@ -2726,7 +2757,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
                       <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Título do plano avulso</label>
                       <input
                         type="text"
-                        value={proposalDraft.opcao1_titulo || ''}
+                        value={recurringProposalDraft.opcao1_titulo || ''}
                         onChange={(e) => updateProposalDraftField('opcao1_titulo', e.target.value)}
                         className="hinput w-full"
                         placeholder="Ex.: Plano Avulso"
@@ -2736,7 +2767,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
                       <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Título do plano recorrente</label>
                       <input
                         type="text"
-                        value={proposalDraft.opcao2_titulo || ''}
+                        value={recurringProposalDraft.opcao2_titulo || ''}
                         onChange={(e) => updateProposalDraftField('opcao2_titulo', e.target.value)}
                         className="hinput w-full"
                         placeholder="Ex.: Plano Trimestral"
@@ -3113,7 +3144,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
                 Cliente aprovou
               </button>
             )}
-            <button onClick={handleSave} disabled={saving || pdfLoading || draftSaving || hasBlockingProposalIssue} className="btn-gold orcamento-save-button">
+            <button onClick={handleSave} disabled={saving || pdfLoading || draftSaving || hasCommercialCriticalBlock} className="btn-gold orcamento-save-button">
               {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
               Salvar
             </button>

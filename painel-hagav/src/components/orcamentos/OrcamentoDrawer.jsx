@@ -211,6 +211,29 @@ function CalculatedField({ label, value, placeholder = 'Calculado automaticament
   );
 }
 
+function stripCurrencyPrefix(value) {
+  return normalizeText(value).replace(/^R\$\s*/i, '');
+}
+
+function CurrencyInput({ value, onChange, onBlur, placeholder = '1.500,00' }) {
+  return (
+    <div className="relative">
+      <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-hagav-gold">
+        R$
+      </span>
+      <input
+        type="text"
+        inputMode="decimal"
+        value={stripCurrencyPrefix(value)}
+        onChange={(event) => onChange?.(event.target.value)}
+        onBlur={(event) => onBlur?.(event.target.value)}
+        className="hinput w-full pl-10"
+        placeholder={placeholder}
+      />
+    </div>
+  );
+}
+
 function toDateTimeLocal(iso) {
   if (!iso) return '';
   const date = new Date(iso);
@@ -1131,10 +1154,11 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
       : proposalDraft),
     [proposalDraft, proposalMode, proposalRecord]
   );
-  const activeProposalPrice = getActiveProposalPrice(
-    proposalMode,
-    proposalMode === 'opcoes' ? comparativeProposalDraft : proposalDraft
-  );
+  const activeProposalDraft = proposalMode === 'opcoes' ? comparativeProposalDraft : proposalDraft;
+  const activeProposalPrice = getActiveProposalPrice(proposalMode, activeProposalDraft);
+  const activeProposalPriceLabel = activeProposalPrice > 0 ? fmtBRL(activeProposalPrice) : '—';
+  const activeProposalOriginLabel = PROPOSAL_MODE_OPTIONS.find((mode) => mode.value === proposalMode)?.label
+    || 'Proposta comercial';
   const proposalPreview = useMemo(
     () => buildProposalPreviewModel({
       orc: proposalRecord,
@@ -2391,6 +2415,21 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
                 </button>
               ))}
             </div>
+            <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_minmax(220px,0.55fr)] gap-2">
+              <div className="rounded-lg border border-hagav-gold/30 bg-hagav-gold/10 p-3">
+                <p className="text-[10px] text-hagav-gold uppercase tracking-[0.18em] mb-1">Valor comercial da proposta</p>
+                <p className="text-2xl font-bold text-hagav-gold leading-tight">{activeProposalPriceLabel}</p>
+                <p className="mt-1 text-xs text-hagav-light">Origem: {activeProposalOriginLabel}</p>
+                <p className="mt-1 text-[11px] text-hagav-gray">
+                  Este é o valor usado no preview, PDF, aprovação e cliente.
+                </p>
+              </div>
+              <div className="rounded-lg border border-hagav-border bg-hagav-dark/40 p-3">
+                <p className="text-[10px] text-hagav-gray uppercase tracking-[0.18em] mb-1">Valor usado no PDF</p>
+                <p className="text-lg font-semibold text-hagav-light">{activeProposalPriceLabel}</p>
+                <p className="mt-1 text-[11px] text-hagav-gray">Mesma fonte do preview ao vivo.</p>
+              </div>
+            </div>
             <div className="space-y-3">
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-2">
               <div>
@@ -2522,13 +2561,15 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-2">
               <div>
-                <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Serviço</label>
+                <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">
+                  {proposalMode === 'personalizada' ? 'Título da proposta' : 'Serviço'}
+                </label>
                 <input
                   type="text"
                   value={proposalDraft.servico_principal || ''}
                   onChange={(e) => updateProposalDraftField('servico_principal', e.target.value)}
                   className="hinput w-full"
-                  placeholder="Ex.: Reels / Shorts / TikTok"
+                  placeholder={proposalMode === 'personalizada' ? 'Ex.: Proposta premium de edição' : 'Ex.: Reels / Shorts / TikTok'}
                 />
               </div>
               <div>
@@ -2541,29 +2582,29 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
                   placeholder="Ex.: 10 vídeos"
                 />
               </div>
-              <div>
-                <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Prazo</label>
-                <select
-                  value={normalizePrazoLabel(proposalDraft.prazo, 'Sem prazo definido')}
-                  onChange={(e) => updateProposalDraftField('prazo', e.target.value)}
-                  className="hselect w-full"
-                >
-                  {PRAZO_OPTIONS.map((option) => (
-                    <option className="bg-hagav-dark text-hagav-white" key={option} value={option}>{option}</option>
-                  ))}
-                </select>
-              </div>
+              {proposalMode !== 'personalizada' && (
+                <div>
+                  <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Prazo</label>
+                  <select
+                    value={normalizePrazoLabel(proposalDraft.prazo, 'Sem prazo definido')}
+                    onChange={(e) => updateProposalDraftField('prazo', e.target.value)}
+                    className="hselect w-full"
+                  >
+                    {PRAZO_OPTIONS.map((option) => (
+                      <option className="bg-hagav-dark text-hagav-white" key={option} value={option}>{option}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <div>
                 <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">
                   {proposalMode === 'personalizada' ? 'Valor da proposta (R$)' : 'Valor total'}
                 </label>
-                <input
-                  type="text"
+                <CurrencyInput
                   value={proposalDraft.valor_total_moeda || ''}
-                  onChange={(e) => updateProposalDraftField('valor_total_moeda', e.target.value)}
-                  onBlur={(e) => updateProposalDraftField('valor_total_moeda', formatCurrencyBR(e.target.value))}
-                  className="hinput w-full"
-                  placeholder="Ex.: R$ 1.500,00"
+                  onChange={(value) => updateProposalDraftField('valor_total_moeda', value)}
+                  onBlur={(value) => updateProposalDraftField('valor_total_moeda', formatCurrencyBR(value))}
+                  placeholder="1.500,00"
                 />
               </div>
                 </div>
@@ -2582,13 +2623,11 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
                     </div>
                     <div>
                       <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Valor mensal</label>
-                      <input
-                        type="text"
+                      <CurrencyInput
                         value={proposalDraft.valor_mensal_moeda || ''}
-                        onChange={(e) => updateProposalDraftField('valor_mensal_moeda', e.target.value)}
-                        onBlur={(e) => updateProposalDraftField('valor_mensal_moeda', formatCurrencyBRKeepingMonthly(e.target.value))}
-                        className="hinput w-full"
-                        placeholder="Ex.: R$ 1.500,00/mês"
+                        onChange={(value) => updateProposalDraftField('valor_mensal_moeda', value)}
+                        onBlur={(value) => updateProposalDraftField('valor_mensal_moeda', formatCurrencyBRKeepingMonthly(value))}
+                        placeholder="1.500,00/mês"
                       />
                     </div>
                     <div>
@@ -2605,13 +2644,15 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
                 )}
 
                 <div>
-                  <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Escopo / descricao da proposta</label>
+                  <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">
+                    {proposalMode === 'personalizada' ? 'Descrição curta' : 'Escopo / descrição da proposta'}
+                  </label>
                   <textarea
                     value={proposalDraft.escopo_comercial || ''}
                     onChange={(e) => updateProposalDraftField('escopo_comercial', e.target.value)}
-                    rows={3}
+                    rows={proposalMode === 'personalizada' ? 2 : 3}
                     className="hinput w-full resize-none"
-                    placeholder="Descreva o escopo da proposta"
+                    placeholder={proposalMode === 'personalizada' ? 'Resumo curto da proposta personalizada' : 'Descreva o escopo da proposta'}
                   />
                 </div>
 
@@ -2818,7 +2859,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
                 className="hinput w-full opacity-80 cursor-not-allowed"
                 placeholder="R$ 3.000,00"
               />
-              <p className="mt-1 text-[11px] text-hagav-gray">Sincronizado com o valor da proposta ativa.</p>
+              <p className="mt-1 text-[11px] text-hagav-gray">Sincronizado com o valor comercial da proposta.</p>
             </div>
 
             <div>

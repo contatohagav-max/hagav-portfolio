@@ -23,7 +23,7 @@ import {
   normalizePricingRules,
   parseDurationToHours,
 } from '@/lib/commercial';
-import { buildAutoOptionDraft, buildCommercialScopeText, buildProposalPreviewModel } from '@/lib/proposal';
+import { buildAutoOptionDraft, buildCommercialScopeText, buildComparativeCalculatedDraft, buildProposalPreviewModel } from '@/lib/proposal';
 import { fmtDateTime, fmtBRL, whatsappLink, ORC_STATUS_LABELS } from '@/lib/utils';
 
 const ORC_STATUSES = ['orcamento', 'proposta_enviada', 'ajustando', 'aprovado', 'perdido'];
@@ -390,6 +390,25 @@ function parseCurrencyNumber(value, fallback = 0) {
   const parsed = Number(normalized);
   if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
   return parsed;
+}
+
+function normalizeComparativeQuantityInput(value, fallbackValue = '') {
+  const parsed = parseQuantityNumber(value, null);
+  if (parsed === null) return normalizeText(fallbackValue);
+  return String(parsed);
+}
+
+function normalizeComparativeDiscountInput(value) {
+  const raw = normalizeText(value);
+  if (!raw) return '';
+  const normalized = raw
+    .replace('%', '')
+    .replace('-', '')
+    .replace(',', '.')
+    .replace(/[^0-9.]/g, '');
+  const parsed = Number(normalized);
+  if (!Number.isFinite(parsed) || parsed <= 0) return '';
+  return String(Math.min(100, Math.max(0, parsed)));
 }
 
 function summarizeDraftField(items = [], getValue, fallback = '') {
@@ -966,13 +985,22 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
   const showPropostaPdfBlockedWarning = hasPropostaGerada && !propostaPdfLiberada;
   const canSendProposta = Boolean(propostaLink) && propostaPdfLiberada && hasWhatsapp;
   const marginStatus = financialMetrics.margem_status || autoPricing.margemStatus || null;
+  const comparativeProposalDraft = useMemo(
+    () => (proposalMode === 'opcoes'
+      ? buildComparativeCalculatedDraft({
+        orc: proposalRecord,
+        proposalDraft,
+      })
+      : proposalDraft),
+    [proposalDraft, proposalMode, proposalRecord]
+  );
   const proposalPreview = useMemo(
     () => buildProposalPreviewModel({
       orc: proposalRecord,
       proposalMode,
-      proposalDraft,
+      proposalDraft: comparativeProposalDraft,
     }),
-    [proposalDraft, proposalMode, proposalRecord]
+    [comparativeProposalDraft, proposalMode, proposalRecord]
   );
 
   function buildProposalDraftForMode(mode, currentDraft = proposalDraft) {
@@ -1020,8 +1048,9 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
 
   function buildProposalDraftCommercialState() {
     const values = {};
+    const sourceDraft = proposalMode === 'opcoes' ? comparativeProposalDraft : proposalDraft;
     PROPOSAL_DRAW_FIELDS.forEach((field) => {
-      values[field] = normalizeText(proposalDraft?.[field]);
+      values[field] = normalizeText(sourceDraft?.[field]);
     });
     return {
       proposal_mode: proposalMode,
@@ -1034,7 +1063,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
   function buildProposalTemplateOverrides() {
     const mode = normalizeProposalMode(proposalMode) || inferProposalModeFromFlow(proposalRecord, 'direta');
     const nextDraft = {
-      ...proposalDraft,
+      ...(mode === 'opcoes' ? comparativeProposalDraft : proposalDraft),
     };
     const validade = normalizeText(nextDraft.data_validade || '[data]');
     if (!normalizeText(nextDraft.condicoes_comerciais)) {
@@ -1175,6 +1204,15 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
   function updateProposalDraftField(field, value) {
     setProposalDirtyFields((prev) => ({ ...prev, [field]: true }));
     setProposalDraft((prev) => {
+      const previousValue = normalizeText(prev?.[field]);
+      if (proposalMode === 'opcoes' && /^opcao[123]_qtd$/.test(field)) {
+        const normalizedQuantity = normalizeComparativeQuantityInput(value, previousValue);
+        if (!normalizedQuantity) return prev;
+        value = normalizedQuantity;
+      }
+      if (proposalMode === 'opcoes' && /^opcao[23]_desconto$/.test(field)) {
+        value = normalizeComparativeDiscountInput(value);
+      }
       const nextValue = field === 'prazo'
         ? normalizePrazoLabel(value, 'Sem prazo definido')
         : value;
@@ -2348,52 +2386,63 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
                   <div className="space-y-2 border border-hagav-border rounded-lg p-2.5 bg-hagav-dark/35">
                     <p className="text-[11px] text-hagav-gold uppercase tracking-wider">Opções de investimento</p>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                      {[1, 2, 3].map((index) => (
-                        <div key={index} className="space-y-1.5 border border-hagav-border rounded-lg p-2">
-                          <input
-                            type="text"
-                            value={proposalDraft[`opcao${index}_titulo`] || ''}
-                            onChange={(e) => updateProposalDraftField(`opcao${index}_titulo`, e.target.value)}
-                            className="hinput w-full"
-                            placeholder={`Título da opção ${index}`}
-                          />
-                          <input
-                            type="text"
-                            value={proposalDraft[`opcao${index}_qtd`] || ''}
-                            onChange={(e) => updateProposalDraftField(`opcao${index}_qtd`, e.target.value)}
-                            className="hinput w-full"
-                            placeholder={`Quantidade da opção ${index}`}
-                          />
-                          <input
-                            type="text"
-                            value={proposalDraft[`opcao${index}_preco`] || ''}
-                            onChange={(e) => updateProposalDraftField(`opcao${index}_preco`, e.target.value)}
-                            className="hinput w-full"
-                            placeholder={`Preço total da opção ${index}`}
-                          />
-                          <input
-                            type="text"
-                            value={proposalDraft[`opcao${index}_unitario`] || ''}
-                            onChange={(e) => updateProposalDraftField(`opcao${index}_unitario`, e.target.value)}
-                            className="hinput w-full"
-                            placeholder={`Valor unitário da opção ${index}`}
-                          />
-                          <input
-                            type="text"
-                            value={proposalDraft[`opcao${index}_desc`] || ''}
-                            onChange={(e) => updateProposalDraftField(`opcao${index}_desc`, e.target.value)}
-                            className="hinput w-full"
-                            placeholder={`Descrição da opção ${index}`}
-                          />
-                          <input
-                            type="text"
-                            value={proposalDraft[`opcao${index}_desconto`] || ''}
-                            onChange={(e) => updateProposalDraftField(`opcao${index}_desconto`, e.target.value)}
-                            className="hinput w-full"
-                            placeholder={`Desconto da opção ${index}`}
-                          />
-                        </div>
-                      ))}
+                      {[1, 2, 3].map((index) => {
+                        const calculated = comparativeProposalDraft || {};
+                        const isCalculatedOption = index > 1;
+                        return (
+                          <div key={index} className="space-y-1.5 border border-hagav-border rounded-lg p-2">
+                            <input
+                              type="text"
+                              value={proposalDraft[`opcao${index}_titulo`] || ''}
+                              onChange={(e) => updateProposalDraftField(`opcao${index}_titulo`, e.target.value)}
+                              className="hinput w-full"
+                              placeholder={`Título da opção ${index}`}
+                            />
+                            <input
+                              type="text"
+                              value={proposalDraft[`opcao${index}_qtd`] || ''}
+                              onChange={(e) => updateProposalDraftField(`opcao${index}_qtd`, e.target.value)}
+                              className="hinput w-full"
+                              placeholder={`Quantidade da opção ${index}`}
+                            />
+                            <input
+                              type="text"
+                              value={isCalculatedOption ? (calculated[`opcao${index}_preco`] || '') : (proposalDraft[`opcao${index}_preco`] || '')}
+                              onChange={(e) => updateProposalDraftField(`opcao${index}_preco`, e.target.value)}
+                              readOnly={isCalculatedOption}
+                              className={`hinput w-full ${isCalculatedOption ? 'opacity-80 cursor-not-allowed' : ''}`}
+                              placeholder={isCalculatedOption ? 'Total calculado automaticamente' : `Preço total da opção ${index}`}
+                            />
+                            <input
+                              type="text"
+                              value={calculated[`opcao${index}_unitario`] || proposalDraft[`opcao${index}_unitario`] || ''}
+                              readOnly
+                              className="hinput w-full opacity-80 cursor-not-allowed"
+                              placeholder="Unitário calculado automaticamente"
+                            />
+                            <input
+                              type="text"
+                              value={proposalDraft[`opcao${index}_desc`] || ''}
+                              onChange={(e) => updateProposalDraftField(`opcao${index}_desc`, e.target.value)}
+                              className="hinput w-full"
+                              placeholder={`Descrição da opção ${index}`}
+                            />
+                            <input
+                              type="text"
+                              value={proposalDraft[`opcao${index}_desconto`] || ''}
+                              onChange={(e) => updateProposalDraftField(`opcao${index}_desconto`, e.target.value)}
+                              disabled={index === 1}
+                              className={`hinput w-full ${index === 1 ? 'opacity-70 cursor-not-allowed' : ''}`}
+                              placeholder={index === 1 ? 'Sem desconto' : `Desconto da opção ${index}`}
+                            />
+                            {isCalculatedOption && (
+                              <p className="text-[11px] text-hagav-gray">
+                                Economia calculada: {calculated[`opcao${index}_economia`] || 'R$ 0,00'}
+                              </p>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                     <div>
                       <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Texto comparativo (opcional)</label>

@@ -157,6 +157,78 @@ function syncEconomyDescription(description, economy, discountPercent) {
   return [clean, economyText].filter(Boolean).join(' ');
 }
 
+function formatQuantityLabelFromNumber(quantity, unitLabels) {
+  const safeQuantity = Math.max(1, Number(quantity || 1));
+  const unit = safeQuantity === 1 ? unitLabels.singular : unitLabels.plural;
+  return `${safeQuantity} ${unit}`;
+}
+
+function buildComparativeOptionCalculation({ baseTotal, baseQuantity, optionQuantity, discountPercent }) {
+  const safeBaseTotal = Number(baseTotal || 0);
+  const safeBaseQuantity = Math.max(1, Number(baseQuantity || 1));
+  const safeOptionQuantity = Math.max(1, Number(optionQuantity || 1));
+  const safeDiscountPercent = Math.max(0, Math.min(100, Math.abs(Number(discountPercent || 0))));
+  const baseUnit = safeBaseQuantity > 0 ? safeBaseTotal / safeBaseQuantity : 0;
+  const totalWithoutDiscount = baseUnit * safeOptionQuantity;
+  const economy = totalWithoutDiscount * (safeDiscountPercent / 100);
+  const total = totalWithoutDiscount - economy;
+  const unitPrice = safeOptionQuantity > 0 ? total / safeOptionQuantity : 0;
+
+  return {
+    quantity: safeOptionQuantity,
+    discountPercent: safeDiscountPercent,
+    totalWithoutDiscount,
+    economy,
+    total,
+    unitPrice,
+  };
+}
+
+export function buildComparativeCalculatedDraft({ orc, proposalDraft }) {
+  const draft = proposalDraft && typeof proposalDraft === 'object' ? proposalDraft : {};
+  const unitLabels = inferUnitLabels(orc);
+  const baseQuantity = parseQuantityNumber(draft.opcao1_qtd || draft.quantidade, 1);
+  const baseTotal = parseCurrencyNumber(draft.opcao1_preco || draft.valor_total_moeda, 0);
+  const baseCalculation = buildComparativeOptionCalculation({
+    baseTotal,
+    baseQuantity,
+    optionQuantity: baseQuantity,
+    discountPercent: 0,
+  });
+  const next = {
+    ...draft,
+    opcao1_qtd: formatQuantityLabelFromNumber(baseCalculation.quantity, unitLabels),
+    opcao1_preco: baseTotal > 0 ? fmtBRL(baseTotal) : normalizeText(draft.opcao1_preco),
+    opcao1_unitario: baseCalculation.unitPrice > 0 ? `${fmtBRL(baseCalculation.unitPrice)} por ${unitLabels.singular}` : normalizeText(draft.opcao1_unitario),
+    opcao1_desconto: '',
+  };
+
+  [2, 3].forEach((index) => {
+    const optionQuantity = parseQuantityNumber(draft[`opcao${index}_qtd`], 1);
+    const discountPercent = parseDiscountPercent(draft[`opcao${index}_desconto`], 0);
+    const calculation = buildComparativeOptionCalculation({
+      baseTotal,
+      baseQuantity,
+      optionQuantity,
+      discountPercent,
+    });
+
+    next[`opcao${index}_qtd`] = formatQuantityLabelFromNumber(calculation.quantity, unitLabels);
+    next[`opcao${index}_preco`] = calculation.total > 0 ? fmtBRL(calculation.total) : '';
+    next[`opcao${index}_unitario`] = calculation.unitPrice > 0 ? `${fmtBRL(calculation.unitPrice)} por ${unitLabels.singular}` : '';
+    next[`opcao${index}_desconto`] = formatPercentBadge(calculation.discountPercent);
+    next[`opcao${index}_desc`] = syncEconomyDescription(
+      draft[`opcao${index}_desc`],
+      calculation.economy,
+      calculation.discountPercent
+    );
+    next[`opcao${index}_economia`] = calculation.economy > 0 ? fmtBRL(calculation.economy) : '';
+    next[`opcao${index}_total_sem_desconto`] = calculation.totalWithoutDiscount > 0 ? fmtBRL(calculation.totalWithoutDiscount) : '';
+  });
+
+  return next;
+}
+
 function getServiceItems(orc = {}) {
   const itens = Array.isArray(orc?.itens_servico) ? orc.itens_servico.filter(Boolean) : [];
   if (itens.length > 0) return itens;
@@ -322,8 +394,11 @@ export function buildAutoOptionDraft({ orc, quantityText, totalText, pricingRule
 }
 
 export function buildProposalPreviewModel({ orc, proposalMode, proposalDraft }) {
-  const draft = proposalDraft && typeof proposalDraft === 'object' ? proposalDraft : {};
   const mode = normalizeText(proposalMode) || 'direta';
+  const rawDraft = proposalDraft && typeof proposalDraft === 'object' ? proposalDraft : {};
+  const draft = mode === 'opcoes'
+    ? buildComparativeCalculatedDraft({ orc, proposalDraft: rawDraft })
+    : rawDraft;
   const conditions = splitLines(draft.condicoes_comerciais);
     const unitLabels = inferUnitLabels(orc);
   const baseQuantity = parseQuantityNumber(draft.opcao1_qtd || draft.quantidade, 1);

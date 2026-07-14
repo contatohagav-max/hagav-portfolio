@@ -1587,9 +1587,21 @@ function readFinancialMetadataBlock(value) {
   return meta;
 }
 
-function formatFinancialInputDate(value) {
+function parseFinancialLocalDate(value) {
+  const raw = String(value || '').trim();
+  const isoMatch = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (isoMatch) {
+    return new Date(Number(isoMatch[1]), Number(isoMatch[2]) - 1, Number(isoMatch[3]));
+  }
   const date = value instanceof Date ? value : new Date(value || Date.now());
-  if (Number.isNaN(date.getTime())) return new Date().toISOString().slice(0, 10);
+  return Number.isNaN(date.getTime()) ? new Date() : date;
+}
+
+function formatFinancialInputDate(value) {
+  const raw = String(value || '').trim();
+  const isoMatch = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (isoMatch) return `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`;
+  const date = parseFinancialLocalDate(value);
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
@@ -1597,8 +1609,7 @@ function formatFinancialInputDate(value) {
 }
 
 function addFinancialMonths(value, amount = 0) {
-  const base = new Date(value || Date.now());
-  const date = Number.isNaN(base.getTime()) ? new Date() : base;
+  const date = parseFinancialLocalDate(value);
   const day = date.getDate();
   const next = new Date(date);
   next.setMonth(next.getMonth() + Number(amount || 0), 1);
@@ -1609,6 +1620,14 @@ function addFinancialMonths(value, amount = 0) {
 
 function getFinancialMonthKey(value) {
   return formatFinancialInputDate(value).slice(0, 7);
+}
+
+function normalizeFinancialText(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
 }
 
 function buildActivatedClientFinancialObservacoes({
@@ -1823,6 +1842,13 @@ export async function syncFinancialEntriesForActiveClientContract(fields) {
   const valor = Math.max(0, Number(fields?.valor || 0));
   const startDate = formatFinancialInputDate(fields?.dataInicio || today);
   const durationMonths = Math.max(1, Number.parseInt(String(fields?.duracaoMeses || fields?.duracao_meses || 1), 10) || 1);
+  const endDate = formatFinancialInputDate(addFinancialMonths(startDate, durationMonths - 1));
+  const clientSearchTerms = Array.from(new Set([
+    clientName,
+    companyName,
+    displayName,
+    fornecedor,
+  ].map(normalizeFinancialText).filter(Boolean)));
 
   const { data: existingRows, error: findError } = await client
     .from('financial_entries')
@@ -1832,22 +1858,36 @@ export async function syncFinancialEntriesForActiveClientContract(fields) {
 
   if (findError) throw findError;
 
-  const linkedEntries = (existingRows || []).filter((entry) => {
-    const observacoes = String(entry?.observacoes || '');
-    return observacoes.includes(`deal_id=${dealId}`)
-      && (
-        observacoes.includes('origem=cliente_ativo')
-        || observacoes.includes('origem=cliente_ativado')
-        || observacoes.includes('contrato=true')
-      );
+  const { data: legacyRows, error: legacyError } = await client
+    .from('financial_entries')
+    .select('*')
+    .eq('tipo', 'receber')
+    .gte('vencimento', startDate)
+    .lte('vencimento', endDate)
+    .limit(500);
+
+  if (legacyError) throw legacyError;
+
+  const belongsToSameClient = (entry) => {
+    const meta = readFinancialMetadataBlock(entry?.observacoes);
+    if (String(meta.deal_id || '').trim() === dealId) return true;
+    const haystack = normalizeFinancialText(`${entry?.cliente_fornecedor || ''} ${entry?.descricao || ''}`);
+    return clientSearchTerms.some((term) => term && haystack.includes(term));
+  };
+
+  const candidateById = new Map();
+  [...(existingRows || []), ...(legacyRows || [])].forEach((entry) => {
+    if (entry?.id && belongsToSameClient(entry)) candidateById.set(entry.id, entry);
   });
 
-  const existingByMonth = new Map();
-  linkedEntries.forEach((entry) => {
+  const entriesByMonth = new Map();
+  [...candidateById.values()].forEach((entry) => {
     const meta = readFinancialMetadataBlock(entry?.observacoes);
     const monthKey = String(meta.contrato_mes || '').trim()
       || getFinancialMonthKey(entry?.vencimento || startDate);
-    if (!existingByMonth.has(monthKey)) existingByMonth.set(monthKey, entry);
+    const current = entriesByMonth.get(monthKey) || [];
+    current.push(entry);
+    entriesByMonth.set(monthKey, current);
   });
 
   const changedEntries = [];
@@ -1855,7 +1895,27 @@ export async function syncFinancialEntriesForActiveClientContract(fields) {
     const dueDate = addFinancialMonths(startDate, index);
     const vencimento = formatFinancialInputDate(dueDate);
     const contratoMes = getFinancialMonthKey(dueDate);
-    const existing = existingByMonth.get(contratoMes);
+    const monthEntries = entriesByMonth.get(contratoMes) || [];
+    const expectedDescription = normalizeFinancialText(`Projeto aprovado - ${displayName}`);
+    const editableLegacy = monthEntries.find((entry) => (
+      String(entry?.status || '').toLowerCase() !== 'pago'
+      && !String(entry?.observacoes || '').includes(`deal_id=${dealId}`)
+      && normalizeFinancialText(entry?.descricao) === expectedDescription
+    ));
+    const editableLinked = monthEntries.find((entry) => (
+      String(entry?.status || '').toLowerCase() !== 'pago'
+      && String(entry?.observacoes || '').includes(`deal_id=${dealId}`)
+    ));
+    const paidExisting = monthEntries.find((entry) => String(entry?.status || '').toLowerCase() === 'pago');
+    const existing = editableLegacy || editableLinked || paidExisting || null;
+    const duplicateEntries = monthEntries.filter((entry) => {
+      const observacoes = String(entry?.observacoes || '');
+      return existing?.id
+        && entry.id !== existing.id
+        && String(entry?.status || '').toLowerCase() !== 'pago'
+        && observacoes.includes(`deal_id=${dealId}`)
+        && observacoes.includes('origem=cliente_ativo');
+    });
     const freeObservation = stripFinancialMetadataBlock(existing?.observacoes || fields?.observacoes);
     const payload = {
       tipo: 'receber',
@@ -1896,6 +1956,13 @@ export async function syncFinancialEntriesForActiveClientContract(fields) {
     const existingPaidValue = Math.max(0, Number(existing.valor_pago || 0));
 
     if (existingStatus === 'pago' || (existingStatus === 'parcial' && existingPaidValue >= valor)) {
+      for (const duplicate of duplicateEntries) {
+        const { error } = await client
+          .from('financial_entries')
+          .delete()
+          .eq('id', duplicate.id);
+        if (error) throw error;
+      }
       changedEntries.push(existing);
       continue;
     }
@@ -1919,6 +1986,13 @@ export async function syncFinancialEntriesForActiveClientContract(fields) {
       .select('*')
       .single();
     if (error) throw error;
+    for (const duplicate of duplicateEntries) {
+      const { error: deleteError } = await client
+        .from('financial_entries')
+        .delete()
+        .eq('id', duplicate.id);
+      if (deleteError) throw deleteError;
+    }
     changedEntries.push(data);
   }
 

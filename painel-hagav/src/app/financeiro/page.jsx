@@ -156,6 +156,22 @@ function parseDateSafe(value) {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
+function startOfMonth(date) {
+  return new Date(date.getFullYear(), date.getMonth(), 1);
+}
+
+function addMonths(date, amount) {
+  return new Date(date.getFullYear(), date.getMonth() + amount, 1);
+}
+
+function formatMonthLabel(date) {
+  const label = new Intl.DateTimeFormat('pt-BR', {
+    month: 'long',
+    year: 'numeric',
+  }).format(date);
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
 function isSameMonth(date, referenceDate) {
   return Boolean(date)
     && date.getMonth() === referenceDate.getMonth()
@@ -487,6 +503,7 @@ export default function FinanceiroPage() {
   const [tipo, setTipo] = useState('');
   const [status, setStatus] = useState('');
   const [naturezaFilter, setNaturezaFilter] = useState('');
+  const [selectedMonth, setSelectedMonth] = useState(() => startOfMonth(new Date()));
   const [selected, setSelected] = useState(null);
   const [creating, setCreating] = useState(false);
 
@@ -513,7 +530,8 @@ export default function FinanceiroPage() {
   }, [load]);
 
   const metrics = useMemo(() => {
-    const referenceDate = new Date();
+    const referenceDate = selectedMonth;
+    const today = new Date();
     let received = 0;
     let pending = 0;
     let overdue = 0;
@@ -534,7 +552,7 @@ export default function FinanceiroPage() {
         if (!isPaid(entry) && isSameMonth(dueDate, referenceDate)) {
           pending += openAmount;
         }
-        if (!isPaid(entry) && isBeforeToday(dueDate, referenceDate)) {
+        if (!isPaid(entry) && isSameMonth(dueDate, referenceDate) && isBeforeToday(dueDate, today)) {
           overdue += openAmount;
         }
       }
@@ -563,7 +581,7 @@ export default function FinanceiroPage() {
       targetGap,
       neededClients,
     };
-  }, [entries]);
+  }, [entries, selectedMonth]);
 
   function saveLocal(saved) {
     setEntries((current) => {
@@ -589,6 +607,18 @@ export default function FinanceiroPage() {
     setNaturezaFilter('');
   }
 
+  function goToPreviousMonth() {
+    setSelectedMonth((current) => addMonths(current, -1));
+  }
+
+  function goToNextMonth() {
+    setSelectedMonth((current) => addMonths(current, 1));
+  }
+
+  function goToCurrentMonth() {
+    setSelectedMonth(startOfMonth(new Date()));
+  }
+
   const metricCards = [
     { label: 'Recebido no mês', value: metrics.received, helper: 'Entradas pagas', icon: ArrowDownCircle, tone: 'text-emerald-300' },
     { label: 'A receber no mês', value: metrics.pending, helper: 'Pendentes e parciais', icon: CalendarClock, tone: 'text-blue-300' },
@@ -609,10 +639,15 @@ export default function FinanceiroPage() {
   ];
 
   const visibleEntries = useMemo(() => (
-    naturezaFilter
-      ? entries.filter((entry) => getEntryMeta(entry).natureza === naturezaFilter)
-      : entries
-  ), [entries, naturezaFilter]);
+    entries.filter((entry) => {
+      const dueDate = getDueDate(entry);
+      if (!isSameMonth(dueDate, selectedMonth)) return false;
+      if (naturezaFilter && getEntryMeta(entry).natureza !== naturezaFilter) return false;
+      return true;
+    })
+  ), [entries, naturezaFilter, selectedMonth]);
+
+  const selectedMonthLabel = formatMonthLabel(selectedMonth);
 
   return (
     <div className="space-y-5 animate-fade-in">
@@ -621,7 +656,21 @@ export default function FinanceiroPage() {
           <h1 className="page-title">Financeiro</h1>
           <p className="page-subtitle">Acompanhe entradas, custos, lucro e o que falta para bater a meta do mês.</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <div className="hcard px-2 py-1.5 flex items-center gap-1.5">
+            <button type="button" onClick={goToPreviousMonth} className="btn-ghost btn-sm px-2" aria-label="Mês anterior">
+              ←
+            </button>
+            <span className="min-w-[128px] text-center text-sm font-semibold text-hagav-white">
+              {selectedMonthLabel}
+            </span>
+            <button type="button" onClick={goToNextMonth} className="btn-ghost btn-sm px-2" aria-label="Próximo mês">
+              →
+            </button>
+            <button type="button" onClick={goToCurrentMonth} className="btn-ghost btn-sm">
+              Hoje
+            </button>
+          </div>
           <button type="button" onClick={load} disabled={loading} className="btn-ghost btn-sm">
             <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
             Atualizar

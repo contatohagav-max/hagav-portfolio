@@ -71,6 +71,7 @@ function parseQuantityNumber(value, fallback = 1) {
 }
 
 function parseCurrencyNumber(value, fallback = 0) {
+  if (typeof value === 'number') return Number.isFinite(value) && value > 0 ? value : fallback;
   const raw = normalizeText(value);
   if (!raw) return fallback;
   const normalized = raw
@@ -83,6 +84,22 @@ function parseCurrencyNumber(value, fallback = 0) {
   if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
   return parsed;
 }
+
+function formatCurrencyText(value) {
+  const parsed = parseCurrencyNumber(value, 0);
+  return parsed > 0 ? fmtBRL(parsed) : normalizeText(value);
+}
+
+function formatMonthlyCurrencyText(value) {
+  const clean = normalizeText(value);
+  const hasMonthlySuffix = /\s*\/\s*m(?:e|\u00ea|\u00c3\u00aa)s/i.test(clean);
+  const valueOnly = clean.replace(/\s*\/\s*m(?:e|\u00ea|\u00c3\u00aa)s/ig, '').trim();
+  const parsed = parseCurrencyNumber(valueOnly, 0);
+  const formatted = parsed > 0 ? fmtBRL(parsed) : clean;
+  if (!formatted) return '';
+  return hasMonthlySuffix ? `${formatted}/mês` : formatted;
+}
+
 function parseDiscountPercent(value, fallback = 0) {
   const raw = normalizeText(value);
   if (!raw) return fallback;
@@ -146,14 +163,15 @@ function buildEconomyText(scenario, baseUnitPrice) {
 }
 
 function syncEconomyDescription(description, economy, discountPercent) {
-  const clean = normalizeText(description);
+  const clean = normalizeText(description)
+    .replace(/\s*Economia:\s*.*$/i, '')
+    .replace(/\s*\.?\s*(?:R\$\s*)?[\d.]+,\d{2}\s*\(\s*\d+(?:[,.]\d+)?\s*%\s*\)\.?\s*$/i, '')
+    .replace(/\s*\.?\s*[\d.]+,\d{2}\s*\(\s*\d+(?:[,.]\d+)?\s*%\s*\)\.?\s*$/i, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
   if (!(Number(economy || 0) > 0) || !(Number(discountPercent || 0) > 0)) return clean;
 
   const economyText = `Economia: ${fmtBRL(economy)} (${Math.round(discountPercent)}%).`;
-  if (/Economia:/i.test(clean)) {
-    const updated = clean.replace(/Economia:\s*.*?(?:\(\s*[\d.,]+\s*%\s*\)|\.)\.?/i, economyText);
-    return (updated === clean ? clean.replace(/Economia:\s*.*$/i, economyText) : updated).trim();
-  }
   return [clean, economyText].filter(Boolean).join(' ');
 }
 
@@ -187,8 +205,8 @@ function buildComparativeOptionCalculation({ baseTotal, baseQuantity, optionQuan
 export function buildComparativeCalculatedDraft({ orc, proposalDraft }) {
   const draft = proposalDraft && typeof proposalDraft === 'object' ? proposalDraft : {};
   const unitLabels = inferUnitLabels(orc);
-  const baseQuantity = parseQuantityNumber(draft.opcao1_qtd || draft.quantidade, 1);
-  const baseTotal = parseCurrencyNumber(draft.opcao1_preco || draft.valor_total_moeda, 0);
+  const baseQuantity = parseQuantityNumber(draft.quantidade || draft.opcao1_qtd, 1);
+  const baseTotal = parseCurrencyNumber(draft.valor_total_moeda || draft.opcao1_preco, 0);
   const baseCalculation = buildComparativeOptionCalculation({
     baseTotal,
     baseQuantity,
@@ -279,7 +297,7 @@ function inferUnitLabels(orc = {}) {
 function ensureMensalValue(value) {
   const clean = normalizeText(value);
   if (!clean) return '';
-  return /\/m[eê]s/i.test(clean) ? clean : `${clean}/mês`;
+  return /\s*\/\s*m(?:e|\u00ea|\u00c3\u00aa)s/i.test(clean) ? clean : `${clean}/mês`;
 }
 
 function splitLines(value) {
@@ -401,8 +419,8 @@ export function buildProposalPreviewModel({ orc, proposalMode, proposalDraft }) 
     : rawDraft;
   const conditions = splitLines(draft.condicoes_comerciais);
     const unitLabels = inferUnitLabels(orc);
-  const baseQuantity = parseQuantityNumber(draft.opcao1_qtd || draft.quantidade, 1);
-  const baseTotal = parseCurrencyNumber(draft.opcao1_preco || draft.valor_total_moeda, 0);
+  const baseQuantity = parseQuantityNumber(draft.quantidade || draft.opcao1_qtd, 1);
+  const baseTotal = parseCurrencyNumber(draft.valor_total_moeda || draft.opcao1_preco, 0);
 
   const optionCards = [1, 2, 3].map((index) => {
     const title = normalizeText(draft[`opcao${index}_titulo`]);
@@ -439,9 +457,9 @@ export function buildProposalPreviewModel({ orc, proposalMode, proposalDraft }) 
     };
   }).filter((card) => card.title || card.total || card.quantity || card.unitPrice);
 
-  const directValue = normalizeText(draft.valor_total_moeda);
-  const mensalValue = ensureMensalValue(draft.valor_mensal_moeda || draft.valor_total_moeda);
-  const customValue = normalizeText(draft.valor_personalizado_moeda || draft.valor_total_moeda);
+  const directValue = formatCurrencyText(draft.valor_total_moeda);
+  const mensalValue = ensureMensalValue(formatMonthlyCurrencyText(draft.valor_mensal_moeda || draft.valor_total_moeda));
+  const customValue = formatCurrencyText(draft.valor_personalizado_moeda || draft.valor_total_moeda);
 
   let investmentLabel = 'Valor total';
   let investmentValue = directValue;

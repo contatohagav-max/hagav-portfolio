@@ -379,6 +379,7 @@ function parseQuantityNumber(value, fallback = 10) {
 }
 
 function parseCurrencyNumber(value, fallback = 0) {
+  if (typeof value === 'number') return Number.isFinite(value) && value > 0 ? value : fallback;
   const raw = normalizeText(value);
   if (!raw) return fallback;
   const normalized = raw
@@ -390,6 +391,19 @@ function parseCurrencyNumber(value, fallback = 0) {
   const parsed = Number(normalized);
   if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
   return parsed;
+}
+
+function formatCurrencyBR(value) {
+  const parsed = parseCurrencyNumber(value, 0);
+  return parsed > 0 ? fmtBRL(parsed) : '';
+}
+
+function formatCurrencyBRKeepingMonthly(value) {
+  const clean = normalizeText(value);
+  const hasMonthlySuffix = /\s*\/\s*m(?:e|\u00ea|\u00c3\u00aa)s/i.test(clean);
+  const formatted = formatCurrencyBR(clean.replace(/\s*\/\s*m(?:e|\u00ea|\u00c3\u00aa)s/ig, '').trim());
+  if (!formatted) return normalizeText(value);
+  return hasMonthlySuffix ? `${formatted}/mês` : formatted;
 }
 
 function normalizeComparativeQuantityInput(value, fallbackValue = '') {
@@ -812,7 +826,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
   const initialStoredSuggested = Number(orc?.valor_sugerido ?? orc?.preco_base ?? 0);
   const initialFinalPrice = Number(orc?.preco_final ?? initialStoredSuggested ?? 0);
   const [statusOrc, setStatusOrc] = useState(orc?.status_orcamento ?? 'orcamento');
-  const [precoFinal, setPrecoFinal] = useState(initialFinalPrice);
+  const [precoFinal, setPrecoFinal] = useState(formatCurrencyBR(initialFinalPrice));
   const [precoFinalTouched, setPrecoFinalTouched] = useState(() => Math.abs(initialFinalPrice - initialStoredSuggested) > 0.009);
   const [obsInternas, setObsInternas] = useState(orc?.observacoes_internas ?? '');
   const [urgencia, setUrgencia] = useState(orc?.urgencia ?? 'media');
@@ -874,7 +888,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
     prazo: normalizePrazoLabel(getFirstItemValue(pricingItems, 'prazo', orc?.prazo), 'Sem prazo definido'),
     referencia: getFirstItemValue(pricingItems, 'referencia', orc?.referencia),
   }), [orc, pricingItems]);
-  const parsedPrecoFinal = Number(precoFinal || 0);
+  const parsedPrecoFinal = parseCurrencyNumber(precoFinal, 0);
   const autoPricing = useMemo(
     () => computePricingSnapshot(pricingRecord, pricingRules),
     [pricingRecord, pricingRules]
@@ -1050,6 +1064,14 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
     const values = {};
     const sourceDraft = proposalMode === 'opcoes' ? comparativeProposalDraft : proposalDraft;
     PROPOSAL_DRAW_FIELDS.forEach((field) => {
+      if (field === 'valor_total_moeda' || field === 'valor_mensal_moeda') {
+        values[field] = formatCurrencyBRKeepingMonthly(sourceDraft?.[field]);
+        return;
+      }
+      if (field === 'valor_personalizado_moeda') {
+        values[field] = formatCurrencyBR(sourceDraft?.[field]);
+        return;
+      }
       values[field] = normalizeText(sourceDraft?.[field]);
     });
     return {
@@ -1073,7 +1095,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
     if (mode === 'mensal') {
       const valorMensal = normalizeText(nextDraft.valor_mensal_moeda || nextDraft.valor_total_moeda);
       if (valorMensal) {
-        nextDraft.valor_total_moeda = /\/m[eê]s/i.test(valorMensal)
+        nextDraft.valor_total_moeda = /\s*\/\s*m(?:e|\u00ea|\u00c3\u00aa)s/i.test(valorMensal)
           ? valorMensal
           : `${valorMensal}/mês`;
       }
@@ -1084,6 +1106,10 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
       const valorCustom = normalizeText(nextDraft.valor_personalizado_moeda || nextDraft.valor_total_moeda);
       if (valorCustom) nextDraft.valor_total_moeda = valorCustom;
     }
+
+    nextDraft.valor_total_moeda = formatCurrencyBRKeepingMonthly(nextDraft.valor_total_moeda);
+    nextDraft.valor_mensal_moeda = formatCurrencyBRKeepingMonthly(nextDraft.valor_mensal_moeda);
+    nextDraft.valor_personalizado_moeda = formatCurrencyBR(nextDraft.valor_personalizado_moeda);
 
     return buildTemplateOverridesFromDraft(nextDraft);
   }
@@ -1277,12 +1303,13 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
     const comercialAtual = parseDetalhes(detalhesAtual?.comercial);
     const nowIso = new Date().toISOString();
     const proposalState = buildProposalDraftCommercialState();
-    const finalPriceValue = Number(
+    const finalPriceValue = parseCurrencyNumber(
       finalPriceOverride
       ?? financialMetrics.preco_final
       ?? autoPricing.precoFinal
-      ?? 0
-    ) || 0;
+      ?? 0,
+      0
+    );
     const itemDrafts = Array.isArray(autoPricing?.itensServico) && autoPricing.itensServico.length > 0
       ? autoPricing.itensServico
       : pricingItems;
@@ -1364,7 +1391,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
     setStatusOrc(orc?.status_orcamento ?? 'orcamento');
     const nextStoredSuggested = Number(orc?.valor_sugerido ?? orc?.preco_base ?? 0);
     const nextFinalPrice = Number(orc?.preco_final ?? nextStoredSuggested ?? 0);
-    setPrecoFinal(nextFinalPrice);
+    setPrecoFinal(formatCurrencyBR(nextFinalPrice));
     setPrecoFinalTouched(Math.abs(nextFinalPrice - nextStoredSuggested) > 0.009);
     setObsInternas(orc?.observacoes_internas ?? '');
     setUrgencia(orc?.urgencia ?? 'media');
@@ -1467,8 +1494,8 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
     const suggested = Number(autoPricing?.precoFinal || autoPricing?.valorSugerido || 0);
     if (!Number.isFinite(suggested) || suggested <= 0) return;
     setPrecoFinal((current) => {
-      const currentNumber = Number(current || 0);
-      return Math.abs(currentNumber - suggested) > 0.009 ? suggested : current;
+      const currentNumber = parseCurrencyNumber(current, 0);
+      return Math.abs(currentNumber - suggested) > 0.009 ? formatCurrencyBR(suggested) : current;
     });
   }, [autoPricing?.precoFinal, autoPricing?.valorSugerido, precoFinalTouched]);
 
@@ -1483,7 +1510,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
     try {
       const updated = await updateOrcamento(orc.id, buildFinancialPersistencePatch());
       onUpdated?.(updated);
-      setPrecoFinal(updated?.preco_final ?? Number(financialMetrics.preco_final || 0));
+      setPrecoFinal(formatCurrencyBR(updated?.preco_final ?? financialMetrics.preco_final ?? 0));
       setInfo('Rascunho da proposta salvo no orçamento.');
     } catch (err) {
       setError(err.message ?? 'Erro ao salvar rascunho da proposta.');
@@ -1508,7 +1535,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
         proximo_followup_em: fromDateTimeLocal(followup),
       });
       onUpdated?.(updated);
-      setPrecoFinal(updated?.preco_final ?? Number(financialMetrics.preco_final || 0));
+      setPrecoFinal(formatCurrencyBR(updated?.preco_final ?? financialMetrics.preco_final ?? 0));
       setPrecoFinalTouched(
         Math.abs(
           Number(updated?.preco_final ?? 0) - Number(updated?.valor_sugerido ?? autoPricing?.valorSugerido ?? 0)
@@ -1758,7 +1785,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
   }
 
   async function handleRecalculateValues() {
-    const nextPrecoFinal = Number(autoPricing?.precoFinal || autoPricing?.valorSugerido || autoPricing?.precoBase || precoFinal || 0);
+    const nextPrecoFinal = parseCurrencyNumber(autoPricing?.precoFinal || autoPricing?.valorSugerido || autoPricing?.precoBase || precoFinal || 0, 0);
     if (!Number.isFinite(nextPrecoFinal) || nextPrecoFinal <= 0) {
       setError('Não foi possível recalcular: valor sugerido indisponível.');
       return;
@@ -1779,7 +1806,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
         responsavel,
         proximo_followup_em: fromDateTimeLocal(followup),
       });
-      setPrecoFinal(nextPrecoFinal);
+      setPrecoFinal(formatCurrencyBR(nextPrecoFinal));
       setPrecoFinalTouched(false);
       onUpdated?.(updated);
       setInfo('Valores recalculados e sincronizados.');
@@ -2271,6 +2298,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
                   type="text"
                   value={proposalDraft.valor_total_moeda || ''}
                   onChange={(e) => updateProposalDraftField('valor_total_moeda', e.target.value)}
+                  onBlur={(e) => updateProposalDraftField('valor_total_moeda', formatCurrencyBR(e.target.value))}
                   className="hinput w-full"
                   placeholder="Ex.: R$ 1.500,00"
                 />
@@ -2295,6 +2323,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
                         type="text"
                         value={proposalDraft.valor_mensal_moeda || ''}
                         onChange={(e) => updateProposalDraftField('valor_mensal_moeda', e.target.value)}
+                        onBlur={(e) => updateProposalDraftField('valor_mensal_moeda', formatCurrencyBRKeepingMonthly(e.target.value))}
                         className="hinput w-full"
                         placeholder="Ex.: R$ 1.500,00/mês"
                       />
@@ -2319,6 +2348,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
                       type="text"
                       value={proposalDraft.valor_personalizado_moeda || ''}
                       onChange={(e) => updateProposalDraftField('valor_personalizado_moeda', e.target.value)}
+                      onBlur={(e) => updateProposalDraftField('valor_personalizado_moeda', formatCurrencyBR(e.target.value))}
                       className="hinput w-full"
                       placeholder="Ex.: R$ 2.350,00"
                     />
@@ -2388,6 +2418,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
                       {[1, 2, 3].map((index) => {
                         const calculated = comparativeProposalDraft || {};
+                        const isCurrentOrder = index === 1;
                         const isCalculatedOption = index > 1;
                         return (
                           <div key={index} className="space-y-1.5 border border-hagav-border rounded-lg p-2">
@@ -2400,18 +2431,19 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
                             />
                             <input
                               type="text"
-                              value={proposalDraft[`opcao${index}_qtd`] || ''}
+                              value={isCurrentOrder ? (calculated.opcao1_qtd || '') : (proposalDraft[`opcao${index}_qtd`] || '')}
                               onChange={(e) => updateProposalDraftField(`opcao${index}_qtd`, e.target.value)}
-                              className="hinput w-full"
-                              placeholder={`Quantidade da opção ${index}`}
+                              readOnly={isCurrentOrder}
+                              className={`hinput w-full ${isCurrentOrder ? 'opacity-80 cursor-not-allowed' : ''}`}
+                              placeholder={isCurrentOrder ? 'Quantidade do pedido atual' : `Quantidade da opção ${index}`}
                             />
                             <input
                               type="text"
-                              value={isCalculatedOption ? (calculated[`opcao${index}_preco`] || '') : (proposalDraft[`opcao${index}_preco`] || '')}
+                              value={calculated[`opcao${index}_preco`] || proposalDraft[`opcao${index}_preco`] || ''}
                               onChange={(e) => updateProposalDraftField(`opcao${index}_preco`, e.target.value)}
-                              readOnly={isCalculatedOption}
-                              className={`hinput w-full ${isCalculatedOption ? 'opacity-80 cursor-not-allowed' : ''}`}
-                              placeholder={isCalculatedOption ? 'Total calculado automaticamente' : `Preço total da opção ${index}`}
+                              readOnly
+                              className="hinput w-full opacity-80 cursor-not-allowed"
+                              placeholder="Total calculado automaticamente"
                             />
                             <input
                               type="text"
@@ -2522,16 +2554,16 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
             <div>
               <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Preço final (R$)</label>
               <input
-                type="number"
-                step="0.01"
-                min="0"
+                type="text"
+                inputMode="decimal"
                 value={precoFinal}
                 onChange={(e) => {
                   setPrecoFinalTouched(true);
                   setPrecoFinal(e.target.value);
                 }}
+                onBlur={(e) => setPrecoFinal(formatCurrencyBR(e.target.value))}
                 className="hinput w-full"
-                placeholder="0.00"
+                placeholder="R$ 3.000,00"
               />
             </div>
 

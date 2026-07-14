@@ -483,6 +483,7 @@ export function buildRecurringCalculatedDraft({ proposalDraft } = {}) {
   const totalOneOffPeriod = oneOffMonthlyValue * durationMonths;
   const totalContract = recurringMonthlyValue * durationMonths;
   const totalEconomy = Math.max(0, totalOneOffPeriod - totalContract);
+  const recurringInvalid = oneOffMonthlyValue < 10 || recurringMonthlyValue < 10 || totalContract < 10;
   const oneOffTitleRaw = normalizeText(draft.opcao1_titulo);
   const recurringTitleRaw = normalizeText(draft.opcao2_titulo);
   const oneOffTitle = oneOffTitleRaw && oneOffTitleRaw !== OPTION_STRATEGY.pedido_atual.title
@@ -505,6 +506,7 @@ export function buildRecurringCalculatedDraft({ proposalDraft } = {}) {
     recorrente_total_avulso_moeda: oneOffMonthlyValue > 0 ? fmtBRL(totalOneOffPeriod) : '',
     recorrente_total_contrato_moeda: totalContract > 0 ? fmtBRL(totalContract) : '',
     recorrente_economia_moeda: totalEconomy > 0 ? fmtBRL(totalEconomy) : '',
+    recorrente_invalido: recurringInvalid ? 'true' : '',
     opcao1_titulo: oneOffTitle,
     opcao1_qtd: `${baseQuantity} este mês`,
     opcao1_preco: oneOffMonthlyValue > 0 ? fmtBRL(oneOffMonthlyValue) : normalizeText(draft.opcao1_preco),
@@ -524,7 +526,7 @@ export function buildRecurringCalculatedDraft({ proposalDraft } = {}) {
     opcao3_desc: totalContract > 0
       ? `Total recorrente: ${fmtBRL(totalContract)}. Total avulso no período: ${fmtBRL(totalOneOffPeriod)}.`
       : '',
-    opcao3_desconto: formatPercentBadge(discountPercent),
+    opcao3_desconto: '',
     texto_comparativo: normalizeText(draft.texto_comparativo)
       || `Comparativo entre contratação avulsa e plano recorrente de ${durationMonths} meses.`,
   };
@@ -542,6 +544,7 @@ export function buildProposalPreviewModel({ orc, proposalMode, proposalDraft }) 
     const unitLabels = inferUnitLabels(orc);
   const baseQuantity = parseQuantityNumber(draft.quantidade || draft.opcao1_qtd, 1);
   const baseTotal = parseCurrencyNumber(draft.valor_total_moeda || draft.opcao1_preco, 0);
+  const recurringInvalid = mode === 'mensal' && normalizeText(draft.recorrente_invalido);
 
   const optionCards = [1, 2, 3].map((index) => {
     const title = normalizeText(draft[`opcao${index}_titulo`]);
@@ -614,14 +617,16 @@ export function buildProposalPreviewModel({ orc, proposalMode, proposalDraft }) 
       quantity: normalizeText(mode === 'mensal' ? (draft.quantidade_mensal || draft.quantidade) : draft.quantidade),
       deadline: normalizePrazoLabel(draft.prazo, ''),
     },
-    scope: normalizeText(mode === 'mensal' ? (draft.escopo_mensal || draft.escopo_comercial) : draft.escopo_comercial),
+    scope: recurringInvalid
+      ? 'Configure um valor mensal válido para visualizar a proposta recorrente.'
+      : normalizeText(mode === 'mensal' ? (draft.escopo_mensal || draft.escopo_comercial) : draft.escopo_comercial),
     investment: {
       label: investmentLabel,
       value: investmentValue,
       visible: mode !== 'opcoes' && mode !== 'mensal' && Boolean(investmentValue),
     },
     monthly: {
-      visible: mode === 'mensal',
+      visible: false,
       quantity: normalizeText(draft.quantidade_mensal || draft.quantidade),
       duration: normalizeText(draft.duracao_contrato_meses),
       value: mensalValue,
@@ -629,7 +634,7 @@ export function buildProposalPreviewModel({ orc, proposalMode, proposalDraft }) 
       structure: 'Produção recorrente com organização mensal, recebimento de materiais, edição, revisão e entrega final conforme cronograma aprovado.',
     },
     options: {
-      visible: (mode === 'opcoes' || mode === 'mensal') && optionCards.length > 0,
+      visible: !recurringInvalid && (mode === 'opcoes' || mode === 'mensal') && optionCards.length > 0,
       items: optionCards,
       footnote: normalizeText(draft.texto_comparativo),
     },

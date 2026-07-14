@@ -102,11 +102,12 @@ function updateFinancialObservacoes(observacaoLivre, meta) {
 }
 
 function parseCurrencyValue(value) {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
   const raw = String(value || '').replace(/[^\d,.-]/g, '').trim();
   if (!raw) return 0;
   const normalized = raw.includes(',')
     ? raw.replace(/\./g, '').replace(',', '.')
-    : raw;
+    : raw.replace(/\./g, '');
   const parsed = Number(normalized);
   return Number.isFinite(parsed) ? parsed : 0;
 }

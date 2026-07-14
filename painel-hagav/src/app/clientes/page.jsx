@@ -101,6 +101,21 @@ function addMonthsIso(baseDate, monthsToAdd = 0) {
   return target.toISOString().slice(0, 10);
 }
 
+function parseCurrencyBR(value) {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+  const raw = String(value || '').replace(/[^\d,.-]/g, '').trim();
+  if (!raw) return 0;
+  const normalized = raw.includes(',')
+    ? raw.replace(/\./g, '').replace(',', '.')
+    : raw.replace(/\./g, '');
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function formatCurrencyBR(value) {
+  return fmtBRL(parseCurrencyBR(value));
+}
+
 function toIsoRenewAlert(vencimento) {
   if (!vencimento) return null;
   const date = new Date(`${vencimento}T12:00:00`);
@@ -305,7 +320,7 @@ function buildContractPreviewModel({
   if (!row) return null;
 
   const contrato = row?.contrato || {};
-  const valorNumerico = Number(valorFinal || row?.valor_contrato || row?.preco_final || row?.valor_sugerido || 0);
+  const valorNumerico = parseCurrencyBR(valorFinal || row?.valor_contrato || row?.preco_final || row?.valor_sugerido || 0);
   const contractNumber = String(
     contrato?.numero_contrato
     || contrato?.contrato_numero
@@ -454,7 +469,7 @@ export default function ClientesPage() {
       || ''
     );
 
-    setValorFinal(String(contrato?.valor_final || selected?.valor_contrato || selected?.preco_final || selected?.valor_sugerido || 0));
+    setValorFinal(formatCurrencyBR(contrato?.valor_final || selected?.valor_contrato || selected?.preco_final || selected?.valor_sugerido || 0));
     setDataInicio(inicioDefault);
     setDuracaoMeses(duracaoDefault);
     setVencimento(vencimentoDefault);
@@ -569,7 +584,7 @@ export default function ClientesPage() {
         isoDate(contratoBase?.data_fim || contratoBase?.vencimento || currentRow?.vencimento_contrato || currentRow?.validade_ate)
         || (inicioGeracao ? addMonthsIso(inicioGeracao, duracaoSafe) : '')
       );
-    const valorInput = isSelectedRow ? Number(valorFinal) : Number(contratoBase?.valor_final ?? currentRow?.valor_contrato ?? currentRow?.preco_final ?? currentRow?.valor_sugerido ?? 0);
+    const valorInput = isSelectedRow ? parseCurrencyBR(valorFinal) : parseCurrencyBR(contratoBase?.valor_final ?? currentRow?.valor_contrato ?? currentRow?.preco_final ?? currentRow?.valor_sugerido ?? 0);
     const valorSafe = Number.isFinite(valorInput) && valorInput > 0
       ? valorInput
       : Number(currentRow?.valor_contrato || currentRow?.preco_final || currentRow?.valor_sugerido || 0);
@@ -811,7 +826,7 @@ export default function ClientesPage() {
   async function handleSaveContrato(statusOverride, acao = 'salvar') {
     if (!selected) return;
 
-    const valor = Number(valorFinal);
+    const valor = parseCurrencyBR(valorFinal);
     if (!Number.isFinite(valor) || valor <= 0) {
       setFeedback('Informe um valor final valido.');
       return;
@@ -1211,7 +1226,15 @@ export default function ClientesPage() {
                 </div>
                 <div>
                   <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Valor final (R$)</label>
-                  <input type="number" min="0" step="0.01" value={valorFinal} onChange={(e) => setValorFinal(e.target.value)} className="hinput w-full" />
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={valorFinal}
+                    onChange={(e) => setValorFinal(e.target.value)}
+                    onBlur={(e) => setValorFinal(formatCurrencyBR(e.target.value))}
+                    className="hinput w-full"
+                    placeholder="R$ 1.500,00"
+                  />
                 </div>
                 <div>
                   <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Duração (meses)</label>

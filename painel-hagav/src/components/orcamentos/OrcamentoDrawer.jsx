@@ -1125,13 +1125,18 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
     return [...legacyOptions, ...officialOptions];
   }, [pricingItems, pricingRules]);
   const defaultPricingServiceLabel = pricingServiceOptions[0]?.label || getDefaultCommercialServiceLabel(pricingRules);
+  const proposalBasePriceReference = firstValidCurrencyValue(
+    proposalDraft?.valor_total_moeda,
+    parsedPrecoFinal,
+    Number(autoPricing?.precoFinal || 0)
+  );
   const autoProposalDraft = useMemo(
     () => buildProposalDraftFromRecord(proposalRecord, proposalMode, {
       pricingRules,
       preferLiveRecord: true,
-      priceReference: parsedPrecoFinal > 0 ? parsedPrecoFinal : Number(autoPricing?.precoFinal || 0),
+      priceReference: proposalBasePriceReference,
     }),
-    [autoPricing?.precoFinal, parsedPrecoFinal, pricingRules, proposalMode, proposalRecord]
+    [pricingRules, proposalBasePriceReference, proposalMode, proposalRecord]
   );
   const serviceNames = [
     ...new Set(
@@ -1624,7 +1629,14 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
       return;
     }
     setProposalMode(normalizedMode);
-    setProposalDirtyFields({});
+    setProposalDirtyFields((prev) => ({
+      valor_total_moeda: true,
+      ...(prev?.valor_mensal_moeda ? { valor_mensal_moeda: true } : {}),
+      ...(prev?.valor_personalizado_moeda && normalizedMode === 'personalizada'
+        ? { valor_personalizado_moeda: true }
+        : {}),
+      ...(prev?.usar_valor_manual ? { usar_valor_manual: true } : {}),
+    }));
     setRecurringValueTouched(false);
     setComparativeWarning('');
     setProposalDraft(buildProposalDraftForMode(normalizedMode));

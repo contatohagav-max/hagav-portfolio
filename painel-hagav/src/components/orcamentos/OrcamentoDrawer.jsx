@@ -516,15 +516,6 @@ function firstValidCurrencyValue(...values) {
   return 0;
 }
 
-function isSuspiciousRecurringBaseValue(value, safeBaseValue = 0) {
-  const parsed = parseCurrencyNumber(value, 0);
-  if (!Number.isFinite(parsed) || parsed <= 0) return true;
-  if (parsed < 10) return true;
-  const safe = Number(safeBaseValue || 0);
-  if (safe >= 100 && parsed < Math.min(100, safe * 0.1)) return true;
-  return false;
-}
-
 function getActiveProposalPrice(mode, draft = {}) {
   const normalizedMode = normalizeVisibleProposalMode(mode) || 'direta';
   if (normalizedMode === 'mensal') {
@@ -1256,17 +1247,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
   const oneOffButtonLabel = oneOffButtonValue >= 10
     ? `Usar valor do Avulso: ${fmtBRL(oneOffButtonValue)}`
     : 'Valor do Avulso indisponível';
-  const safeRecurringBaseValue = firstValidCurrencyValue(
-    lastManualRecurringBaseValue,
-    lastKnownOneOffValue
-  );
-  const shouldSanitizeRecurringBase = proposalMode === 'mensal'
-    && !recurringValueTouched
-    && safeRecurringBaseValue >= 10
-    && isSuspiciousRecurringBaseValue(proposalDraft?.valor_total_moeda, safeRecurringBaseValue);
-  const recurringBaseValue = shouldSanitizeRecurringBase
-    ? formatCurrencyBR(safeRecurringBaseValue)
-    : (proposalDraft?.valor_total_moeda || '');
+  const recurringBaseValue = proposalDraft?.valor_total_moeda || '';
   const recurringProposalDraft = useMemo(
     () => (proposalMode === 'mensal'
       ? buildRecurringCalculatedDraft({
@@ -1303,7 +1284,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
     ? `${fmtBRL(activeProposalPrice)}${proposalMode === 'mensal' ? '/mês' : ''}`
     : '—';
   const activeProposalAuxText = hasSuspiciousRecurringPrice
-    ? 'Configure um valor mensal válido para visualizar a proposta recorrente.'
+    ? 'Informe o valor avulso mensal para calcular a proposta recorrente.'
     : proposalMode === 'mensal' && recurringContractTotal > 0
     ? `Total do contrato: ${fmtBRL(recurringContractTotal)} em ${recurringProposalDraft?.duracao_contrato_meses || '3'} meses`
     : 'Este é o valor usado no preview, PDF, aprovação e cliente.';
@@ -1364,7 +1345,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
 
     if (normalizedMode === 'mensal') {
       const providedRecurringBaseValue = parseCurrencyNumber(currentDraft?.valor_total_moeda, 0);
-      const recurringSeedValue = firstValidCurrencyValue(providedRecurringBaseValue, lastKnownOneOffValue);
+      const recurringSeedValue = firstValidCurrencyValue(providedRecurringBaseValue);
       next.valor_total_moeda = recurringSeedValue >= 10 ? fmtBRL(recurringSeedValue) : '';
       next.quantidade_mensal = next.quantidade_mensal || next.quantidade || preset.quantidade_mensal;
       next.duracao_contrato_meses = next.duracao_contrato_meses || preset.duracao_contrato_meses || '3';
@@ -1633,7 +1614,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
       setLastKnownOneOffValue(capturedOneOffValue);
     }
     const recurringSeedValue = normalizedMode === 'mensal'
-      ? firstValidCurrencyValue(lastManualRecurringBaseValue, capturedOneOffValue, lastKnownOneOffValue)
+      ? lastManualRecurringBaseValue
       : 0;
     const seedDraft = recurringSeedValue >= 10
       ? { valor_total_moeda: formatCurrencyBR(recurringSeedValue) }
@@ -2000,24 +1981,6 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
     });
     setPrecoFinalTouched(true);
   }, [activeProposalPrice, hasSuspiciousRecurringPrice]);
-
-  useEffect(() => {
-    if (!shouldSanitizeRecurringBase) return;
-    setProposalDirtyFields((prev) => ({
-      ...prev,
-      valor_total_moeda: true,
-      duracao_contrato_meses: true,
-      recorrente_desconto_percent: true,
-      opcao2_titulo: true,
-    }));
-    setProposalDraft((prev) => ({
-      ...(prev && typeof prev === 'object' ? prev : {}),
-      valor_total_moeda: recurringBaseValue,
-      duracao_contrato_meses: prev?.duracao_contrato_meses || '3',
-      recorrente_desconto_percent: prev?.recorrente_desconto_percent || '10%',
-      opcao2_titulo: prev?.opcao2_titulo || 'Plano Trimestral',
-    }));
-  }, [recurringBaseValue, shouldSanitizeRecurringBase]);
 
   useEffect(() => {
     syncPreviewDraft(proposalMode, activeProposalDraft, proposalPreview);

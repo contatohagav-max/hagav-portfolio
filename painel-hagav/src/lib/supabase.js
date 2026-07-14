@@ -1907,7 +1907,7 @@ export async function syncFinancialEntriesForActiveClientContract(fields) {
       && String(entry?.observacoes || '').includes(`deal_id=${dealId}`)
     ));
     const paidExisting = monthEntries.find((entry) => String(entry?.status || '').toLowerCase() === 'pago');
-    const existing = editableLegacy || editableLinked || paidExisting || null;
+    const existing = paidExisting || editableLegacy || editableLinked || null;
     const duplicateEntries = monthEntries.filter((entry) => {
       const observacoes = String(entry?.observacoes || '');
       return existing?.id

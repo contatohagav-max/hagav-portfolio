@@ -261,6 +261,24 @@ function isPagar(entry) {
   return entry?.tipo === 'pagar';
 }
 
+function getFinancialTypeRank(entry) {
+  const tipo = String(entry?.tipo || '').toLowerCase();
+  if (tipo === 'receber' || tipo === 'entrada') return 0;
+  if (tipo === 'pagar' || tipo === 'saida') return 1;
+  return 2;
+}
+
+function compareFinancialEntries(a, b) {
+  const typeDiff = getFinancialTypeRank(a) - getFinancialTypeRank(b);
+  if (typeDiff !== 0) return typeDiff;
+
+  const dateA = getDueDate(a)?.getTime() ?? Number.MAX_SAFE_INTEGER;
+  const dateB = getDueDate(b)?.getTime() ?? Number.MAX_SAFE_INTEGER;
+  if (dateA !== dateB) return dateA - dateB;
+
+  return String(a?.descricao || '').localeCompare(String(b?.descricao || ''), 'pt-BR');
+}
+
 function isCancelled(entry) {
   return effectiveFinancialStatus(entry) === 'cancelado';
 }
@@ -825,7 +843,7 @@ export default function FinanceiroPage() {
       if (!isSameMonth(dueDate, selectedMonth)) return false;
       if (naturezaFilter && getEntryMeta(entry).natureza !== naturezaFilter) return false;
       return true;
-    })
+    }).sort(compareFinancialEntries)
   ), [entries, naturezaFilter, selectedMonth]);
 
   const selectedMonthLabel = formatMonthLabel(selectedMonth);
@@ -912,10 +930,10 @@ export default function FinanceiroPage() {
         <EmptyState icon={CircleDollarSign} title="Nenhum lançamento encontrado" description="Aprovações criarão contas a receber automaticamente. Custos podem ser adicionados manualmente." />
       ) : (
         <div className="hcard overflow-hidden">
-          <div className="overflow-x-auto">
+          <div className="max-h-[62vh] overflow-auto">
             <table className="w-full text-sm min-w-[1120px]">
               <thead>
-                <tr className="border-b border-hagav-border text-left text-[10px] uppercase tracking-wider text-hagav-gray">
+                <tr className="sticky top-0 z-10 border-b border-hagav-border bg-hagav-surface text-left text-[10px] uppercase tracking-wider text-hagav-gray">
                   <th className="px-4 py-3">Tipo</th>
                   <th className="px-4 py-3">Natureza</th>
                   <th className="px-4 py-3">Nome do lançamento</th>

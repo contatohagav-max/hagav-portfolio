@@ -1566,16 +1566,74 @@ function stripFinancialMetadataBlock(value) {
     .trim();
 }
 
-function buildActivatedClientFinancialObservacoes({ dealId, recorrenteMensal, observacoes }) {
+function readFinancialMetadataBlock(value) {
+  const raw = String(value || '');
+  const match = raw.match(FINANCEIRO_META_REGEX);
+  const meta = {};
+  if (!match?.[0]) return meta;
+
+  match[0]
+    .replace(FINANCEIRO_META_START, '')
+    .replace(FINANCEIRO_META_END, '')
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .forEach((line) => {
+      const [key, ...rest] = line.split('=');
+      const normalizedKey = String(key || '').trim();
+      if (!normalizedKey) return;
+      meta[normalizedKey] = rest.join('=').trim();
+    });
+  return meta;
+}
+
+function formatFinancialInputDate(value) {
+  const date = value instanceof Date ? value : new Date(value || Date.now());
+  if (Number.isNaN(date.getTime())) return new Date().toISOString().slice(0, 10);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function addFinancialMonths(value, amount = 0) {
+  const base = new Date(value || Date.now());
+  const date = Number.isNaN(base.getTime()) ? new Date() : base;
+  const day = date.getDate();
+  const next = new Date(date);
+  next.setMonth(next.getMonth() + Number(amount || 0), 1);
+  const lastDay = new Date(next.getFullYear(), next.getMonth() + 1, 0).getDate();
+  next.setDate(Math.min(day, lastDay));
+  return next;
+}
+
+function getFinancialMonthKey(value) {
+  return formatFinancialInputDate(value).slice(0, 7);
+}
+
+function buildActivatedClientFinancialObservacoes({
+  dealId,
+  recorrenteMensal,
+  observacoes,
+  clienteNome,
+  contratoMes,
+  contratoInicio,
+  contratoDuracaoMeses,
+}) {
   const block = [
     FINANCEIRO_META_START,
-    'origem=cliente_ativado',
+    'origem=cliente_ativo',
     `deal_id=${String(dealId || '').trim()}`,
+    `cliente_nome=${String(clienteNome || '').trim()}`,
+    'contrato_ativo=true',
+    contratoMes ? `contrato_mes=${String(contratoMes).trim()}` : '',
+    contratoInicio ? `contrato_inicio=${String(contratoInicio).trim()}` : '',
+    contratoDuracaoMeses ? `contrato_duracao_meses=${String(contratoDuracaoMeses).trim()}` : '',
     'contrato=true',
     'natureza=Empresa',
     `recorrente_mensal=${Boolean(recorrenteMensal) ? 'true' : 'false'}`,
     FINANCEIRO_META_END,
-  ].join('\n');
+  ].filter(Boolean).join('\n');
   const cleanText = stripFinancialMetadataBlock(observacoes);
   return cleanText ? `${block}\n\n${cleanText}` : block;
 }
@@ -1748,4 +1806,121 @@ export async function upsertActivatedClientFinancialEntry(fields) {
   const { data, error } = await query.select('*').single();
   if (error) throw error;
   return data;
+}
+
+export async function syncFinancialEntriesForActiveClientContract(fields) {
+  const client = getSupabase();
+  if (!client) throw new Error('Supabase nÃ£o configurado');
+
+  const dealId = String(fields?.dealId || '').trim();
+  if (!dealId) throw new Error('Deal indisponÃ­vel para sincronizar financeiro');
+
+  const today = new Date().toISOString().slice(0, 10);
+  const clientName = String(fields?.nomeCliente || '').trim();
+  const companyName = String(fields?.empresa || '').trim();
+  const displayName = clientName || 'Sem cliente';
+  const fornecedor = clientName || companyName || 'Sem cliente';
+  const valor = Math.max(0, Number(fields?.valor || 0));
+  const startDate = formatFinancialInputDate(fields?.dataInicio || today);
+  const durationMonths = Math.max(1, Number.parseInt(String(fields?.duracaoMeses || fields?.duracao_meses || 1), 10) || 1);
+
+  const { data: existingRows, error: findError } = await client
+    .from('financial_entries')
+    .select('*')
+    .ilike('observacoes', `%deal_id=${dealId}%`)
+    .limit(120);
+
+  if (findError) throw findError;
+
+  const linkedEntries = (existingRows || []).filter((entry) => {
+    const observacoes = String(entry?.observacoes || '');
+    return observacoes.includes(`deal_id=${dealId}`)
+      && (
+        observacoes.includes('origem=cliente_ativo')
+        || observacoes.includes('origem=cliente_ativado')
+        || observacoes.includes('contrato=true')
+      );
+  });
+
+  const existingByMonth = new Map();
+  linkedEntries.forEach((entry) => {
+    const meta = readFinancialMetadataBlock(entry?.observacoes);
+    const monthKey = String(meta.contrato_mes || '').trim()
+      || getFinancialMonthKey(entry?.vencimento || startDate);
+    if (!existingByMonth.has(monthKey)) existingByMonth.set(monthKey, entry);
+  });
+
+  const changedEntries = [];
+  for (let index = 0; index < durationMonths; index += 1) {
+    const dueDate = addFinancialMonths(startDate, index);
+    const vencimento = formatFinancialInputDate(dueDate);
+    const contratoMes = getFinancialMonthKey(dueDate);
+    const existing = existingByMonth.get(contratoMes);
+    const freeObservation = stripFinancialMetadataBlock(existing?.observacoes || fields?.observacoes);
+    const payload = {
+      tipo: 'receber',
+      categoria: 'contrato',
+      descricao: `Projeto aprovado - ${displayName}`,
+      cliente_fornecedor: fornecedor,
+      valor,
+      status: 'pendente',
+      vencimento,
+      forma_pagamento: String(fields?.formaPagamento || '').trim() || null,
+      observacoes: buildActivatedClientFinancialObservacoes({
+        dealId,
+        clienteNome: displayName,
+        contratoMes,
+        contratoInicio: startDate,
+        contratoDuracaoMeses: durationMonths,
+        recorrenteMensal: Boolean(fields?.recorrenteMensal),
+        observacoes: freeObservation,
+      }),
+    };
+
+    if (!existing?.id) {
+      const { data, error } = await client
+        .from('financial_entries')
+        .insert({
+          ...payload,
+          valor_pago: 0,
+          pago_em: null,
+        })
+        .select('*')
+        .single();
+      if (error) throw error;
+      changedEntries.push(data);
+      continue;
+    }
+
+    const existingStatus = String(existing.status || '').toLowerCase();
+    const existingPaidValue = Math.max(0, Number(existing.valor_pago || 0));
+
+    if (existingStatus === 'pago' || (existingStatus === 'parcial' && existingPaidValue >= valor)) {
+      changedEntries.push(existing);
+      continue;
+    }
+
+    const updatePayload = {
+      ...payload,
+      valor_pago: existingPaidValue,
+      pago_em: null,
+    };
+    if (existingStatus === 'parcial') {
+      updatePayload.status = 'parcial';
+    }
+    if (existingStatus === 'atrasado') {
+      updatePayload.status = 'atrasado';
+    }
+
+    const { data, error } = await client
+      .from('financial_entries')
+      .update(updatePayload)
+      .eq('id', existing.id)
+      .select('*')
+      .single();
+    if (error) throw error;
+    changedEntries.push(data);
+  }
+
+  return changedEntries;
 }

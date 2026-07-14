@@ -23,8 +23,8 @@ import EduTooltip from '@/components/ui/EduTooltip';
 import {
   fetchClientesContratos,
   generateContractPdf,
+  syncFinancialEntriesForActiveClientContract,
   updateDeal,
-  upsertActivatedClientFinancialEntry,
 } from '@/lib/supabase';
 import {
   classNames,
@@ -917,14 +917,14 @@ export default function ClientesPage() {
         },
       });
 
-      if (acao === 'ativar') {
-        await upsertActivatedClientFinancialEntry({
+      if (nextStatus === 'ativo') {
+        await syncFinancialEntriesForActiveClientContract({
           dealId: selected.id,
           nomeCliente: nomeContratanteSafe,
           empresa: selected?.empresa || selected?.cliente_empresa || selected?.nome_empresa || '',
           valor,
-          vencimento: vencimentoSafe || inicioSafe || isoDate(new Date().toISOString()),
           dataInicio: inicioSafe,
+          duracaoMeses: duracaoSafe,
           formaPagamento: formaPagamentoSafe,
           observacoes: observacoesSafe,
           recorrenteMensal: Boolean(recorrente),

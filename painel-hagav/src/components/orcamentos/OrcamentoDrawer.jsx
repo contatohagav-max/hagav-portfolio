@@ -1074,7 +1074,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
     priceReference: initialFinalPrice,
   }));
   const [comparativeWarning, setComparativeWarning] = useState('');
-  const [lastOneOffModeValue, setLastOneOffModeValue] = useState(0);
+  const [lastKnownOneOffValue, setLastKnownOneOffValue] = useState(0);
   const [lastManualRecurringBaseValue, setLastManualRecurringBaseValue] = useState(0);
 
   if (!orc) return null;
@@ -1252,14 +1252,13 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
     ? parseCurrencyNumber(proposalDraft?.valor_total_moeda, 0)
     : 0;
   const currentOneOffModeValue = firstValidCurrencyValue(manualOneOffProposalValue, activeOneOffProposalValue);
-  const oneOffButtonValue = firstValidCurrencyValue(currentOneOffModeValue, lastOneOffModeValue, lastManualRecurringBaseValue);
+  const oneOffButtonValue = lastKnownOneOffValue >= 10 ? lastKnownOneOffValue : 0;
   const oneOffButtonLabel = oneOffButtonValue >= 10
     ? `Usar valor do Avulso: ${fmtBRL(oneOffButtonValue)}`
     : 'Valor do Avulso indisponível';
   const safeRecurringBaseValue = firstValidCurrencyValue(
-    currentOneOffModeValue,
-    lastOneOffModeValue,
-    lastManualRecurringBaseValue
+    lastManualRecurringBaseValue,
+    lastKnownOneOffValue
   );
   const shouldSanitizeRecurringBase = proposalMode === 'mensal'
     && !recurringValueTouched
@@ -1267,7 +1266,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
     && isSuspiciousRecurringBaseValue(proposalDraft?.valor_total_moeda, safeRecurringBaseValue);
   const recurringBaseValue = shouldSanitizeRecurringBase
     ? formatCurrencyBR(safeRecurringBaseValue)
-    : (proposalDraft?.valor_total_moeda || automaticProposalValue);
+    : (proposalDraft?.valor_total_moeda || '');
   const recurringProposalDraft = useMemo(
     () => (proposalMode === 'mensal'
       ? buildRecurringCalculatedDraft({
@@ -1322,7 +1321,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
   useEffect(() => {
     if (proposalMode !== 'direta') return;
     if (currentOneOffModeValue < 10) return;
-    setLastOneOffModeValue((current) => (
+    setLastKnownOneOffValue((current) => (
       Math.abs(Number(current || 0) - currentOneOffModeValue) > 0.009
         ? currentOneOffModeValue
         : current
@@ -1364,14 +1363,12 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
     }
 
     if (normalizedMode === 'mensal') {
-      const safeBaseValue = safeRecurringBaseValue >= 10 ? safeRecurringBaseValue : valueReference;
-      if (safeBaseValue >= 10 && isSuspiciousRecurringBaseValue(next.valor_total_moeda, safeBaseValue)) {
-        next.valor_total_moeda = fmtBRL(safeBaseValue);
-      }
+      const providedRecurringBaseValue = parseCurrencyNumber(currentDraft?.valor_total_moeda, 0);
+      const recurringSeedValue = firstValidCurrencyValue(providedRecurringBaseValue, lastKnownOneOffValue);
+      next.valor_total_moeda = recurringSeedValue >= 10 ? fmtBRL(recurringSeedValue) : '';
       next.quantidade_mensal = next.quantidade_mensal || next.quantidade || preset.quantidade_mensal;
       next.duracao_contrato_meses = next.duracao_contrato_meses || preset.duracao_contrato_meses || '3';
       next.escopo_mensal = next.escopo_mensal || next.escopo_comercial || buildCommercialScopeText(proposalRecord);
-      next.valor_total_moeda = next.valor_total_moeda || fmtBRL(valueReference || 0);
       next.recorrente_desconto_percent = next.recorrente_desconto_percent || preset.recorrente_desconto_percent || '10%';
       next.recorrente = 'true';
       Object.assign(next, buildRecurringCalculatedDraft({ proposalDraft: next }));
@@ -1629,8 +1626,14 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
 
   function applyProposalMode(mode) {
     const normalizedMode = normalizeVisibleProposalMode(mode) || inferProposalModeFromFlow(proposalRecord, 'direta');
+    const capturedOneOffValue = proposalMode === 'direta' && currentOneOffModeValue >= 10
+      ? currentOneOffModeValue
+      : 0;
+    if (normalizedMode === 'mensal' && capturedOneOffValue >= 10) {
+      setLastKnownOneOffValue(capturedOneOffValue);
+    }
     const recurringSeedValue = normalizedMode === 'mensal'
-      ? firstValidCurrencyValue(lastManualRecurringBaseValue, currentOneOffModeValue, lastOneOffModeValue)
+      ? firstValidCurrencyValue(lastManualRecurringBaseValue, capturedOneOffValue, lastKnownOneOffValue)
       : 0;
     const seedDraft = recurringSeedValue >= 10
       ? { valor_total_moeda: formatCurrencyBR(recurringSeedValue) }
@@ -1902,7 +1905,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
     setProposalMode(nextMode);
     setProposalDraft(nextDraft);
     setRecurringValueTouched(false);
-    setLastOneOffModeValue(0);
+    setLastKnownOneOffValue(0);
     setLastManualRecurringBaseValue(0);
   }, [
     orc?.id,

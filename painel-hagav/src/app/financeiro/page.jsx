@@ -21,6 +21,7 @@ import {
   createFinancialEntry,
   deleteFinancialEntry,
   fetchFinancialEntries,
+  fetchFinancialEntriesByRecurrenceOrigin,
   updateFinancialEntry,
 } from '@/lib/supabase';
 import {
@@ -59,6 +60,10 @@ function readFinancialMetadata(observacoes) {
   const meta = {
     natureza: 'Empresa',
     recorrente_mensal: false,
+    recorrencia_origem_id: '',
+    recorrencia_mes: '',
+    recorrencia_origem: false,
+    gerado_por_recorrencia: false,
     hasMeta: Boolean(match?.[0]),
   };
   if (!match?.[0]) return meta;
@@ -74,6 +79,10 @@ function readFinancialMetadata(observacoes) {
       const value = rest.join('=').trim();
       if (key === 'natureza') meta.natureza = normalizeNatureza(value);
       if (key === 'recorrente_mensal') meta.recorrente_mensal = parseBooleanMeta(value);
+      if (key === 'recorrencia_origem_id') meta.recorrencia_origem_id = value;
+      if (key === 'recorrencia_mes') meta.recorrencia_mes = value;
+      if (key === 'recorrencia_origem') meta.recorrencia_origem = parseBooleanMeta(value);
+      if (key === 'gerado_por_recorrencia') meta.gerado_por_recorrencia = parseBooleanMeta(value);
     });
 
   return meta;
@@ -87,12 +96,17 @@ function stripFinancialMetadata(observacoes) {
 }
 
 function buildFinancialMetadataBlock(meta) {
-  return [
+  const lines = [
     FINANCEIRO_META_START,
     `natureza=${normalizeNatureza(meta?.natureza)}`,
     `recorrente_mensal=${Boolean(meta?.recorrente_mensal) ? 'true' : 'false'}`,
-    FINANCEIRO_META_END,
-  ].join('\n');
+  ];
+  if (meta?.recorrencia_origem_id) lines.push(`recorrencia_origem_id=${String(meta.recorrencia_origem_id).trim()}`);
+  if (meta?.recorrencia_mes) lines.push(`recorrencia_mes=${String(meta.recorrencia_mes).trim()}`);
+  if (meta?.recorrencia_origem) lines.push('recorrencia_origem=true');
+  if (meta?.gerado_por_recorrencia) lines.push('gerado_por_recorrencia=true');
+  lines.push(FINANCEIRO_META_END);
+  return lines.join('\n');
 }
 
 function updateFinancialObservacoes(observacaoLivre, meta) {
@@ -169,6 +183,23 @@ function parseDateSafe(value) {
     ? new Date(`${text}T00:00:00`)
     : new Date(text);
   return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function padDatePart(value) {
+  return String(value).padStart(2, '0');
+}
+
+function formatInputDate(date) {
+  return `${date.getFullYear()}-${padDatePart(date.getMonth() + 1)}-${padDatePart(date.getDate())}`;
+}
+
+function formatMonthKey(date) {
+  return `${date.getFullYear()}-${padDatePart(date.getMonth() + 1)}`;
+}
+
+function buildMonthlyDate(year, monthIndex, day) {
+  const lastDay = new Date(year, monthIndex + 1, 0).getDate();
+  return new Date(year, monthIndex, Math.min(day, lastDay));
 }
 
 function startOfMonth(date) {
@@ -354,7 +385,7 @@ function FinancialEditor({ entry, createMode, onClose, onSaved, onDeleted }) {
       const saved = createMode
         ? await createFinancialEntry(payload)
         : await updateFinancialEntry(entry.id, payload);
-      onSaved?.(saved);
+      await onSaved?.(saved);
       onClose?.();
     } catch (err) {
       console.error('[Financeiro][Salvar]', err);
@@ -627,14 +658,120 @@ export default function FinanceiroPage() {
     };
   }, [entries, selectedMonth]);
 
-  function saveLocal(saved) {
+  function applyEntriesLocal(items) {
+    const cleanItems = (Array.isArray(items) ? items : [items]).filter((item) => item?.id);
     setEntries((current) => {
-      const exists = current.some((entry) => entry.id === saved.id);
-      return exists
-        ? current.map((entry) => entry.id === saved.id ? saved : entry)
-        : [saved, ...current];
+      const byId = new Map(current.map((entry) => [entry.id, entry]));
+      cleanItems.forEach((item) => byId.set(item.id, item));
+      const currentIds = new Set(current.map((entry) => entry.id));
+      const newItems = cleanItems.filter((item) => !currentIds.has(item.id));
+      return [
+        ...newItems,
+        ...current.map((entry) => byId.get(entry.id) || entry),
+      ];
     });
-    setFeedback('Lançamento salvo.');
+  }
+
+  async function syncMonthlyRecurrences(saved) {
+    const meta = getEntryMeta(saved);
+    const dueDate = getDueDate(saved);
+    const value = getEntryValue(saved);
+
+    if (!meta.recorrente_mensal || meta.gerado_por_recorrencia || !saved?.id || !dueDate || value <= 0) {
+      return {
+        entries: [saved],
+        feedback: 'Lan\u00e7amento salvo.',
+      };
+    }
+
+    const originId = saved.id;
+    const freeObservation = stripFinancialMetadata(saved.observacoes);
+    const originObservacoes = updateFinancialObservacoes(freeObservation, {
+      ...meta,
+      recorrente_mensal: true,
+      recorrencia_origem_id: originId,
+      recorrencia_origem: true,
+      recorrencia_mes: '',
+      gerado_por_recorrencia: false,
+    });
+    const normalizedOrigin = originObservacoes === saved.observacoes
+      ? saved
+      : await updateFinancialEntry(originId, {
+        observacoes: originObservacoes,
+        status: saved.status,
+        pago_em: saved.pago_em || null,
+      });
+
+    const related = await fetchFinancialEntriesByRecurrenceOrigin(originId);
+    const generatedByMonth = new Map();
+    related.forEach((entry) => {
+      const entryMeta = getEntryMeta(entry);
+      if (
+        entry.id !== originId
+        && entryMeta.gerado_por_recorrencia
+        && entryMeta.recorrencia_origem_id === originId
+        && entryMeta.recorrencia_mes
+      ) {
+        generatedByMonth.set(entryMeta.recorrencia_mes, entry);
+      }
+    });
+
+    const changedEntries = [normalizedOrigin];
+    let createdCount = 0;
+    let updatedCount = 0;
+    const year = dueDate.getFullYear();
+    const day = dueDate.getDate();
+
+    for (let monthIndex = dueDate.getMonth() + 1; monthIndex <= 11; monthIndex += 1) {
+      const recurrenceDate = buildMonthlyDate(year, monthIndex, day);
+      const recurrenceMonth = formatMonthKey(recurrenceDate);
+      const recurrencePayload = {
+        tipo: normalizedOrigin.tipo === 'pagar' ? 'pagar' : 'receber',
+        categoria: String(normalizedOrigin.categoria || 'projeto').trim() || 'projeto',
+        descricao: String(normalizedOrigin.descricao || '').trim(),
+        cliente_fornecedor: String(normalizedOrigin.cliente_fornecedor || '').trim(),
+        valor: value,
+        valor_pago: 0,
+        status: 'pendente',
+        vencimento: formatInputDate(recurrenceDate),
+        pago_em: null,
+        forma_pagamento: String(normalizedOrigin.forma_pagamento || '').trim(),
+        observacoes: updateFinancialObservacoes(freeObservation, {
+          natureza: meta.natureza,
+          recorrente_mensal: true,
+          recorrencia_origem_id: originId,
+          recorrencia_mes: recurrenceMonth,
+          gerado_por_recorrencia: true,
+        }),
+      };
+
+      const existing = generatedByMonth.get(recurrenceMonth);
+      if (!existing) {
+        const created = await createFinancialEntry(recurrencePayload);
+        changedEntries.push(created);
+        createdCount += 1;
+        continue;
+      }
+
+      if (existing.status === 'pendente') {
+        const updated = await updateFinancialEntry(existing.id, recurrencePayload);
+        changedEntries.push(updated);
+        updatedCount += 1;
+      }
+    }
+
+    return {
+      entries: changedEntries,
+      feedback: createdCount > 0 || updatedCount > 0
+        ? 'Lan\u00e7amento salvo e recorr\u00eancias geradas at\u00e9 dezembro.'
+        : 'Lan\u00e7amento salvo. Recorr\u00eancias futuras j\u00e1 estavam atualizadas.',
+    };
+  }
+
+  async function saveLocal(saved) {
+    const recurrenceResult = await syncMonthlyRecurrences(saved);
+    applyEntriesLocal(recurrenceResult.entries);
+    setFeedback(recurrenceResult.feedback);
     setTimeout(() => setFeedback(''), 2200);
   }
 

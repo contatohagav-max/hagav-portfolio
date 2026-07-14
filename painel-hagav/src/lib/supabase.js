@@ -1611,6 +1611,23 @@ export async function fetchFinancialEntries({
   return data || [];
 }
 
+export async function fetchFinancialEntriesByRecurrenceOrigin(originId) {
+  const client = getSupabase();
+  if (!client) return [];
+
+  const cleanOriginId = String(originId || '').trim();
+  if (!cleanOriginId) return [];
+
+  const { data, error } = await client
+    .from('financial_entries')
+    .select('*')
+    .ilike('observacoes', `%recorrencia_origem_id=${cleanOriginId}%`)
+    .order('vencimento', { ascending: true, nullsFirst: false });
+
+  if (error) throw error;
+  return data || [];
+}
+
 export async function createFinancialEntry(fields) {
   const client = getSupabase();
   if (!client) throw new Error('Supabase não configurado');

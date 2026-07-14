@@ -100,6 +100,42 @@ function formatMonthlyCurrencyText(value) {
   return hasMonthlySuffix ? `${formatted}/mês` : formatted;
 }
 
+function formatDateBr(value) {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const year = String(date.getFullYear());
+  return `${day}/${month}/${year}`;
+}
+
+function parseDateBr(value) {
+  const clean = normalizeText(value);
+  const match = clean.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (!match) return null;
+  const day = Number(match[1]);
+  const month = Number(match[2]) - 1;
+  const year = Number(match[3]);
+  const date = new Date(year, month, day);
+  if (
+    Number.isNaN(date.getTime())
+    || date.getDate() !== day
+    || date.getMonth() !== month
+    || date.getFullYear() !== year
+  ) {
+    return null;
+  }
+  return date;
+}
+
+function getFallbackValidityDate(emissionDate) {
+  const baseDate = parseDateBr(emissionDate) || new Date();
+  const nextDate = new Date(baseDate.getTime());
+  nextDate.setDate(nextDate.getDate() + 7);
+  return formatDateBr(nextDate.toISOString());
+}
+
 function parseDiscountPercent(value, fallback = 0) {
   const raw = normalizeText(value);
   if (!raw) return fallback;
@@ -221,8 +257,10 @@ export function buildComparativeCalculatedDraft({ orc, proposalDraft }) {
     opcao1_desconto: '',
   };
 
+  let previousQuantity = baseQuantity;
   [2, 3].forEach((index) => {
-    const optionQuantity = parseQuantityNumber(draft[`opcao${index}_qtd`], 1);
+    const rawOptionQuantity = parseQuantityNumber(draft[`opcao${index}_qtd`], previousQuantity + 1);
+    const optionQuantity = Math.max(previousQuantity + 1, rawOptionQuantity);
     const discountPercent = parseDiscountPercent(draft[`opcao${index}_desconto`], 0);
     const calculation = buildComparativeOptionCalculation({
       baseTotal,
@@ -242,6 +280,7 @@ export function buildComparativeCalculatedDraft({ orc, proposalDraft }) {
     );
     next[`opcao${index}_economia`] = calculation.economy > 0 ? fmtBRL(calculation.economy) : '';
     next[`opcao${index}_total_sem_desconto`] = calculation.totalWithoutDiscount > 0 ? fmtBRL(calculation.totalWithoutDiscount) : '';
+    previousQuantity = calculation.quantity;
   });
 
   return next;
@@ -459,7 +498,9 @@ export function buildProposalPreviewModel({ orc, proposalMode, proposalDraft }) 
 
   const directValue = formatCurrencyText(draft.valor_total_moeda);
   const mensalValue = ensureMensalValue(formatMonthlyCurrencyText(draft.valor_mensal_moeda || draft.valor_total_moeda));
-  const customValue = formatCurrencyText(draft.valor_personalizado_moeda || draft.valor_total_moeda);
+  const customValue = formatCurrencyText(draft.valor_total_moeda || draft.valor_personalizado_moeda);
+  const emissionDate = normalizeText(draft.data_emissao);
+  const validityDate = normalizeText(draft.data_validade) || getFallbackValidityDate(emissionDate);
 
   let investmentLabel = 'Valor total';
   let investmentValue = directValue;
@@ -476,8 +517,8 @@ export function buildProposalPreviewModel({ orc, proposalMode, proposalDraft }) 
     title: 'PROPOSTA COMERCIAL',
     subtitle: PROPOSAL_SUBTITLE,
     proposalNumber: formatProposalNumber(draft.numero_proposta),
-    emissionDate: normalizeText(draft.data_emissao),
-    validityDate: normalizeText(draft.data_validade),
+    emissionDate,
+    validityDate,
     paymentMethod: normalizeText(draft.forma_pagamento),
     client: {
       name: normalizeText(draft.cliente_nome),

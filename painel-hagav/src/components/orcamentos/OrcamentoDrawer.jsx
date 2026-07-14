@@ -202,6 +202,15 @@ function InfoRow({ label, value }) {
   );
 }
 
+function CalculatedField({ label, value, placeholder = 'Calculado automaticamente' }) {
+  return (
+    <div className="rounded-lg border border-hagav-border bg-hagav-dark/45 px-3 py-2 min-h-[42px]">
+      <p className="text-[9px] text-hagav-gray uppercase tracking-wider mb-0.5">{label}</p>
+      <p className="text-sm text-hagav-light font-semibold break-words">{value || placeholder}</p>
+    </div>
+  );
+}
+
 function toDateTimeLocal(iso) {
   if (!iso) return '';
   const date = new Date(iso);
@@ -226,6 +235,32 @@ function formatDateBr(value) {
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const year = String(date.getFullYear());
   return `${day}/${month}/${year}`;
+}
+
+function parseDateBr(value) {
+  const clean = normalizeText(value);
+  const match = clean.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (!match) return null;
+  const day = Number(match[1]);
+  const month = Number(match[2]) - 1;
+  const year = Number(match[3]);
+  const date = new Date(year, month, day);
+  if (
+    Number.isNaN(date.getTime())
+    || date.getDate() !== day
+    || date.getMonth() !== month
+    || date.getFullYear() !== year
+  ) {
+    return null;
+  }
+  return date;
+}
+
+function getFallbackValidityDate(emissionDate) {
+  const baseDate = parseDateBr(emissionDate) || new Date();
+  const nextDate = new Date(baseDate.getTime());
+  nextDate.setDate(nextDate.getDate() + 7);
+  return formatDateBr(nextDate.toISOString());
 }
 
 function formatProposalSequence(value) {
@@ -423,6 +458,60 @@ function normalizeComparativeDiscountInput(value) {
   const parsed = Number(normalized);
   if (!Number.isFinite(parsed) || parsed <= 0) return '';
   return String(Math.min(100, Math.max(0, parsed)));
+}
+
+function parseEstimatedTimeInput(value) {
+  const raw = normalizeText(value).toLowerCase();
+  if (!raw) return { valid: false, hours: 0, canonical: '' };
+
+  const hhmm = raw.match(/^(\d{1,2}):(\d{2})$/);
+  if (hhmm) {
+    const hours = Number(hhmm[1]);
+    const minutes = Number(hhmm[2]);
+    if (Number.isFinite(hours) && Number.isFinite(minutes) && minutes < 60) {
+      const totalMinutes = (hours * 60) + minutes;
+      if (totalMinutes > 0) {
+        return {
+          valid: true,
+          hours: totalMinutes / 60,
+          canonical: `${Math.floor(totalMinutes / 60)}:${String(totalMinutes % 60).padStart(2, '0')}`,
+        };
+      }
+    }
+    return { valid: false, hours: 0, canonical: '' };
+  }
+
+  const hourMinute = raw.match(/^(\d+(?:[.,]\d+)?)\s*h(?:oras?)?\s*(\d{1,2})?\s*(?:m|min|minutos?)?$/);
+  if (hourMinute) {
+    const hours = Number(String(hourMinute[1]).replace(',', '.'));
+    const minutes = Number(hourMinute[2] || 0);
+    if (Number.isFinite(hours) && Number.isFinite(minutes) && minutes < 60) {
+      const totalMinutes = Math.round((hours * 60) + minutes);
+      if (totalMinutes > 0) {
+        return {
+          valid: true,
+          hours: totalMinutes / 60,
+          canonical: `${Math.floor(totalMinutes / 60)}:${String(totalMinutes % 60).padStart(2, '0')}`,
+        };
+      }
+    }
+    return { valid: false, hours: 0, canonical: '' };
+  }
+
+  const minutesMatch = raw.match(/^(\d+(?:[.,]\d+)?)\s*(?:m|min|minutos?)?$/);
+  if (minutesMatch) {
+    const minutes = Number(String(minutesMatch[1]).replace(',', '.'));
+    if (Number.isFinite(minutes) && minutes > 0) {
+      const totalMinutes = Math.round(minutes);
+      return {
+        valid: true,
+        hours: totalMinutes / 60,
+        canonical: `${Math.floor(totalMinutes / 60)}:${String(totalMinutes % 60).padStart(2, '0')}`,
+      };
+    }
+  }
+
+  return { valid: false, hours: 0, canonical: '' };
 }
 
 function summarizeDraftField(items = [], getValue, fallback = '') {
@@ -872,6 +961,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
     pricingRules: COMMERCIAL_DEFAULTS.pricing,
     priceReference: initialFinalPrice,
   }));
+  const [comparativeWarning, setComparativeWarning] = useState('');
 
   if (!orc) return null;
   const pricingRecord = useMemo(() => ({
@@ -889,6 +979,13 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
     referencia: getFirstItemValue(pricingItems, 'referencia', orc?.referencia),
   }), [orc, pricingItems]);
   const parsedPrecoFinal = parseCurrencyNumber(precoFinal, 0);
+  const timeValidationErrors = useMemo(() => pricingItems
+    .map((item, index) => {
+      const rawTime = item?.horas_estimadas || item?.tempo_bruto || '';
+      return parseEstimatedTimeInput(rawTime).valid ? '' : `Item ${index + 1}: Tempo inválido. Use 0:10, 10min ou 1h15.`;
+    })
+    .filter(Boolean), [pricingItems]);
+  const hasInvalidTime = timeValidationErrors.length > 0;
   const autoPricing = useMemo(
     () => computePricingSnapshot(pricingRecord, pricingRules),
     [pricingRecord, pricingRules]
@@ -999,6 +1096,18 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
   const showPropostaPdfBlockedWarning = hasPropostaGerada && !propostaPdfLiberada;
   const canSendProposta = Boolean(propostaLink) && propostaPdfLiberada && hasWhatsapp;
   const marginStatus = financialMetrics.margem_status || autoPricing.margemStatus || null;
+  const priceReferenceForSuspicion = Math.max(
+    Number(autoPricing?.precoFinal || 0),
+    Number(autoPricing?.valorSugerido || 0),
+    Number(autoPricing?.precoBase || 0),
+    Number(orc?.valor_sugerido || 0),
+    Number(orc?.preco_base || 0)
+  );
+  const hasSuspiciousFinalPrice = parsedPrecoFinal > 0
+    && parsedPrecoFinal < 10
+    && priceReferenceForSuspicion > 100;
+  const hasBlockingProposalIssue = hasInvalidTime || Boolean(comparativeWarning);
+  const hasCommercialCriticalBlock = hasBlockingProposalIssue || hasSuspiciousFinalPrice;
   const comparativeProposalDraft = useMemo(
     () => (proposalMode === 'opcoes'
       ? buildComparativeCalculatedDraft({
@@ -1074,6 +1183,12 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
       }
       values[field] = normalizeText(sourceDraft?.[field]);
     });
+    values.data_validade = normalizeText(values.data_validade || getFallbackValidityDate(values.data_emissao));
+    if (proposalMode === 'personalizada') {
+      const singleValue = formatCurrencyBR(sourceDraft?.valor_total_moeda || sourceDraft?.valor_personalizado_moeda);
+      values.valor_total_moeda = singleValue;
+      values.valor_personalizado_moeda = singleValue;
+    }
     return {
       proposal_mode: proposalMode,
       proposta_modo: proposalMode,
@@ -1087,6 +1202,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
     const nextDraft = {
       ...(mode === 'opcoes' ? comparativeProposalDraft : proposalDraft),
     };
+    nextDraft.data_validade = normalizeText(nextDraft.data_validade || getFallbackValidityDate(nextDraft.data_emissao));
     const validade = normalizeText(nextDraft.data_validade || '[data]');
     if (!normalizeText(nextDraft.condicoes_comerciais)) {
       nextDraft.condicoes_comerciais = DEFAULT_CONDICOES_COMERCIAIS.replace('[data]', validade);
@@ -1103,8 +1219,11 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
     }
 
     if (mode === 'personalizada') {
-      const valorCustom = normalizeText(nextDraft.valor_personalizado_moeda || nextDraft.valor_total_moeda);
-      if (valorCustom) nextDraft.valor_total_moeda = valorCustom;
+      const valorCustom = normalizeText(nextDraft.valor_total_moeda || nextDraft.valor_personalizado_moeda);
+      if (valorCustom) {
+        nextDraft.valor_total_moeda = valorCustom;
+        nextDraft.valor_personalizado_moeda = valorCustom;
+      }
     }
 
     nextDraft.valor_total_moeda = formatCurrencyBRKeepingMonthly(nextDraft.valor_total_moeda);
@@ -1137,6 +1256,22 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
     } catch (err) {
       console.warn('[Orcamentos][PDF][PreviewSync]', err);
     }
+  }
+
+  function validateProposalState({ blockSuspiciousPrice = false } = {}) {
+    if (hasInvalidTime) {
+      setError(timeValidationErrors[0] || 'Tempo inválido. Use 0:10, 10min ou 1h15.');
+      return false;
+    }
+    if (comparativeWarning) {
+      setError(comparativeWarning);
+      return false;
+    }
+    if (blockSuspiciousPrice && hasSuspiciousFinalPrice) {
+      setError('Preço final parece inválido. Revise antes de aprovar.');
+      return false;
+    }
+    return true;
   }
 
   function updatePricingItem(index, field, value) {
@@ -1196,6 +1331,19 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
     }
   }
 
+  function normalizePricingItemTime(index) {
+    setPricingItems((prev) => prev.map((item, itemIndex) => {
+      if (itemIndex !== index) return item;
+      const parsedTime = parseEstimatedTimeInput(item?.horas_estimadas || item?.tempo_bruto || '');
+      if (!parsedTime.valid) return item;
+      return {
+        ...item,
+        horas_estimadas: parsedTime.canonical,
+        tempo_bruto: parsedTime.canonical,
+      };
+    }));
+  }
+
   function addPricingItem() {
     const seed = pricingItems[pricingItems.length - 1] || pricingItems[0] || {};
     const seedService = normalizeText(seed?.servico || defaultPricingServiceLabel) || defaultPricingServiceLabel;
@@ -1224,6 +1372,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
     const normalizedMode = normalizeProposalMode(mode) || inferProposalModeFromFlow(proposalRecord, 'direta');
     setProposalMode(normalizedMode);
     setProposalDirtyFields({});
+    setComparativeWarning('');
     setProposalDraft(buildProposalDraftForMode(normalizedMode, {}));
   }
 
@@ -1234,6 +1383,18 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
       if (proposalMode === 'opcoes' && /^opcao[123]_qtd$/.test(field)) {
         const normalizedQuantity = normalizeComparativeQuantityInput(value, previousValue);
         if (!normalizedQuantity) return prev;
+        const nextQuantity = parseQuantityNumber(normalizedQuantity, 0);
+        const currentQuantity = parseQuantityNumber(prev?.quantidade || prev?.opcao1_qtd, 1);
+        const growthQuantity = parseQuantityNumber(prev?.opcao2_qtd, currentQuantity + 1);
+        if (field === 'opcao2_qtd' && nextQuantity <= currentQuantity) {
+          setComparativeWarning('Plano Crescimento precisa ser maior que o Pedido atual.');
+          return prev;
+        }
+        if (field === 'opcao3_qtd' && nextQuantity <= growthQuantity) {
+          setComparativeWarning('Plano Escala precisa ser maior que o Plano Crescimento.');
+          return prev;
+        }
+        setComparativeWarning('');
         value = normalizedQuantity;
       }
       if (proposalMode === 'opcoes' && /^opcao[23]_desconto$/.test(field)) {
@@ -1246,6 +1407,12 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
         ...prev,
         [field]: nextValue,
       };
+      if (proposalMode === 'personalizada' && field === 'valor_total_moeda') {
+        nextDraft.valor_personalizado_moeda = nextValue;
+      }
+      if (proposalMode === 'personalizada' && field === 'valor_personalizado_moeda') {
+        nextDraft.valor_total_moeda = nextValue;
+      }
       if (proposalMode === 'opcoes' && ['quantidade', 'valor_total_moeda'].includes(field)) {
         Object.assign(nextDraft, buildAutoOptionDraft({
           orc: proposalRecord,
@@ -1504,6 +1671,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
   }, [orc?.id, proposalMode, proposalDraft, proposalPreview]);
 
   async function handleSaveProposalDraft() {
+    if (!validateProposalState()) return;
     setDraftSaving(true);
     setError('');
     setInfo('');
@@ -1520,6 +1688,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
   }
 
   async function handleSave() {
+    if (!validateProposalState()) return;
     setSaving(true);
     setError('');
     setInfo('');
@@ -1551,6 +1720,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
   }
 
   async function handleQuickStatus(nextStatus) {
+    if (!validateProposalState({ blockSuspiciousPrice: nextStatus === 'aprovado' })) return;
     setStatusOrc(nextStatus);
     setSaving(true);
     setError('');
@@ -1576,6 +1746,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
   }
 
   async function handleGeneratePdf() {
+    if (!validateProposalState({ blockSuspiciousPrice: true })) return;
     setPdfLoading(true);
     setError('');
     setInfo('Gerando proposta PDF em modo teste...');
@@ -1736,6 +1907,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
   }
 
   async function handleEnviarProposta() {
+    if (!validateProposalState({ blockSuspiciousPrice: true })) return;
     if (!propostaLink || !propostaPdfLiberada) {
       setError('Gere a proposta PDF antes de enviar no WhatsApp.');
       if (!propostaPdfLiberada) {
@@ -1785,6 +1957,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
   }
 
   async function handleRecalculateValues() {
+    if (!validateProposalState()) return;
     const nextPrecoFinal = parseCurrencyNumber(autoPricing?.precoFinal || autoPricing?.valorSugerido || autoPricing?.precoBase || precoFinal || 0, 0);
     if (!Number.isFinite(nextPrecoFinal) || nextPrecoFinal <= 0) {
       setError('Não foi possível recalcular: valor sugerido indisponível.');
@@ -1890,6 +2063,12 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
             </p>
           )}
 
+          {hasSuspiciousFinalPrice && (
+            <p className="text-xs text-red-200 bg-red-500/10 border border-red-500/25 rounded-lg px-3 py-2">
+              Preço final parece inválido. Revise antes de aprovar.
+            </p>
+          )}
+
           <div className="flex flex-wrap gap-2">
             <OrcStatusBadge status={statusOrc} />
             <UrgenciaBadge urgencia={urgencia} />
@@ -1934,8 +2113,8 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
             <div className="space-y-3">
               {pricingItems.map((item, idx) => {
                 const itemResult = itensServico[idx] || {};
-                const parsedHours = parseDurationToHours(item?.horas_estimadas || item?.tempo_bruto, 0);
-                const effectiveHours = Number(itemResult?.horas_por_unidade || parsedHours || 0);
+                const parsedTime = parseEstimatedTimeInput(item?.horas_estimadas || item?.tempo_bruto || '');
+                const effectiveHours = parsedTime.valid ? parsedTime.hours : 0;
                 return (
                   <div key={`pricing-item-${idx}`} className="bg-hagav-surface border border-hagav-border rounded-lg p-3 space-y-3">
                     <div className="flex items-center justify-between gap-2">
@@ -1960,7 +2139,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
                           className="hselect w-full"
                         >
                           {pricingServiceOptions.map((option) => (
-                            <option key={option.key || option.label} value={option.label}>{option.label}</option>
+                            <option className="bg-hagav-dark text-hagav-white" key={option.key || option.label} value={option.label}>{option.label}</option>
                           ))}
                         </select>
                       </div>
@@ -1983,7 +2162,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
                           className="hselect w-full"
                         >
                           {ITEM_MATERIAL_OPTIONS.map((option) => (
-                            <option key={option} value={option}>{option}</option>
+                            <option className="bg-hagav-dark text-hagav-white" key={option} value={option}>{option}</option>
                           ))}
                         </select>
                       </div>
@@ -1993,8 +2172,9 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
                           type="text"
                           value={item?.horas_estimadas || item?.tempo_bruto || ''}
                           onChange={(e) => updatePricingItem(idx, 'horas_estimadas', e.target.value)}
+                          onBlur={() => normalizePricingItemTime(idx)}
                           className="hinput w-full"
-                          placeholder="1h, 1:30, 2h30, 0:45"
+                          placeholder="0:10, 10min, 1h15"
                         />
                       </div>
                       <div>
@@ -2005,7 +2185,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
                           className="hselect w-full"
                         >
                           {PRAZO_OPTIONS.map((option) => (
-                            <option key={option} value={option}>{option}</option>
+                            <option className="bg-hagav-dark text-hagav-white" key={option} value={option}>{option}</option>
                           ))}
                         </select>
                       </div>
@@ -2024,16 +2204,16 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
                       </div>
                       <div className="grid grid-cols-2 gap-2">
                         <InfoRow label="Horas/un" value={effectiveHours > 0 ? `${effectiveHours.toFixed(2)}h` : '—'} />
-                        <InfoRow label="Custo real" value={fmtBRL(itemResult?.custo_real_item || 0)} />
-                        <InfoRow label="Sugerido" value={fmtBRL(itemResult?.valor_sugerido_item || 0)} />
-                        <InfoRow label="Margem" value={Number.isFinite(Number(itemResult?.margem_item)) ? `${Number(itemResult.margem_item).toFixed(1)}%` : '—'} />
+                        <InfoRow label="Custo real" value={parsedTime.valid ? fmtBRL(itemResult?.custo_real_item || 0) : '—'} />
+                        <InfoRow label="Sugerido" value={parsedTime.valid ? fmtBRL(itemResult?.valor_sugerido_item || 0) : '—'} />
+                        <InfoRow label="Margem" value={parsedTime.valid && Number.isFinite(Number(itemResult?.margem_item)) ? `${Number(itemResult.margem_item).toFixed(1)}%` : '—'} />
                       </div>
                     </div>
 
                     <p className="text-[11px] text-hagav-gray">
-                      {parsedHours > 0
-                        ? `Tempo informado reconhecido: ${formatDurationCompact(parsedHours) || `${parsedHours.toFixed(2)}h`}.`
-                        : `Sem tempo informado válido: usando preset operacional de ${effectiveHours > 0 ? `${effectiveHours.toFixed(2)}h` : '0h'} para este serviço.`}
+                      {parsedTime.valid
+                        ? `Tempo informado reconhecido: ${parsedTime.canonical}.`
+                        : 'Tempo inválido. Use 0:10, 10min ou 1h15.'}
                     </p>
                   </div>
                 );
@@ -2288,12 +2468,14 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
                   className="hselect w-full"
                 >
                   {PRAZO_OPTIONS.map((option) => (
-                    <option key={option} value={option}>{option}</option>
+                    <option className="bg-hagav-dark text-hagav-white" key={option} value={option}>{option}</option>
                   ))}
                 </select>
               </div>
               <div>
-                <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Valor total</label>
+                <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">
+                  {proposalMode === 'personalizada' ? 'Valor da proposta (R$)' : 'Valor total'}
+                </label>
                 <input
                   type="text"
                   value={proposalDraft.valor_total_moeda || ''}
@@ -2338,20 +2520,6 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
                         placeholder="Resumo da operação mensal"
                       />
                     </div>
-                  </div>
-                )}
-
-                {proposalMode === 'personalizada' && (
-                  <div>
-                    <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Valor personalizado</label>
-                    <input
-                      type="text"
-                      value={proposalDraft.valor_personalizado_moeda || ''}
-                      onChange={(e) => updateProposalDraftField('valor_personalizado_moeda', e.target.value)}
-                      onBlur={(e) => updateProposalDraftField('valor_personalizado_moeda', formatCurrencyBR(e.target.value))}
-                      className="hinput w-full"
-                      placeholder="Ex.: R$ 2.350,00"
-                    />
                   </div>
                 )}
 
@@ -2415,6 +2583,11 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
                 {proposalMode === 'opcoes' && (
                   <div className="space-y-2 border border-hagav-border rounded-lg p-2.5 bg-hagav-dark/35">
                     <p className="text-[11px] text-hagav-gold uppercase tracking-wider">Opções de investimento</p>
+                    {comparativeWarning && (
+                      <p className="text-[11px] text-amber-200 bg-amber-500/10 border border-amber-500/25 rounded-lg px-2 py-1.5">
+                        {comparativeWarning}
+                      </p>
+                    )}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
                       {[1, 2, 3].map((index) => {
                         const calculated = comparativeProposalDraft || {};
@@ -2426,7 +2599,8 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
                               type="text"
                               value={proposalDraft[`opcao${index}_titulo`] || ''}
                               onChange={(e) => updateProposalDraftField(`opcao${index}_titulo`, e.target.value)}
-                              className="hinput w-full"
+                              readOnly={isCurrentOrder}
+                              className={`hinput w-full ${isCurrentOrder ? 'opacity-80 cursor-not-allowed' : ''}`}
                               placeholder={`Título da opção ${index}`}
                             />
                             <input
@@ -2437,28 +2611,29 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
                               className={`hinput w-full ${isCurrentOrder ? 'opacity-80 cursor-not-allowed' : ''}`}
                               placeholder={isCurrentOrder ? 'Quantidade do pedido atual' : `Quantidade da opção ${index}`}
                             />
-                            <input
-                              type="text"
+                            <CalculatedField
+                              label="Total"
                               value={calculated[`opcao${index}_preco`] || proposalDraft[`opcao${index}_preco`] || ''}
-                              onChange={(e) => updateProposalDraftField(`opcao${index}_preco`, e.target.value)}
-                              readOnly
-                              className="hinput w-full opacity-80 cursor-not-allowed"
-                              placeholder="Total calculado automaticamente"
                             />
-                            <input
-                              type="text"
+                            <CalculatedField
+                              label="Valor por vídeo"
                               value={calculated[`opcao${index}_unitario`] || proposalDraft[`opcao${index}_unitario`] || ''}
-                              readOnly
-                              className="hinput w-full opacity-80 cursor-not-allowed"
-                              placeholder="Unitário calculado automaticamente"
                             />
-                            <input
-                              type="text"
-                              value={proposalDraft[`opcao${index}_desc`] || ''}
-                              onChange={(e) => updateProposalDraftField(`opcao${index}_desc`, e.target.value)}
-                              className="hinput w-full"
-                              placeholder={`Descrição da opção ${index}`}
-                            />
+                            {isCurrentOrder ? (
+                              <CalculatedField
+                                label="Descrição"
+                                value={calculated.opcao1_desc || proposalDraft.opcao1_desc || ''}
+                                placeholder="Pedido atual"
+                              />
+                            ) : (
+                              <input
+                                type="text"
+                                value={proposalDraft[`opcao${index}_desc`] || ''}
+                                onChange={(e) => updateProposalDraftField(`opcao${index}_desc`, e.target.value)}
+                                className="hinput w-full"
+                                placeholder={`Descrição da opção ${index}`}
+                              />
+                            )}
                             <input
                               type="text"
                               value={proposalDraft[`opcao${index}_desconto`] || ''}
@@ -2468,9 +2643,10 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
                               placeholder={index === 1 ? 'Sem desconto' : `Desconto da opção ${index}`}
                             />
                             {isCalculatedOption && (
-                              <p className="text-[11px] text-hagav-gray">
-                                Economia calculada: {calculated[`opcao${index}_economia`] || 'R$ 0,00'}
-                              </p>
+                              <CalculatedField
+                                label="Economia"
+                                value={calculated[`opcao${index}_economia`] || 'R$ 0,00'}
+                              />
                             )}
                           </div>
                         );
@@ -2512,7 +2688,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
               <button
                 type="button"
                 onClick={handleGeneratePdf}
-                disabled={pdfLoading || saving || draftSaving}
+                disabled={pdfLoading || saving || draftSaving || hasCommercialCriticalBlock}
                 className="btn-ghost btn-sm"
               >
                 {pdfLoading ? <Loader2 size={13} className="animate-spin" /> : <ExternalLink size={13} />}
@@ -2529,24 +2705,24 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
                 <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Status</label>
                 <select value={statusOrc} onChange={(e) => setStatusOrc(e.target.value)} className="hselect w-full">
                   {statusOptions.map((status) => (
-                    <option key={status} value={status}>{ORC_STATUS_LABELS[status] || status}</option>
+                    <option className="bg-hagav-dark text-hagav-white" key={status} value={status}>{ORC_STATUS_LABELS[status] || status}</option>
                   ))}
                 </select>
               </div>
               <div>
                 <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Urgência</label>
                 <select value={urgencia} onChange={(e) => setUrgencia(e.target.value)} className="hselect w-full">
-                  <option value="alta">Alta</option>
-                  <option value="media">Média</option>
-                  <option value="baixa">Baixa</option>
+                  <option className="bg-hagav-dark text-hagav-white" value="alta">Alta</option>
+                  <option className="bg-hagav-dark text-hagav-white" value="media">Média</option>
+                  <option className="bg-hagav-dark text-hagav-white" value="baixa">Baixa</option>
                 </select>
               </div>
               <div>
                 <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Prioridade</label>
                 <select value={prioridade} onChange={(e) => setPrioridade(e.target.value)} className="hselect w-full">
-                  <option value="alta">Alta</option>
-                  <option value="media">Média</option>
-                  <option value="baixa">Baixa</option>
+                  <option className="bg-hagav-dark text-hagav-white" value="alta">Alta</option>
+                  <option className="bg-hagav-dark text-hagav-white" value="media">Média</option>
+                  <option className="bg-hagav-dark text-hagav-white" value="baixa">Baixa</option>
                 </select>
               </div>
             </div>
@@ -2639,7 +2815,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
                   <button
                     type="button"
                     onClick={handleEnviarProposta}
-                    disabled={saving || pdfLoading || draftSaving || !canSendProposta}
+                    disabled={saving || pdfLoading || draftSaving || !canSendProposta || hasCommercialCriticalBlock}
                     className={`btn-ghost btn-sm orcamento-action-button ${!canSendProposta ? 'opacity-60 cursor-not-allowed' : ''}`}
                   >
                     <Send size={13} />
@@ -2673,7 +2849,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
               <button
                 type="button"
                 onClick={handleRecalculateValues}
-                disabled={saving || pdfLoading || draftSaving}
+                disabled={saving || pdfLoading || draftSaving || hasBlockingProposalIssue}
                 className="btn-ghost btn-sm orcamento-action-button"
               >
                 {saving ? <Loader2 size={13} className="animate-spin" /> : <RotateCw size={13} />}
@@ -2695,14 +2871,14 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
               <button
                 type="button"
                 onClick={() => handleQuickStatus('aprovado')}
-                disabled={saving || pdfLoading || draftSaving}
+                disabled={saving || pdfLoading || draftSaving || hasCommercialCriticalBlock}
                 className="btn-gold btn-sm orcamento-approve-button"
               >
                 <CheckCircle2 size={13} />
                 Cliente aprovou
               </button>
             )}
-            <button onClick={handleSave} disabled={saving || pdfLoading || draftSaving} className="btn-gold orcamento-save-button">
+            <button onClick={handleSave} disabled={saving || pdfLoading || draftSaving || hasBlockingProposalIssue} className="btn-gold orcamento-save-button">
               {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
               Salvar
             </button>

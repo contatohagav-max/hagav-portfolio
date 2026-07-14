@@ -24,6 +24,7 @@ import {
   fetchClientesContratos,
   generateContractPdf,
   updateDeal,
+  upsertActivatedClientFinancialEntry,
 } from '@/lib/supabase';
 import {
   classNames,
@@ -900,6 +901,20 @@ export default function ClientesPage() {
           contrato: detalhesContrato,
         },
       });
+
+      if (acao === 'ativar') {
+        await upsertActivatedClientFinancialEntry({
+          dealId: selected.id,
+          nomeCliente: nomeContratanteSafe,
+          empresa: selected?.empresa || selected?.cliente_empresa || selected?.nome_empresa || '',
+          valor,
+          vencimento: vencimentoSafe || inicioSafe || isoDate(new Date().toISOString()),
+          dataInicio: inicioSafe,
+          formaPagamento: formaPagamentoSafe,
+          observacoes: observacoesSafe,
+          recorrenteMensal: Boolean(recorrente),
+        });
+      }
 
       setRows((prev) => prev.map((item) => (item.id === selected.id ? { ...item, ...updated } : item)));
       setSelected((prev) => cloneSelectedRow({ ...prev, ...updated }));

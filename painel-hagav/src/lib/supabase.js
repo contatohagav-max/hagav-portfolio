@@ -1319,6 +1319,31 @@ export async function updateProductionJob(id, patch) {
 
 // Financeiro operacional
 
+const FINANCEIRO_META_START = '[HAGAV_FINANCEIRO_META]';
+const FINANCEIRO_META_END = '[/HAGAV_FINANCEIRO_META]';
+const FINANCEIRO_META_REGEX = /\[HAGAV_FINANCEIRO_META\][\s\S]*?\[\/HAGAV_FINANCEIRO_META\]/g;
+
+function stripFinancialMetadataBlock(value) {
+  return String(value || '')
+    .replace(FINANCEIRO_META_REGEX, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+function buildActivatedClientFinancialObservacoes({ dealId, recorrenteMensal, observacoes }) {
+  const block = [
+    FINANCEIRO_META_START,
+    'origem=cliente_ativado',
+    `deal_id=${String(dealId || '').trim()}`,
+    'contrato=true',
+    'natureza=Empresa',
+    `recorrente_mensal=${Boolean(recorrenteMensal) ? 'true' : 'false'}`,
+    FINANCEIRO_META_END,
+  ].join('\n');
+  const cleanText = stripFinancialMetadataBlock(observacoes);
+  return cleanText ? `${block}\n\n${cleanText}` : block;
+}
+
 export async function fetchFinancialEntries({
   tipo,
   status,
@@ -1415,4 +1440,59 @@ export async function deleteFinancialEntry(id) {
 
   if (error) throw error;
   return true;
+}
+
+export async function upsertActivatedClientFinancialEntry(fields) {
+  const client = getSupabase();
+  if (!client) throw new Error('Supabase não configurado');
+
+  const dealId = String(fields?.dealId || '').trim();
+  if (!dealId) throw new Error('Deal indisponível para sincronizar financeiro');
+
+  const today = new Date().toISOString().slice(0, 10);
+  const clientName = String(fields?.nomeCliente || '').trim();
+  const companyName = String(fields?.empresa || '').trim();
+  const displayName = clientName || 'Sem cliente';
+  const fornecedor = clientName || companyName || 'Sem cliente';
+  const valor = Math.max(0, Number(fields?.valor || 0));
+  const vencimento = fields?.vencimento || fields?.dataInicio || today;
+
+  const payload = {
+    tipo: 'receber',
+    categoria: 'contrato',
+    descricao: `Projeto aprovado - ${displayName}`,
+    cliente_fornecedor: fornecedor,
+    valor,
+    valor_pago: 0,
+    status: 'pendente',
+    vencimento,
+    pago_em: null,
+    forma_pagamento: String(fields?.formaPagamento || '').trim() || null,
+    observacoes: buildActivatedClientFinancialObservacoes({
+      dealId,
+      recorrenteMensal: Boolean(fields?.recorrenteMensal),
+      observacoes: fields?.observacoes,
+    }),
+  };
+
+  const { data: existingRows, error: findError } = await client
+    .from('financial_entries')
+    .select('*')
+    .ilike('observacoes', `%deal_id=${dealId}%`)
+    .limit(20);
+
+  if (findError) throw findError;
+
+  const existing = (existingRows || []).find((entry) => {
+    const observacoes = String(entry?.observacoes || '');
+    return observacoes.includes('origem=cliente_ativado') && observacoes.includes(`deal_id=${dealId}`);
+  });
+
+  const query = existing?.id
+    ? client.from('financial_entries').update(payload).eq('id', existing.id)
+    : client.from('financial_entries').insert(payload);
+
+  const { data, error } = await query.select('*').single();
+  if (error) throw error;
+  return data;
 }

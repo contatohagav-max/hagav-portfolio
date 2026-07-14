@@ -1074,6 +1074,8 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
     priceReference: initialFinalPrice,
   }));
   const [comparativeWarning, setComparativeWarning] = useState('');
+  const [lastOneOffModeValue, setLastOneOffModeValue] = useState(0);
+  const [lastManualRecurringBaseValue, setLastManualRecurringBaseValue] = useState(0);
 
   if (!orc) return null;
   const pricingRecord = useMemo(() => ({
@@ -1246,20 +1248,18 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
   const activeOneOffProposalValue = proposalMode === 'direta'
     ? getActiveProposalPrice('direta', directProposalDraft)
     : 0;
+  const manualOneOffProposalValue = proposalMode === 'direta' && manualProposalValueEnabled
+    ? parseCurrencyNumber(proposalDraft?.valor_total_moeda, 0)
+    : 0;
+  const currentOneOffModeValue = firstValidCurrencyValue(manualOneOffProposalValue, activeOneOffProposalValue);
+  const oneOffButtonValue = firstValidCurrencyValue(currentOneOffModeValue, lastOneOffModeValue, lastManualRecurringBaseValue);
+  const oneOffButtonLabel = oneOffButtonValue >= 10
+    ? `Usar valor do Avulso: ${fmtBRL(oneOffButtonValue)}`
+    : 'Valor do Avulso indisponível';
   const safeRecurringBaseValue = firstValidCurrencyValue(
-    activeOneOffProposalValue,
-    parsedPrecoFinal,
-    proposalRecord?.preco_final,
-    orc?.preco_final,
-    financialMetrics.preco_final,
-    autoPricing?.precoFinal,
-    proposalRecord?.valor_sugerido,
-    orc?.valor_sugerido,
-    autoPricing?.valorSugerido,
-    proposalRecord?.preco_base,
-    orc?.preco_base,
-    autoPricing?.precoBase,
-    proposalDraft?.valor_total_moeda
+    currentOneOffModeValue,
+    lastOneOffModeValue,
+    lastManualRecurringBaseValue
   );
   const shouldSanitizeRecurringBase = proposalMode === 'mensal'
     && !recurringValueTouched
@@ -1318,6 +1318,25 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
     }),
     [activeProposalDraft, proposalMode, proposalRecord]
   );
+
+  useEffect(() => {
+    if (proposalMode !== 'direta') return;
+    if (currentOneOffModeValue < 10) return;
+    setLastOneOffModeValue((current) => (
+      Math.abs(Number(current || 0) - currentOneOffModeValue) > 0.009
+        ? currentOneOffModeValue
+        : current
+    ));
+  }, [currentOneOffModeValue, proposalMode]);
+
+  useEffect(() => {
+    if (proposalMode !== 'mensal' || !recurringValueTouched) return;
+    const currentValue = parseCurrencyNumber(proposalDraft?.valor_total_moeda, 0);
+    if (currentValue < 10) return;
+    setLastManualRecurringBaseValue((current) => (
+      Math.abs(Number(current || 0) - currentValue) > 0.009 ? currentValue : current
+    ));
+  }, [proposalDraft?.valor_total_moeda, proposalMode, recurringValueTouched]);
 
   function buildProposalDraftForMode(mode, currentDraft = proposalDraft) {
     const normalizedMode = normalizeVisibleProposalMode(mode) || inferProposalModeFromFlow(proposalRecord, 'direta');
@@ -1610,21 +1629,28 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
 
   function applyProposalMode(mode) {
     const normalizedMode = normalizeVisibleProposalMode(mode) || inferProposalModeFromFlow(proposalRecord, 'direta');
+    const recurringSeedValue = normalizedMode === 'mensal'
+      ? firstValidCurrencyValue(lastManualRecurringBaseValue, currentOneOffModeValue, lastOneOffModeValue)
+      : 0;
+    const seedDraft = recurringSeedValue >= 10
+      ? { valor_total_moeda: formatCurrencyBR(recurringSeedValue) }
+      : {};
     setProposalMode(normalizedMode);
     setProposalDirtyFields({});
-    setRecurringValueTouched(false);
+    setRecurringValueTouched(normalizedMode === 'mensal' && lastManualRecurringBaseValue >= 10);
     setComparativeWarning('');
-    setProposalDraft(buildProposalDraftForMode(normalizedMode, {}));
+    setProposalDraft(buildProposalDraftForMode(normalizedMode, seedDraft));
   }
 
   function applyOneOffValueToRecurring() {
-    if (safeRecurringBaseValue < 10) {
-      setError('Configure um valor mensal vÃ¡lido para visualizar a proposta recorrente.');
+    if (oneOffButtonValue < 10) {
+      setError('Não foi possível identificar um valor avulso válido.');
       return;
     }
-    const formatted = formatCurrencyBR(safeRecurringBaseValue);
+    const formatted = formatCurrencyBR(oneOffButtonValue);
     setError('');
     setRecurringValueTouched(true);
+    setLastManualRecurringBaseValue(oneOffButtonValue);
     setProposalDirtyFields((prev) => ({
       ...prev,
       valor_total_moeda: true,
@@ -1640,6 +1666,12 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
 
   function updateProposalDraftField(field, value) {
     setProposalDirtyFields((prev) => ({ ...prev, [field]: true }));
+    if (proposalMode === 'mensal' && field === 'valor_total_moeda') {
+      const parsedRecurringBase = parseCurrencyNumber(value, 0);
+      if (parsedRecurringBase >= 10) {
+        setLastManualRecurringBaseValue(parsedRecurringBase);
+      }
+    }
     setProposalDraft((prev) => {
       const previousValue = normalizeText(prev?.[field]);
       if (proposalMode === 'opcoes' && /^opcao[123]_qtd$/.test(field)) {
@@ -1870,6 +1902,8 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
     setProposalMode(nextMode);
     setProposalDraft(nextDraft);
     setRecurringValueTouched(false);
+    setLastOneOffModeValue(0);
+    setLastManualRecurringBaseValue(0);
   }, [
     orc?.id,
     orc?.status_orcamento,
@@ -2844,10 +2878,10 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
                   <button
                     type="button"
                     onClick={applyOneOffValueToRecurring}
-                    disabled={safeRecurringBaseValue < 10}
+                    disabled={oneOffButtonValue < 10}
                     className="btn-ghost btn-sm mt-2"
                   >
-                    Usar valor do Avulso
+                    {oneOffButtonLabel}
                   </button>
                 )}
                 {proposalMode === 'direta' && (

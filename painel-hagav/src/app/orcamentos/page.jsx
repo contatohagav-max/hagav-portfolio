@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Search, RefreshCw, FileText, AlertTriangle, ClipboardList, Plus, UserPlus, UsersRound } from 'lucide-react';
+import { Archive, Search, RefreshCw, FileText, AlertTriangle, ClipboardList, Plus, UserPlus, UsersRound } from 'lucide-react';
 import OrcamentosTable from '@/components/orcamentos/OrcamentosTable';
 import OrcamentoDrawer from '@/components/orcamentos/OrcamentoDrawer';
 import EmptyState from '@/components/ui/EmptyState';
@@ -13,6 +13,7 @@ import {
   createOrcamentoFromCliente,
   fetchClientesAtivosParaOrcamento,
   fetchOrcamentos,
+  updateOrcamento,
 } from '@/lib/supabase';
 import { ORC_STATUS_LABELS, fmtBRL } from '@/lib/utils';
 
@@ -31,6 +32,48 @@ const EMPTY_NEW_CLIENT_FORM = {
   instagram: '',
   email: '',
 };
+
+function parseDetalhes(value) {
+  if (!value) return {};
+  if (typeof value === 'object' && !Array.isArray(value)) return { ...value };
+  if (typeof value !== 'string') return {};
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function isUiArchived(row) {
+  const detalhes = parseDetalhes(row?.detalhes);
+  return Boolean(detalhes?.ui_arquivado);
+}
+
+function canArchiveOrcamento(row) {
+  const status = String(row?.status_orcamento || row?.status_deal || row?.status || '').toLowerCase();
+  const haystack = `${row?.nome || ''} ${row?.origem || ''} ${row?.servico || ''}`.toLowerCase();
+  return ['perdido', 'cancelado'].includes(status) || haystack.includes('teste');
+}
+
+function buildArchiveDetails(row, archived) {
+  const detalhes = parseDetalhes(row?.detalhes);
+  if (!archived) {
+    const {
+      ui_arquivado,
+      ui_arquivado_em,
+      ui_arquivado_motivo,
+      ...rest
+    } = detalhes;
+    return rest;
+  }
+  return {
+    ...detalhes,
+    ui_arquivado: true,
+    ui_arquivado_em: new Date().toISOString(),
+    ui_arquivado_motivo: 'limpeza_manual',
+  };
+}
 
 function ClienteExistenteResult({ cliente, selected, onSelect }) {
   return (
@@ -83,6 +126,7 @@ export default function OrcamentosPage() {
   const [prioridade, setPrioridade] = useState(searchParams.get('prioridade') || '');
   const [incompletoOnly, setIncompletoOnly] = useState(searchParams.get('incompleto') === '1');
   const [abertosOnly, setAbertosOnly] = useState(searchParams.get('abertos') !== '0');
+  const [showArchived, setShowArchived] = useState(false);
 
   useEffect(() => {
     setSearch(searchParams.get('search') || '');
@@ -112,9 +156,10 @@ export default function OrcamentosPage() {
         incompleto: incompletoOnly || undefined,
         limit: 800,
       });
+      const visibleData = showArchived ? data : data.filter((item) => !isUiArchived(item));
       const rows = abertosOnly && !statusOrc
-        ? data.filter(isActiveOrcamento)
-        : data;
+        ? visibleData.filter(isActiveOrcamento)
+        : visibleData;
       setOrcamentos(rows);
     } catch (err) {
       console.error('[Orcamentos]', err);
@@ -122,7 +167,7 @@ export default function OrcamentosPage() {
     } finally {
       setLoading(false);
     }
-  }, [search, statusOrc, urgencia, prioridade, incompletoOnly, abertosOnly, isActiveOrcamento]);
+  }, [search, statusOrc, urgencia, prioridade, incompletoOnly, abertosOnly, showArchived, isActiveOrcamento]);
 
   useEffect(() => {
     const timer = setTimeout(load, 250);
@@ -160,14 +205,47 @@ export default function OrcamentosPage() {
   function handleUpdated(updated) {
     setOrcamentos((prev) => prev
       .map((item) => (item.id === updated.id ? updated : item))
+      .filter((item) => (showArchived || !isUiArchived(item)))
       .filter((item) => (abertosOnly && !statusOrc ? isActiveOrcamento(item) : true)));
     if (selected?.id === updated?.id) {
-      const keepOpen = !(abertosOnly && !statusOrc && !isActiveOrcamento(updated));
+      const keepOpen = (showArchived || !isUiArchived(updated))
+        && !(abertosOnly && !statusOrc && !isActiveOrcamento(updated));
       setSelected(keepOpen ? updated : null);
     }
     setFeedback('Orçamento salvo com sucesso.');
     setTimeout(() => setFeedback(''), 2500);
     load();
+  }
+
+  async function handleToggleArchiveOrcamento(row, archived) {
+    if (!row?.id) return;
+    if (archived && !canArchiveOrcamento(row)) {
+      setFeedback('Arquivamento disponível para orçamentos perdidos, cancelados ou de teste.');
+      setTimeout(() => setFeedback(''), 3200);
+      return;
+    }
+    const confirmed = archived
+      ? window.confirm('Este orçamento será ocultado da lista principal, mas não será apagado. Continuar?')
+      : window.confirm('Este orçamento voltará a aparecer na lista principal. Continuar?');
+    if (!confirmed) return;
+
+    try {
+      const updated = await updateOrcamento(row.id, {
+        detalhes: buildArchiveDetails(row, archived),
+      });
+      setOrcamentos((prev) => {
+        const next = prev.map((item) => (item.id === updated.id ? updated : item));
+        return showArchived ? next : next.filter((item) => !isUiArchived(item));
+      });
+      if (selected?.id === updated.id) setSelected(showArchived ? updated : null);
+      setFeedback(archived ? 'Orçamento arquivado.' : 'Orçamento restaurado.');
+      setTimeout(() => setFeedback(''), 2500);
+      load();
+    } catch (err) {
+      console.error('[Orcamentos][Arquivar]', err);
+      setFeedback(archived ? 'Não foi possível arquivar o orçamento.' : 'Não foi possível restaurar o orçamento.');
+      setTimeout(() => setFeedback(''), 3200);
+    }
   }
 
   function openNewOrcamentoModal() {
@@ -335,6 +413,15 @@ export default function OrcamentosPage() {
           >
             Orçamentos ativos
           </button>
+
+          <button
+            type="button"
+            onClick={() => setShowArchived((prev) => !prev)}
+            className={`btn-ghost btn-sm ${showArchived ? 'border-hagav-gold/40 text-hagav-gold' : ''}`}
+          >
+            <Archive size={12} />
+            Mostrar arquivados
+          </button>
         </div>
       </div>
 
@@ -356,7 +443,11 @@ export default function OrcamentosPage() {
           description="Ajuste os filtros ou aguarde novos formularios chegarem."
         />
       ) : (
-        <OrcamentosTable orcamentos={orcamentos} onSelect={setSelected} />
+        <OrcamentosTable
+          orcamentos={orcamentos}
+          onSelect={setSelected}
+          onToggleArchive={handleToggleArchiveOrcamento}
+        />
       )}
 
       {!loading && orcamentos.length > 0 && (

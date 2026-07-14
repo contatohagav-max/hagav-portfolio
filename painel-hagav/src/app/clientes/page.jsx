@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  Archive,
   CalendarClock,
   Download,
   Eye,
@@ -82,6 +83,36 @@ function cloneSelectedRow(row) {
       ...contratoFromDetalhes,
       ...contratoFromRow,
     },
+  };
+}
+
+function isUiArchived(row) {
+  const detalhes = parseDetalhes(row?.detalhes);
+  return Boolean(detalhes?.ui_arquivado);
+}
+
+function canArchiveCliente(row) {
+  const status = String(row?.status_contrato || '').toLowerCase();
+  const haystack = `${row?.nome || ''} ${row?.servico || ''} ${row?.plano_servico || ''}`.toLowerCase();
+  return ['encerrado', 'vencido'].includes(status) || haystack.includes('teste');
+}
+
+function buildArchiveDetails(row, archived) {
+  const detalhes = parseDetalhes(row?.detalhes);
+  if (!archived) {
+    const {
+      ui_arquivado,
+      ui_arquivado_em,
+      ui_arquivado_motivo,
+      ...rest
+    } = detalhes;
+    return rest;
+  }
+  return {
+    ...detalhes,
+    ui_arquivado: true,
+    ui_arquivado_em: new Date().toISOString(),
+    ui_arquivado_motivo: 'limpeza_manual',
   };
 }
 
@@ -404,6 +435,7 @@ export default function ClientesPage() {
   const [statusContrato, setStatusContrato] = useState('');
   const [recorrenteFilter, setRecorrenteFilter] = useState('');
   const [renovacaoProximaOnly, setRenovacaoProximaOnly] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
 
   const [selected, setSelected] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -436,14 +468,14 @@ export default function ClientesPage() {
         onlyRenovacaoProxima: renovacaoProximaOnly,
         limit: 1000,
       });
-      setRows(data);
+      setRows(showArchived ? data : data.filter((item) => !isUiArchived(item)));
     } catch (err) {
       console.error('[Clientes]', err);
       setLoadError('Não foi possível carregar clientes/contratos agora.');
     } finally {
       setLoading(false);
     }
-  }, [search, statusContrato, recorrenteFilter, renovacaoProximaOnly]);
+  }, [search, statusContrato, recorrenteFilter, renovacaoProximaOnly, showArchived]);
 
   useEffect(() => {
     const timer = setTimeout(load, 250);
@@ -995,6 +1027,42 @@ export default function ClientesPage() {
     }
   }
 
+  async function handleToggleArchiveCliente(row, archived) {
+    if (!row?.id) return;
+    if (archived && !canArchiveCliente(row)) {
+      setFeedback('Arquivamento disponível para clientes encerrados, vencidos ou de teste.');
+      setTimeout(() => setFeedback(''), 3200);
+      return;
+    }
+    const confirmed = archived
+      ? window.confirm('Este cliente será ocultado da lista principal, mas não será apagado. Continuar?')
+      : window.confirm('Este cliente voltará a aparecer na lista principal. Continuar?');
+    if (!confirmed) return;
+
+    setSaving(true);
+    try {
+      const updated = await updateDeal(row.id, {
+        detalhes: buildArchiveDetails(row, archived),
+      });
+      setRows((prev) => {
+        const next = prev.map((item) => (item.id === updated.id ? { ...item, ...updated } : item));
+        return showArchived ? next : next.filter((item) => !isUiArchived(item));
+      });
+      if (selected?.id === updated.id) {
+        setSelected(showArchived ? cloneSelectedRow({ ...selected, ...updated }) : null);
+      }
+      setFeedback(archived ? 'Cliente arquivado.' : 'Cliente restaurado.');
+      setTimeout(() => setFeedback(''), 2500);
+      load();
+    } catch (err) {
+      console.error('[Clientes][Arquivar]', err);
+      setFeedback(archived ? 'Não foi possível arquivar o cliente.' : 'Não foi possível restaurar o cliente.');
+      setTimeout(() => setFeedback(''), 3200);
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
     <div className="space-y-5 animate-fade-in">
       <div className="flex items-center justify-between">
@@ -1074,6 +1142,15 @@ export default function ClientesPage() {
           <CalendarClock size={12} />
           So renovacao proxima
         </button>
+
+        <button
+          type="button"
+          onClick={() => setShowArchived((prev) => !prev)}
+          className={classNames('btn-ghost btn-sm', showArchived && 'border-hagav-gold/40 text-hagav-gold')}
+        >
+          <Archive size={12} />
+          Mostrar arquivados
+        </button>
       </div>
 
       {loadError && (
@@ -1111,11 +1188,19 @@ export default function ClientesPage() {
               </tr>
             </thead>
             <tbody>
-              {rows.map((row) => (
-                <tr key={row.id} className="cursor-pointer" onClick={() => setSelected(cloneSelectedRow(row))}>
+              {rows.map((row) => {
+                const archived = isUiArchived(row);
+                const canArchive = canArchiveCliente(row);
+                return (
+                <tr key={row.id} className={`cursor-pointer ${archived ? 'opacity-75' : ''}`} onClick={() => setSelected(cloneSelectedRow(row))}>
                   <td>
                     <div>
-                      <p className="font-medium text-hagav-white">{row.nome || 'Sem nome'}</p>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <p className="font-medium text-hagav-white">{row.nome || 'Sem nome'}</p>
+                        {archived && (
+                          <span className="badge bg-zinc-500/20 text-zinc-300 border-zinc-500/30">Arquivado</span>
+                        )}
+                      </div>
                       <p className="text-[11px] text-hagav-gray font-mono">{row.whatsapp || '—'}</p>
                     </div>
                   </td>
@@ -1151,10 +1236,35 @@ export default function ClientesPage() {
                       <button type="button" className="btn-ghost btn-sm" onClick={(event) => { event.stopPropagation(); handleGenerateContractPdf(row); }}>
                         <Download size={12} /> Contrato PDF
                       </button>
+                      {archived ? (
+                        <button
+                          type="button"
+                          className="btn-ghost btn-sm"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            handleToggleArchiveCliente(row, false);
+                          }}
+                        >
+                          Restaurar
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          className={classNames('btn-ghost btn-sm', !canArchive && 'opacity-50 cursor-not-allowed')}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            handleToggleArchiveCliente(row, true);
+                          }}
+                          disabled={!canArchive}
+                        >
+                          Arquivar
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>

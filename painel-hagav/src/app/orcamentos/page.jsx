@@ -2,12 +2,18 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Search, RefreshCw, FileText, AlertTriangle, ClipboardList } from 'lucide-react';
+import { Search, RefreshCw, FileText, AlertTriangle, ClipboardList, Plus, UserPlus, UsersRound } from 'lucide-react';
 import OrcamentosTable from '@/components/orcamentos/OrcamentosTable';
 import OrcamentoDrawer from '@/components/orcamentos/OrcamentoDrawer';
 import EmptyState from '@/components/ui/EmptyState';
 import EduTooltip from '@/components/ui/EduTooltip';
-import { fetchOrcamentos } from '@/lib/supabase';
+import Modal from '@/components/ui/Modal';
+import {
+  createOrcamentoClienteNovo,
+  createOrcamentoFromCliente,
+  fetchClientesAtivosParaOrcamento,
+  fetchOrcamentos,
+} from '@/lib/supabase';
 import { ORC_STATUS_LABELS, fmtBRL } from '@/lib/utils';
 
 const ORC_ACTIVE_STATUSES = ['orcamento', 'proposta_enviada', 'ajustando'];
@@ -18,6 +24,41 @@ const UPDATE_TOOLTIP = {
   purpose: 'Sincronizar negociacoes e valores em tempo real.',
   observe: 'Use antes de revisar fechamentos e pendencias.',
 };
+const EMPTY_NEW_CLIENT_FORM = {
+  nome: '',
+  whatsapp: '',
+  empresa: '',
+  instagram: '',
+  email: '',
+};
+
+function ClienteExistenteResult({ cliente, selected, onSelect }) {
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect(cliente.id)}
+      className={`w-full rounded-xl border px-3 py-2.5 text-left transition-colors ${
+        selected
+          ? 'border-hagav-gold/60 bg-hagav-gold/10'
+          : 'border-hagav-border bg-hagav-dark/40 hover:border-hagav-gold/30'
+      }`}
+    >
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <p className="text-sm font-semibold text-hagav-white">{cliente.nome || 'Sem nome'}</p>
+          <p className="text-xs text-hagav-gray">{cliente.empresa || 'Empresa não informada'}</p>
+        </div>
+        <span className="badge bg-hagav-muted/40 border-hagav-border text-hagav-light">
+          {cliente.status_contrato || cliente.status_deal || cliente.status || 'ativo'}
+        </span>
+      </div>
+      <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-1 text-[11px] text-hagav-gray">
+        <span>WhatsApp: {cliente.whatsapp || '—'}</span>
+        <span>Instagram: {cliente.instagram || '—'}</span>
+      </div>
+    </button>
+  );
+}
 
 export default function OrcamentosPage() {
   const searchParams = useSearchParams();
@@ -26,6 +67,15 @@ export default function OrcamentosPage() {
   const [loadError, setLoadError] = useState('');
   const [feedback, setFeedback] = useState('');
   const [selected, setSelected] = useState(null);
+  const [newOrcamentoOpen, setNewOrcamentoOpen] = useState(false);
+  const [newOrcamentoMode, setNewOrcamentoMode] = useState('');
+  const [newClientForm, setNewClientForm] = useState(EMPTY_NEW_CLIENT_FORM);
+  const [clientSearch, setClientSearch] = useState('');
+  const [clientResults, setClientResults] = useState([]);
+  const [clientsLoading, setClientsLoading] = useState(false);
+  const [selectedClientId, setSelectedClientId] = useState('');
+  const [creatingOrcamento, setCreatingOrcamento] = useState(false);
+  const [createError, setCreateError] = useState('');
 
   const [search, setSearch] = useState(searchParams.get('search') || '');
   const [statusOrc, setStatusOrc] = useState(searchParams.get('status_orcamento') || '');
@@ -79,6 +129,34 @@ export default function OrcamentosPage() {
     return () => clearTimeout(timer);
   }, [load]);
 
+  useEffect(() => {
+    if (!newOrcamentoOpen || newOrcamentoMode !== 'existente') return undefined;
+    let active = true;
+    const timer = setTimeout(async () => {
+      setClientsLoading(true);
+      setCreateError('');
+      try {
+        const data = await fetchClientesAtivosParaOrcamento({
+          search: clientSearch,
+          limit: 600,
+        });
+        if (!active) return;
+        setClientResults(data);
+        setSelectedClientId((current) => (data.some((cliente) => cliente.id === current) ? current : ''));
+      } catch (err) {
+        console.error('[Orcamentos][ClientesAtivos]', err);
+        if (active) setCreateError('Não foi possível carregar os clientes ativos.');
+      } finally {
+        if (active) setClientsLoading(false);
+      }
+    }, 250);
+
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [clientSearch, newOrcamentoMode, newOrcamentoOpen]);
+
   function handleUpdated(updated) {
     setOrcamentos((prev) => prev
       .map((item) => (item.id === updated.id ? updated : item))
@@ -90,6 +168,71 @@ export default function OrcamentosPage() {
     setFeedback('Orçamento salvo com sucesso.');
     setTimeout(() => setFeedback(''), 2500);
     load();
+  }
+
+  function openNewOrcamentoModal() {
+    setNewOrcamentoOpen(true);
+    setNewOrcamentoMode('');
+    setNewClientForm(EMPTY_NEW_CLIENT_FORM);
+    setClientSearch('');
+    setClientResults([]);
+    setSelectedClientId('');
+    setCreateError('');
+  }
+
+  function closeNewOrcamentoModal() {
+    if (creatingOrcamento) return;
+    setNewOrcamentoOpen(false);
+    setNewOrcamentoMode('');
+    setCreateError('');
+  }
+
+  function updateNewClientField(field, value) {
+    setNewClientForm((current) => ({ ...current, [field]: value }));
+  }
+
+  async function handleCreateNewClientOrcamento() {
+    if (creatingOrcamento) return;
+    setCreatingOrcamento(true);
+    setCreateError('');
+    try {
+      const created = await createOrcamentoClienteNovo(newClientForm);
+      setOrcamentos((prev) => [created, ...prev.filter((item) => item.id !== created.id)]);
+      setSelected(created);
+      setNewOrcamentoOpen(false);
+      setFeedback(`Novo orçamento criado para ${created.nome || 'cliente novo'}.`);
+      setTimeout(() => setFeedback(''), 2500);
+      load();
+    } catch (err) {
+      console.error('[Orcamentos][NovoCliente]', err);
+      setCreateError(err.message || 'Não foi possível criar o orçamento.');
+    } finally {
+      setCreatingOrcamento(false);
+    }
+  }
+
+  async function handleCreateExistingClientOrcamento() {
+    if (creatingOrcamento) return;
+    if (!selectedClientId) {
+      setCreateError('Selecione um cliente ativo.');
+      return;
+    }
+    setCreatingOrcamento(true);
+    setCreateError('');
+    try {
+      const created = await createOrcamentoFromCliente(selectedClientId);
+      setOrcamentos((prev) => [created, ...prev.filter((item) => item.id !== created.id)]);
+      setSelected(created);
+      setNewOrcamentoOpen(false);
+      setFeedback(`Novo orçamento criado para ${created.nome || 'cliente selecionado'}.`);
+      setTimeout(() => setFeedback(''), 2500);
+      load();
+    } catch (err) {
+      console.error('[Orcamentos][ClienteExistente]', err);
+      setCreateError(err.message || 'Não foi possível criar o orçamento.');
+    } finally {
+      setCreatingOrcamento(false);
+    }
   }
 
   const totalBase = orcamentos.reduce((sum, item) => sum + Number(item.preco_base || 0), 0);
@@ -108,12 +251,18 @@ export default function OrcamentosPage() {
             {loading ? 'Carregando...' : `${orcamentos.length} orcamento${orcamentos.length !== 1 ? 's' : ''}`}
           </p>
         </div>
-        <EduTooltip {...UPDATE_TOOLTIP} className="w-auto" panelClassName="left-auto right-0 translate-x-0">
-          <button onClick={load} disabled={loading} className="btn-ghost btn-sm">
-            <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
-            Atualizar
+        <div className="flex flex-wrap items-center gap-2">
+          <button type="button" onClick={openNewOrcamentoModal} className="btn-gold btn-sm">
+            <Plus size={13} />
+            Novo orçamento
           </button>
-        </EduTooltip>
+          <EduTooltip {...UPDATE_TOOLTIP} className="w-auto" panelClassName="left-auto right-0 translate-x-0">
+            <button onClick={load} disabled={loading} className="btn-ghost btn-sm">
+              <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
+              Atualizar
+            </button>
+          </EduTooltip>
+        </div>
       </div>
 
       {!loading && orcamentos.length > 0 && (
@@ -237,6 +386,173 @@ export default function OrcamentosPage() {
           onUpdated={handleUpdated}
         />
       )}
+
+      <Modal
+        open={newOrcamentoOpen}
+        onClose={closeNewOrcamentoModal}
+        title="Novo orçamento"
+        width="max-w-3xl"
+      >
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                setNewOrcamentoMode('novo');
+                setCreateError('');
+              }}
+              disabled={creatingOrcamento}
+              className={`rounded-xl border p-4 text-left transition-colors ${
+                newOrcamentoMode === 'novo'
+                  ? 'border-hagav-gold/60 bg-hagav-gold/10'
+                  : 'border-hagav-border bg-hagav-dark/40 hover:border-hagav-gold/30'
+              }`}
+            >
+              <div className="flex items-center gap-2 text-hagav-white font-semibold">
+                <UserPlus size={16} className="text-hagav-gold" />
+                Cliente novo
+              </div>
+              <p className="mt-2 text-xs text-hagav-gray">
+                Cria um orçamento manual para preencher os dados cadastrais e do projeto.
+              </p>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setNewOrcamentoMode('existente');
+                setCreateError('');
+              }}
+              disabled={creatingOrcamento}
+              className={`rounded-xl border p-4 text-left transition-colors ${
+                newOrcamentoMode === 'existente'
+                  ? 'border-hagav-gold/60 bg-hagav-gold/10'
+                  : 'border-hagav-border bg-hagav-dark/40 hover:border-hagav-gold/30'
+              }`}
+            >
+              <div className="flex items-center gap-2 text-hagav-white font-semibold">
+                <UsersRound size={16} className="text-hagav-gold" />
+                Cliente existente
+              </div>
+              <p className="mt-2 text-xs text-hagav-gray">
+                Busca um cliente ativo e cria um novo orçamento sem copiar proposta, PDF ou valores antigos.
+              </p>
+            </button>
+          </div>
+
+          {newOrcamentoMode === 'novo' && (
+            <div className="rounded-xl border border-hagav-border bg-hagav-dark/40 p-4 space-y-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <label className="text-xs text-hagav-gray">
+                  Nome do cliente
+                  <input
+                    type="text"
+                    value={newClientForm.nome}
+                    onChange={(e) => updateNewClientField('nome', e.target.value)}
+                    className="hinput w-full mt-1.5"
+                    placeholder="Nome do cliente"
+                  />
+                </label>
+                <label className="text-xs text-hagav-gray">
+                  WhatsApp
+                  <input
+                    type="text"
+                    value={newClientForm.whatsapp}
+                    onChange={(e) => updateNewClientField('whatsapp', e.target.value)}
+                    className="hinput w-full mt-1.5"
+                    placeholder="WhatsApp com DDD"
+                  />
+                </label>
+                <label className="text-xs text-hagav-gray">
+                  Empresa
+                  <input
+                    type="text"
+                    value={newClientForm.empresa}
+                    onChange={(e) => updateNewClientField('empresa', e.target.value)}
+                    className="hinput w-full mt-1.5"
+                    placeholder="Empresa ou marca"
+                  />
+                </label>
+                <label className="text-xs text-hagav-gray">
+                  Instagram
+                  <input
+                    type="text"
+                    value={newClientForm.instagram}
+                    onChange={(e) => updateNewClientField('instagram', e.target.value)}
+                    className="hinput w-full mt-1.5"
+                    placeholder="@instagram"
+                  />
+                </label>
+                <label className="text-xs text-hagav-gray md:col-span-2">
+                  E-mail
+                  <input
+                    type="email"
+                    value={newClientForm.email}
+                    onChange={(e) => updateNewClientField('email', e.target.value)}
+                    className="hinput w-full mt-1.5"
+                    placeholder="E-mail do cliente"
+                  />
+                </label>
+              </div>
+              <div className="flex justify-end">
+                <button type="button" onClick={handleCreateNewClientOrcamento} disabled={creatingOrcamento} className="btn-gold btn-sm">
+                  {creatingOrcamento ? 'Criando...' : 'Criar orçamento'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {newOrcamentoMode === 'existente' && (
+            <div className="rounded-xl border border-hagav-border bg-hagav-dark/40 p-4 space-y-3">
+              <div className="relative">
+                <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-hagav-gray pointer-events-none" />
+                <input
+                  type="text"
+                  value={clientSearch}
+                  onChange={(e) => setClientSearch(e.target.value)}
+                  className="hinput w-full pl-8"
+                  placeholder="Buscar por nome, empresa, WhatsApp, Instagram ou e-mail..."
+                />
+              </div>
+
+              <div className="max-h-[360px] overflow-y-auto space-y-2 pr-1">
+                {clientsLoading ? (
+                  <div className="flex items-center justify-center py-8 text-hagav-gray text-sm">
+                    <RefreshCw size={16} className="animate-spin mr-2" />
+                    Buscando clientes...
+                  </div>
+                ) : clientResults.length === 0 ? (
+                  <p className="text-sm text-hagav-gray text-center py-8">Nenhum cliente ativo encontrado.</p>
+                ) : (
+                  clientResults.map((cliente) => (
+                    <ClienteExistenteResult
+                      key={cliente.id}
+                      cliente={cliente}
+                      selected={selectedClientId === cliente.id}
+                      onSelect={setSelectedClientId}
+                    />
+                  ))
+                )}
+              </div>
+
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={handleCreateExistingClientOrcamento}
+                  disabled={creatingOrcamento || !selectedClientId}
+                  className="btn-gold btn-sm"
+                >
+                  {creatingOrcamento ? 'Criando...' : 'Criar orçamento para cliente'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {createError && (
+            <p className="text-xs text-red-300 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{createError}</p>
+          )}
+        </div>
+      </Modal>
     </div>
   );
 }

@@ -745,6 +745,242 @@ export async function fetchOrcamentos({
   return orcamentos;
 }
 
+function pickClientDetailField(detalhes, ...keys) {
+  const detailSources = [
+    detalhes,
+    safeParseJsonObject(detalhes?.comercial),
+    safeParseJsonObject(detalhes?.cadastro_cliente),
+    safeParseJsonObject(detalhes?.respostasCompletas),
+    safeParseJsonObject(detalhes?.answers),
+  ];
+
+  for (const source of detailSources) {
+    for (const key of keys) {
+      const value = String(source?.[key] || '').trim();
+      if (value) return value;
+    }
+  }
+  return '';
+}
+
+function extractClientRegistration(raw = {}) {
+  const detalhes = safeParseJsonObject(raw?.detalhes);
+  return {
+    empresa: pickClientDetailField(detalhes, 'empresa', 'Empresa'),
+    instagram: pickClientDetailField(detalhes, 'instagram', 'Instagram'),
+    email: pickClientDetailField(detalhes, 'email_cliente', 'email', 'Email', 'E-mail'),
+  };
+}
+
+function buildClientSearchText(row) {
+  const cadastro = extractClientRegistration(row);
+  return [
+    row?.nome,
+    row?.whatsapp,
+    row?.origem,
+    row?.responsavel,
+    cadastro.empresa,
+    cadastro.instagram,
+    cadastro.email,
+  ].filter(Boolean).join(' ').toLowerCase();
+}
+
+export async function fetchClientesAtivosParaOrcamento({ search, limit = 600 } = {}) {
+  const client = getSupabase();
+  if (!client) return [];
+
+  const term = String(search || '').trim().toLowerCase();
+  const { data, error } = await client
+    .from('deals')
+    .select('*')
+    .in('status', [DEAL_STATUS.APROVADO, DEAL_STATUS.FECHADO])
+    .order('updated_at', { ascending: false })
+    .limit(limit);
+
+  if (error) throw error;
+
+  return (data ?? [])
+    .filter((row) => (!term ? true : buildClientSearchText(row).includes(term)))
+    .map((row) => {
+      const cadastro = extractClientRegistration(row);
+      return {
+        ...mapDealToContratoRecord(row),
+        empresa: cadastro.empresa,
+        instagram: cadastro.instagram,
+        email_cliente: cadastro.email,
+      };
+    });
+}
+
+function buildNewOrcamentoDetails({
+  source = null,
+  nome = '',
+  whatsapp = '',
+  empresa = '',
+  instagram = '',
+  email = '',
+  origemOriginal = '',
+  responsavel = '',
+  clienteOrigemId = null,
+} = {}) {
+  const cadastroCliente = {
+    id: clienteOrigemId || null,
+    nome,
+    whatsapp,
+    empresa,
+    instagram,
+    email,
+    origem: origemOriginal,
+    responsavel,
+  };
+
+  return {
+    fluxo: source?.fluxo || '',
+    pagina: 'orcamento',
+    origem: clienteOrigemId ? 'cliente_existente' : 'admin_orcamentos',
+    status: DEAL_STATUS.ORCAMENTO,
+    nome,
+    whatsapp,
+    empresa,
+    instagram,
+    email_cliente: email,
+    servicoOuOperacao: '',
+    quantidade: '',
+    materialGravado: '',
+    tempoBruto: '',
+    prazo: '',
+    referencia: '',
+    observacoes: '',
+    cliente_origem_id: clienteOrigemId || null,
+    criado_a_partir_de_cliente: Boolean(clienteOrigemId),
+    cadastro_cliente: cadastroCliente,
+    comercial: {
+      criado_via: clienteOrigemId ? 'admin_orcamento_cliente_existente' : 'admin_orcamento_cliente_novo',
+      cliente_origem_id: clienteOrigemId || null,
+      criado_a_partir_de_cliente: Boolean(clienteOrigemId),
+      cliente_nome: nome,
+      whatsapp,
+      empresa,
+      instagram,
+      email_cliente: email,
+    },
+  };
+}
+
+async function insertOrcamentoDraft(payload) {
+  const client = getSupabase();
+  if (!client) throw new Error('Supabase nÃ£o configurado');
+  const settings = await fetchCommercialSettings();
+  const pricingRules = normalizePricingRules(settings?.pricing || COMMERCIAL_DEFAULTS.pricing);
+
+  const { data, error } = await client
+    .from('deals')
+    .insert(payload)
+    .select('*')
+    .single();
+
+  if (error) throw error;
+  return enrichOrcamentoRecord(mapDealToOrcamentoRecord(data), pricingRules);
+}
+
+export async function createOrcamentoClienteNovo(fields = {}) {
+  const nome = String(fields.nome || '').trim();
+  const whatsapp = String(fields.whatsapp || '').replace(/\D/g, '');
+  if (!nome) throw new Error('Informe o nome do cliente.');
+  if (!whatsapp || whatsapp.length < 8) throw new Error('Informe um WhatsApp vÃ¡lido.');
+
+  const empresa = String(fields.empresa || '').trim();
+  const instagram = String(fields.instagram || '').trim();
+  const email = String(fields.email || '').trim();
+  const detalhes = buildNewOrcamentoDetails({ nome, whatsapp, empresa, instagram, email });
+
+  return insertOrcamentoDraft({
+    status: DEAL_STATUS.ORCAMENTO,
+    fluxo: 'Novo projeto',
+    pagina: 'orcamento',
+    origem: 'admin_orcamentos',
+    nome,
+    whatsapp,
+    servico: null,
+    quantidade: null,
+    material_gravado: null,
+    tempo_bruto: null,
+    prazo: null,
+    referencia: null,
+    multicamera: false,
+    observacoes: null,
+    detalhes,
+    resumo_orcamento: 'Novo orÃ§amento manual.',
+    resumo_comercial: '',
+    urgencia: 'media',
+    prioridade: 'media',
+    temperatura: 'Morno',
+    proxima_acao: 'Preencher dados do projeto',
+    responsavel: null,
+    observacoes_internas: null,
+  });
+}
+
+export async function createOrcamentoFromCliente(clienteId) {
+  const client = getSupabase();
+  if (!client) throw new Error('Supabase nÃ£o configurado');
+
+  const { data: source, error } = await client
+    .from('deals')
+    .select('*')
+    .eq('id', clienteId)
+    .single();
+
+  if (error) throw error;
+  if (!source) throw new Error('Cliente nÃ£o encontrado.');
+
+  const status = normalizeDealStatus(source.status, DEAL_STATUS.NOVO);
+  if (![DEAL_STATUS.APROVADO, DEAL_STATUS.FECHADO].includes(status)) {
+    throw new Error('Selecione um cliente ativo para criar o orÃ§amento.');
+  }
+
+  const cadastro = extractClientRegistration(source);
+  const nome = String(source.nome || '').trim() || 'Sem cliente';
+  const whatsapp = String(source.whatsapp || '').replace(/\D/g, '');
+  const detalhes = buildNewOrcamentoDetails({
+    source,
+    nome,
+    whatsapp,
+    empresa: cadastro.empresa,
+    instagram: cadastro.instagram,
+    email: cadastro.email,
+    origemOriginal: source.origem || '',
+    responsavel: source.responsavel || '',
+    clienteOrigemId: source.id,
+  });
+
+  return insertOrcamentoDraft({
+    status: DEAL_STATUS.ORCAMENTO,
+    fluxo: source.fluxo || 'Novo projeto',
+    pagina: 'orcamento',
+    origem: 'cliente_existente',
+    nome,
+    whatsapp,
+    servico: null,
+    quantidade: null,
+    material_gravado: null,
+    tempo_bruto: null,
+    prazo: null,
+    referencia: null,
+    multicamera: false,
+    observacoes: null,
+    detalhes,
+    resumo_orcamento: `Novo projeto para cliente existente: ${nome}.`,
+    resumo_comercial: '',
+    urgencia: 'media',
+    prioridade: 'media',
+    temperatura: source.temperatura || 'Morno',
+    proxima_acao: 'Preencher dados do novo projeto',
+    responsavel: source.responsavel || null,
+    observacoes_internas: null,
+  });
+}
+
 export async function fetchNextProposalNumberForClient({ nome, whatsapp, excludeId } = {}) {
   const client = getSupabase();
   if (!client) return '01';

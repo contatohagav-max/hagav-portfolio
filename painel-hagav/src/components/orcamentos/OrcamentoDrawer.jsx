@@ -441,6 +441,20 @@ function formatCurrencyBRKeepingMonthly(value) {
   return hasMonthlySuffix ? `${formatted}/mês` : formatted;
 }
 
+function getActiveProposalPrice(mode, draft = {}) {
+  const normalizedMode = normalizeProposalMode(mode) || 'direta';
+  if (normalizedMode === 'mensal') {
+    return parseCurrencyNumber(draft?.valor_mensal_moeda || draft?.valor_total_moeda, 0);
+  }
+  if (normalizedMode === 'opcoes') {
+    return parseCurrencyNumber(draft?.opcao1_preco || draft?.valor_total_moeda, 0);
+  }
+  if (normalizedMode === 'personalizada') {
+    return parseCurrencyNumber(draft?.valor_total_moeda || draft?.valor_personalizado_moeda, 0);
+  }
+  return parseCurrencyNumber(draft?.valor_total_moeda || draft?.opcao1_preco, 0);
+}
+
 function normalizeComparativeQuantityInput(value, fallbackValue = '') {
   const parsed = parseQuantityNumber(value, null);
   if (parsed === null) return normalizeText(fallbackValue);
@@ -1117,6 +1131,10 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
       : proposalDraft),
     [proposalDraft, proposalMode, proposalRecord]
   );
+  const activeProposalPrice = getActiveProposalPrice(
+    proposalMode,
+    proposalMode === 'opcoes' ? comparativeProposalDraft : proposalDraft
+  );
   const proposalPreview = useMemo(
     () => buildProposalPreviewModel({
       orc: proposalRecord,
@@ -1344,6 +1362,38 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
     }));
   }
 
+  function syncProposalDraftPrice(mode, value) {
+    const formatted = formatCurrencyBR(value);
+    if (!formatted) return;
+    const normalizedMode = normalizeProposalMode(mode) || inferProposalModeFromFlow(proposalRecord, 'direta');
+    setProposalDirtyFields((prev) => ({
+      ...prev,
+      valor_total_moeda: true,
+      valor_mensal_moeda: normalizedMode === 'mensal' ? true : prev.valor_mensal_moeda,
+      valor_personalizado_moeda: normalizedMode === 'personalizada' ? true : prev.valor_personalizado_moeda,
+    }));
+    setProposalDraft((prev) => {
+      const nextDraft = { ...(prev && typeof prev === 'object' ? prev : {}) };
+      if (normalizedMode === 'mensal') {
+        nextDraft.valor_mensal_moeda = formatted;
+        return nextDraft;
+      }
+      nextDraft.valor_total_moeda = formatted;
+      if (normalizedMode === 'personalizada') {
+        nextDraft.valor_personalizado_moeda = formatted;
+      }
+      if (normalizedMode === 'opcoes') {
+        Object.assign(nextDraft, buildAutoOptionDraft({
+          orc: proposalRecord,
+          quantityText: nextDraft.quantidade,
+          totalText: formatted,
+          pricingRules,
+        }));
+      }
+      return nextDraft;
+    });
+  }
+
   function addPricingItem() {
     const seed = pricingItems[pricingItems.length - 1] || pricingItems[0] || {};
     const seedService = normalizeText(seed?.servico || defaultPricingServiceLabel) || defaultPricingServiceLabel;
@@ -1470,13 +1520,32 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
     const comercialAtual = parseDetalhes(detalhesAtual?.comercial);
     const nowIso = new Date().toISOString();
     const proposalState = buildProposalDraftCommercialState();
+    const activePriceValue = getActiveProposalPrice(
+      proposalMode,
+      proposalMode === 'opcoes' ? comparativeProposalDraft : proposalDraft
+    );
     const finalPriceValue = parseCurrencyNumber(
       finalPriceOverride
+      ?? activePriceValue
       ?? financialMetrics.preco_final
       ?? autoPricing.precoFinal
       ?? 0,
       0
     );
+    if (finalPriceOverride !== null && finalPriceValue > 0) {
+      const formattedFinalPrice = formatCurrencyBR(finalPriceValue);
+      if (proposalMode === 'mensal') {
+        proposalState.valor_mensal_moeda = formattedFinalPrice;
+      } else {
+        proposalState.valor_total_moeda = formattedFinalPrice;
+      }
+      if (proposalMode === 'personalizada') {
+        proposalState.valor_personalizado_moeda = formattedFinalPrice;
+      }
+      if (proposalMode === 'opcoes') {
+        proposalState.opcao1_preco = formattedFinalPrice;
+      }
+    }
     const itemDrafts = Array.isArray(autoPricing?.itensServico) && autoPricing.itensServico.length > 0
       ? autoPricing.itensServico
       : pricingItems;
@@ -1665,6 +1734,17 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
       return Math.abs(currentNumber - suggested) > 0.009 ? formatCurrencyBR(suggested) : current;
     });
   }, [autoPricing?.precoFinal, autoPricing?.valorSugerido, precoFinalTouched]);
+
+  useEffect(() => {
+    if (!Number.isFinite(activeProposalPrice) || activeProposalPrice <= 0) return;
+    setPrecoFinal((current) => {
+      const currentNumber = parseCurrencyNumber(current, 0);
+      return Math.abs(currentNumber - activeProposalPrice) > 0.009
+        ? formatCurrencyBR(activeProposalPrice)
+        : current;
+    });
+    setPrecoFinalTouched(true);
+  }, [activeProposalPrice]);
 
   useEffect(() => {
     syncPreviewDraft(proposalMode, proposalDraft, proposalPreview);
@@ -1981,6 +2061,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
       });
       setPrecoFinal(formatCurrencyBR(nextPrecoFinal));
       setPrecoFinalTouched(false);
+      syncProposalDraftPrice(proposalMode, nextPrecoFinal);
       onUpdated?.(updated);
       setInfo('Valores recalculados e sincronizados.');
     } catch (err) {
@@ -2733,14 +2814,11 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
                 type="text"
                 inputMode="decimal"
                 value={precoFinal}
-                onChange={(e) => {
-                  setPrecoFinalTouched(true);
-                  setPrecoFinal(e.target.value);
-                }}
-                onBlur={(e) => setPrecoFinal(formatCurrencyBR(e.target.value))}
-                className="hinput w-full"
+                readOnly
+                className="hinput w-full opacity-80 cursor-not-allowed"
                 placeholder="R$ 3.000,00"
               />
+              <p className="mt-1 text-[11px] text-hagav-gray">Sincronizado com o valor da proposta ativa.</p>
             </div>
 
             <div>

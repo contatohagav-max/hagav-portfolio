@@ -113,13 +113,27 @@ function parseCurrencyValue(value) {
 }
 
 function formatCurrencyInput(value) {
+  if (typeof value === 'number') return Number.isFinite(value) ? fmtBRL(value) : '';
   const raw = String(value || '').trim();
   if (!raw) return '';
   return fmtBRL(parseCurrencyValue(raw));
 }
 
+function normalizePaymentKey(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '');
+}
+
 function resolveFormaPagamento(value) {
   const current = String(value || '').trim();
+  const normalized = normalizePaymentKey(current);
+  const knownOption = FORMA_PAGAMENTO_OPTIONS.find((option) => normalizePaymentKey(option) === normalized);
+  if (knownOption) {
+    return { forma_pagamento: knownOption, forma_pagamento_outro: '' };
+  }
   if (!current || FORMA_PAGAMENTO_OPTIONS.includes(current)) {
     return { forma_pagamento: current, forma_pagamento_outro: '' };
   }
@@ -285,6 +299,11 @@ function FinancialEditor({ entry, createMode, onClose, onSaved, onDeleted }) {
     setForm((current) => ({ ...current, [name]: value }));
   }
 
+  function setPaidPercent(percent) {
+    const valor = Math.max(0, parseCurrencyValue(form.valor));
+    field('valor_pago', formatCurrencyInput(valor * percent));
+  }
+
   function markAsPaid() {
     setForm((current) => ({
       ...current,
@@ -302,6 +321,14 @@ function FinancialEditor({ entry, createMode, onClose, onSaved, onDeleted }) {
     const valorPago = form.status === 'pago'
       ? valor
       : (form.status === 'parcial' ? Math.max(0, parseCurrencyValue(form.valor_pago)) : 0);
+    if (form.status === 'parcial' && valorPago <= 0) {
+      setError('Valor pago deve ser maior que zero.');
+      return;
+    }
+    if (form.status === 'parcial' && valorPago >= valor) {
+      setError('Valor pago não pode ser maior ou igual ao valor total. Use status Pago.');
+      return;
+    }
     const formaPagamento = form.forma_pagamento === 'Outro'
       ? String(form.forma_pagamento_outro || 'Outro').trim()
       : String(form.forma_pagamento || '').trim();
@@ -355,6 +382,10 @@ function FinancialEditor({ entry, createMode, onClose, onSaved, onDeleted }) {
       setDeleting(false);
     }
   }
+
+  const totalValue = Math.max(0, parseCurrencyValue(form.valor));
+  const paidValue = Math.max(0, parseCurrencyValue(form.valor_pago));
+  const remainingValue = Math.max(0, totalValue - paidValue);
 
   return (
     <Modal
@@ -422,18 +453,30 @@ function FinancialEditor({ entry, createMode, onClose, onSaved, onDeleted }) {
             />
           </label>
           {form.status === 'parcial' && (
-            <label className="text-xs text-hagav-gray">
-              Valor pago
-              <input
-                type="text"
-                inputMode="decimal"
-                value={form.valor_pago}
-                onChange={(e) => field('valor_pago', e.target.value)}
-                onBlur={(e) => field('valor_pago', formatCurrencyInput(e.target.value))}
-                className="hinput w-full mt-1.5"
-                placeholder="R$ 0,00"
-              />
-            </label>
+            <div className="text-xs text-hagav-gray">
+              <label>
+                Valor pago
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={form.valor_pago}
+                  onChange={(e) => field('valor_pago', e.target.value)}
+                  onBlur={(e) => field('valor_pago', formatCurrencyInput(e.target.value))}
+                  className="hinput w-full mt-1.5"
+                  placeholder="R$ 0,00"
+                />
+              </label>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                <button type="button" onClick={() => setPaidPercent(0.5)} className="btn-ghost btn-sm px-2 py-1 text-[11px]">50%</button>
+                <button type="button" onClick={() => setPaidPercent(0.3)} className="btn-ghost btn-sm px-2 py-1 text-[11px]">30%</button>
+                <button type="button" onClick={() => setPaidPercent(0.7)} className="btn-ghost btn-sm px-2 py-1 text-[11px]">70%</button>
+                <button type="button" onClick={() => field('valor_pago', formatCurrencyInput(0))} className="btn-ghost btn-sm px-2 py-1 text-[11px]">Zerar</button>
+              </div>
+              <div className="mt-2 rounded-lg border border-hagav-border bg-hagav-dark/40 px-3 py-2">
+                <p className="text-[10px] uppercase tracking-wider text-hagav-gray">Restante</p>
+                <p className="text-sm font-semibold text-hagav-light">{fmtBRL(remainingValue)}</p>
+              </div>
+            </div>
           )}
           <label className="text-xs text-hagav-gray">
             Vencimento/Data

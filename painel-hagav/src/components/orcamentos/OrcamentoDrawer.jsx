@@ -1639,7 +1639,23 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
     }));
     setRecurringValueTouched(false);
     setComparativeWarning('');
-    setProposalDraft(buildProposalDraftForMode(normalizedMode));
+    setProposalDraft((prev) => {
+      const previousDraft = prev && typeof prev === 'object' ? prev : {};
+      const preservedBaseValue = normalizeText(previousDraft.valor_total_moeda);
+      const nextDraft = buildProposalDraftForMode(normalizedMode, previousDraft);
+      if (parseCurrencyNumber(preservedBaseValue, 0) >= 10) {
+        nextDraft.valor_total_moeda = formatCurrencyBR(preservedBaseValue);
+        if (normalizedMode === 'opcoes') {
+          Object.assign(nextDraft, buildAutoOptionDraft({
+            orc: proposalRecord,
+            quantityText: nextDraft.quantidade,
+            totalText: nextDraft.valor_total_moeda,
+            pricingRules,
+          }));
+        }
+      }
+      return nextDraft;
+    });
   }
 
   function applyOneOffValueToRecurring() {

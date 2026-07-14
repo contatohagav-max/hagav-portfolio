@@ -450,12 +450,87 @@ export function buildAutoOptionDraft({ orc, quantityText, totalText, pricingRule
   };
 }
 
+function stripMonthlyQuantitySuffix(value) {
+  return normalizeText(value)
+    .replace(/\s*(?:por|\/)\s*m(?:e|\u00ea|\u00c3\u00aa)s/ig, '')
+    .trim();
+}
+
+function formatDurationMonths(value, fallback = 3) {
+  const parsed = parseQuantityNumber(value, fallback);
+  return String(Math.max(1, parsed || fallback));
+}
+
+export function buildRecurringCalculatedDraft({ proposalDraft } = {}) {
+  const draft = proposalDraft && typeof proposalDraft === 'object' ? proposalDraft : {};
+  const durationMonths = Number(formatDurationMonths(draft.duracao_contrato_meses, 3));
+  const discountPercent = parseDiscountPercent(draft.recorrente_desconto_percent || draft.opcao2_desconto, 10);
+  const monthlyQuantity = normalizeText(draft.quantidade_mensal || draft.quantidade);
+  const baseQuantity = stripMonthlyQuantitySuffix(monthlyQuantity || draft.quantidade) || '10 vídeos';
+  const oneOffMonthlyValue = parseCurrencyNumber(draft.valor_total_moeda || draft.opcao1_preco, 0);
+  const recurringMonthlyValue = oneOffMonthlyValue > 0
+    ? oneOffMonthlyValue * (1 - (discountPercent / 100))
+    : parseCurrencyNumber(draft.valor_mensal_moeda, 0);
+  const totalOneOffPeriod = oneOffMonthlyValue * durationMonths;
+  const totalContract = recurringMonthlyValue * durationMonths;
+  const totalEconomy = Math.max(0, totalOneOffPeriod - totalContract);
+  const oneOffTitleRaw = normalizeText(draft.opcao1_titulo);
+  const recurringTitleRaw = normalizeText(draft.opcao2_titulo);
+  const oneOffTitle = oneOffTitleRaw && oneOffTitleRaw !== OPTION_STRATEGY.pedido_atual.title
+    ? oneOffTitleRaw
+    : 'Plano Avulso';
+  const recurringTitle = recurringTitleRaw && recurringTitleRaw !== OPTION_STRATEGY.mais_volume.title
+    ? recurringTitleRaw
+    : (durationMonths === 3 ? 'Plano Trimestral' : `Plano Recorrente ${durationMonths} meses`);
+  const economyLabel = durationMonths === 3 ? 'Economia no trimestre' : 'Economia no período';
+  const recurringDescription = normalizeText(draft.escopo_mensal || draft.escopo_comercial)
+    || 'Contrato recorrente com previsibilidade mensal, organização de entregas e melhor custo por volume.';
+
+  return {
+    ...draft,
+    quantidade_mensal: monthlyQuantity || `${baseQuantity} por mês`,
+    duracao_contrato_meses: String(durationMonths),
+    recorrente: 'true',
+    recorrente_desconto_percent: discountPercent > 0 ? `${String(discountPercent).replace('.', ',')}%` : '',
+    valor_mensal_moeda: recurringMonthlyValue > 0 ? fmtBRL(recurringMonthlyValue) : normalizeText(draft.valor_mensal_moeda),
+    recorrente_total_avulso_moeda: oneOffMonthlyValue > 0 ? fmtBRL(totalOneOffPeriod) : '',
+    recorrente_total_contrato_moeda: totalContract > 0 ? fmtBRL(totalContract) : '',
+    recorrente_economia_moeda: totalEconomy > 0 ? fmtBRL(totalEconomy) : '',
+    opcao1_titulo: oneOffTitle,
+    opcao1_qtd: `${baseQuantity} este mês`,
+    opcao1_preco: oneOffMonthlyValue > 0 ? fmtBRL(oneOffMonthlyValue) : normalizeText(draft.opcao1_preco),
+    opcao1_unitario: 'Entrega avulsa',
+    opcao1_desc: normalizeText(draft.opcao1_desc) || 'Indicado para uma entrega pontual, sem compromisso recorrente.',
+    opcao1_desconto: '',
+    opcao2_titulo: recurringTitle,
+    opcao2_qtd: `${baseQuantity}/mês por ${durationMonths} meses`,
+    opcao2_preco: recurringMonthlyValue > 0 ? `${fmtBRL(recurringMonthlyValue)}/mês` : normalizeText(draft.valor_mensal_moeda),
+    opcao2_unitario: totalContract > 0 ? `Total do contrato: ${fmtBRL(totalContract)}` : '',
+    opcao2_desc: totalEconomy > 0
+      ? `${recurringDescription} ${economyLabel}: ${fmtBRL(totalEconomy)}.`
+      : recurringDescription,
+    opcao2_desconto: formatPercentBadge(discountPercent),
+    opcao3_titulo: economyLabel,
+    opcao3_qtd: `Comparado ao avulso por ${durationMonths} meses`,
+    opcao3_preco: totalEconomy > 0 ? fmtBRL(totalEconomy) : 'R$ 0,00',
+    opcao3_unitario: discountPercent > 0 ? `${String(discountPercent).replace('.', ',')}% de desconto mensal` : '',
+    opcao3_desc: totalContract > 0
+      ? `Total recorrente: ${fmtBRL(totalContract)}. Total avulso no período: ${fmtBRL(totalOneOffPeriod)}.`
+      : '',
+    opcao3_desconto: '',
+    texto_comparativo: normalizeText(draft.texto_comparativo)
+      || `Comparativo entre contratação avulsa e plano recorrente de ${durationMonths} meses.`,
+  };
+}
+
 export function buildProposalPreviewModel({ orc, proposalMode, proposalDraft }) {
   const mode = normalizeText(proposalMode) || 'direta';
   const rawDraft = proposalDraft && typeof proposalDraft === 'object' ? proposalDraft : {};
   const draft = mode === 'opcoes'
     ? buildComparativeCalculatedDraft({ orc, proposalDraft: rawDraft })
-    : rawDraft;
+    : mode === 'mensal'
+      ? buildRecurringCalculatedDraft({ proposalDraft: rawDraft })
+      : rawDraft;
   const conditions = splitLines(draft.condicoes_comerciais);
     const unitLabels = inferUnitLabels(orc);
   const baseQuantity = parseQuantityNumber(draft.quantidade || draft.opcao1_qtd, 1);
@@ -547,7 +622,7 @@ export function buildProposalPreviewModel({ orc, proposalMode, proposalDraft }) 
       structure: 'Produção recorrente com organização mensal, recebimento de materiais, edição, revisão e entrega final conforme cronograma aprovado.',
     },
     options: {
-      visible: mode === 'opcoes' && optionCards.length > 0,
+      visible: (mode === 'opcoes' || mode === 'mensal') && optionCards.length > 0,
       items: optionCards,
       footnote: normalizeText(draft.texto_comparativo),
     },

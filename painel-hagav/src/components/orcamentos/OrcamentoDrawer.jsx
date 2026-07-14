@@ -23,7 +23,7 @@ import {
   normalizePricingRules,
   parseDurationToHours,
 } from '@/lib/commercial';
-import { buildAutoOptionDraft, buildCommercialScopeText, buildComparativeCalculatedDraft, buildProposalPreviewModel } from '@/lib/proposal';
+import { buildAutoOptionDraft, buildCommercialScopeText, buildComparativeCalculatedDraft, buildProposalPreviewModel, buildRecurringCalculatedDraft } from '@/lib/proposal';
 import { fmtDateTime, fmtBRL, whatsappLink, ORC_STATUS_LABELS } from '@/lib/utils';
 
 const ORC_STATUSES = ['orcamento', 'proposta_enviada', 'ajustando', 'aprovado', 'perdido'];
@@ -40,10 +40,9 @@ const SEND_PROPOSTA_TOOLTIP = {
   observe: 'Gere a proposta PDF antes de enviar no WhatsApp.',
 };
 const PROPOSAL_MODE_OPTIONS = [
-  { value: 'direta', label: 'Modo 1 - Direta' },
+  { value: 'direta', label: 'Modo 1 - Avulso' },
   { value: 'opcoes', label: 'Modo 2 - Comparativo' },
-  { value: 'mensal', label: 'Modo 3 - Mensal' },
-  { value: 'personalizada', label: 'Modo 4 - Personalizada' },
+  { value: 'mensal', label: 'Modo 3 - Recorrente' },
 ];
 
 const DEFAULT_CONDICOES_COMERCIAIS = [
@@ -74,14 +73,15 @@ const PROPOSAL_MODE_PRESETS = {
     valor_personalizado_moeda: '',
   },
   mensal: {
-    servico_principal: 'Plano mensal de conteúdo',
-    quantidade: '12 vídeos mensais',
+    servico_principal: 'Plano recorrente de conteúdo',
+    quantidade: '10 vídeos',
     prazo: 'Este mês',
-    escopo_comercial: 'Operação mensal de edição com padrão visual consistente, organização de entregas e acompanhamento por cronograma aprovado.',
-    quantidade_mensal: '12 vídeos por mês',
+    escopo_comercial: 'Contrato recorrente com previsibilidade mensal, organização de entregas e melhor custo por volume.',
+    quantidade_mensal: '10 vídeos por mês',
     duracao_contrato_meses: '3',
     valor_mensal_moeda: '',
     valor_personalizado_moeda: '',
+    recorrente_desconto_percent: '10%',
   },
   personalizada: {
     servico_principal: 'Proposta personalizada',
@@ -113,6 +113,12 @@ const PROPOSAL_DRAW_FIELDS = [
   'valor_total_moeda',
   'valor_mensal_moeda',
   'valor_personalizado_moeda',
+  'usar_valor_manual',
+  'recorrente',
+  'recorrente_desconto_percent',
+  'recorrente_total_avulso_moeda',
+  'recorrente_total_contrato_moeda',
+  'recorrente_economia_moeda',
   'forma_pagamento',
   'data_validade',
   'duracao_contrato_meses',
@@ -158,6 +164,8 @@ const AUTO_SYNC_PROPOSAL_FIELDS = [
   'valor_total_moeda',
   'valor_mensal_moeda',
   'valor_personalizado_moeda',
+  'usar_valor_manual',
+  'recorrente_desconto_percent',
   'opcao1_titulo',
   'opcao1_qtd',
   'opcao1_preco',
@@ -215,7 +223,7 @@ function stripCurrencyPrefix(value) {
   return normalizeText(value).replace(/^R\$\s*/i, '');
 }
 
-function CurrencyInput({ value, onChange, onBlur, placeholder = '1.500,00' }) {
+function CurrencyInput({ value, onChange, onBlur, placeholder = '1.500,00', disabled = false }) {
   return (
     <div className="relative">
       <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-hagav-gold">
@@ -227,7 +235,8 @@ function CurrencyInput({ value, onChange, onBlur, placeholder = '1.500,00' }) {
         value={stripCurrencyPrefix(value)}
         onChange={(event) => onChange?.(event.target.value)}
         onBlur={(event) => onBlur?.(event.target.value)}
-        className="hinput w-full pl-10"
+        disabled={disabled}
+        className={`hinput w-full pl-10 ${disabled ? 'opacity-70 cursor-not-allowed' : ''}`}
         placeholder={placeholder}
       />
     </div>
@@ -428,6 +437,32 @@ function normalizeProposalMode(value) {
   return '';
 }
 
+function normalizeVisibleProposalMode(value) {
+  const normalized = normalizeProposalMode(value);
+  return normalized === 'personalizada' ? 'direta' : normalized;
+}
+
+function isEnabledValue(value) {
+  const key = normalizeText(value)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+  return ['true', '1', 'sim', 'yes'].includes(key);
+}
+
+function parsePercentNumber(value, fallback = 0) {
+  const raw = normalizeText(value);
+  if (!raw) return fallback;
+  const parsed = Number(raw.replace('%', '').replace(',', '.').replace(/[^0-9.]/g, ''));
+  if (!Number.isFinite(parsed) || parsed < 0) return fallback;
+  return Math.max(0, Math.min(100, parsed));
+}
+
+function formatPercentText(value, fallback = 10) {
+  const parsed = parsePercentNumber(value, fallback);
+  return parsed > 0 ? `${String(parsed).replace('.', ',')}%` : '';
+}
+
 function parseQuantityNumber(value, fallback = 10) {
   const match = String(value || '').match(/(\d{1,5})/);
   if (!match) return fallback;
@@ -465,15 +500,12 @@ function formatCurrencyBRKeepingMonthly(value) {
 }
 
 function getActiveProposalPrice(mode, draft = {}) {
-  const normalizedMode = normalizeProposalMode(mode) || 'direta';
+  const normalizedMode = normalizeVisibleProposalMode(mode) || 'direta';
   if (normalizedMode === 'mensal') {
     return parseCurrencyNumber(draft?.valor_mensal_moeda || draft?.valor_total_moeda, 0);
   }
   if (normalizedMode === 'opcoes') {
     return parseCurrencyNumber(draft?.opcao1_preco || draft?.valor_total_moeda, 0);
-  }
-  if (normalizedMode === 'personalizada') {
-    return parseCurrencyNumber(draft?.valor_total_moeda || draft?.valor_personalizado_moeda, 0);
   }
   return parseCurrencyNumber(draft?.valor_total_moeda || draft?.opcao1_preco, 0);
 }
@@ -658,10 +690,11 @@ function buildProposalDraftFromRecord(record, forcedMode, options = {}) {
     preferLiveRecord ? storedValue : liveValue,
     ...fallbackValues
   );
-  const savedMode = normalizeProposalMode(
+  const savedModeRaw = normalizeProposalMode(
     forcedMode || comercial?.proposta_modo || comercial?.proposal_mode || ''
   );
-  const proposalMode = savedMode || inferProposalModeFromFlow(record, 'direta');
+  const legacyPersonalizada = savedModeRaw === 'personalizada';
+  const proposalMode = (legacyPersonalizada ? 'direta' : savedModeRaw) || inferProposalModeFromFlow(record, 'direta');
   const modePreset = PROPOSAL_MODE_PRESETS[proposalMode] || PROPOSAL_MODE_PRESETS.direta;
   const dataValidade = firstFilledText(
     comercial?.data_validade,
@@ -758,7 +791,7 @@ function buildProposalDraftFromRecord(record, forcedMode, options = {}) {
   const valorPersonalizadoPadrao = pickStoredOrLive(
     comercial?.valor_personalizado_moeda,
     defaultValor,
-    proposalMode === 'personalizada' ? defaultValor : ''
+    legacyPersonalizada ? defaultValor : ''
   );
   const escopoMensalPadrao = firstFilledText(
     proposalMode === 'mensal' ? escopoDefault : '',
@@ -805,6 +838,21 @@ function buildProposalDraftFromRecord(record, forcedMode, options = {}) {
     valor_total_moeda: normalizeText(pickStoredOrLive(comercial?.valor_total_moeda, defaultValor)),
     valor_mensal_moeda: normalizeText(valorMensalPadrao),
     valor_personalizado_moeda: normalizeText(valorPersonalizadoPadrao),
+    usar_valor_manual: normalizeText(firstFilledText(
+      comercial?.usar_valor_manual,
+      legacyPersonalizada ? 'true' : ''
+    )),
+    recorrente: normalizeText(firstFilledText(
+      comercial?.recorrente,
+      proposalMode === 'mensal' ? 'true' : ''
+    )),
+    recorrente_desconto_percent: normalizeText(firstFilledText(
+      comercial?.recorrente_desconto_percent,
+      proposalMode === 'mensal' ? modePreset.recorrente_desconto_percent : ''
+    )),
+    recorrente_total_avulso_moeda: normalizeText(comercial?.recorrente_total_avulso_moeda),
+    recorrente_total_contrato_moeda: normalizeText(comercial?.recorrente_total_contrato_moeda),
+    recorrente_economia_moeda: normalizeText(comercial?.recorrente_economia_moeda),
     forma_pagamento: normalizeText(comercial?.forma_pagamento || 'PIX / Transferencia / Conforme combinado'),
     data_validade: normalizeText(dataValidade),
     duracao_contrato_meses: normalizeText(firstFilledText(
@@ -977,7 +1025,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
   const [proposalMode, setProposalMode] = useState(() => {
     const detalhes = parseDetalhes(orc?.detalhes);
     const comercial = parseDetalhes(detalhes?.comercial);
-    return normalizeProposalMode(comercial?.proposta_modo || comercial?.proposal_mode || '')
+    return normalizeVisibleProposalMode(comercial?.proposta_modo || comercial?.proposal_mode || '')
       || inferProposalModeFromFlow(orc, 'direta');
   });
   const [proposalDirtyFields, setProposalDirtyFields] = useState(() => buildSavedProposalDirtyMap(orc));
@@ -1154,7 +1202,36 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
       : proposalDraft),
     [proposalDraft, proposalMode, proposalRecord]
   );
-  const activeProposalDraft = proposalMode === 'opcoes' ? comparativeProposalDraft : proposalDraft;
+  const manualProposalValueEnabled = isEnabledValue(proposalDraft?.usar_valor_manual);
+  const automaticProposalValue = formatCurrencyBR(
+    parsedPrecoFinal > 0
+      ? parsedPrecoFinal
+      : Number(autoPricing?.precoFinal || financialMetrics.preco_final || proposalRecord?.preco_final || 0)
+  );
+  const directProposalDraft = useMemo(() => {
+    if (proposalMode !== 'direta' || manualProposalValueEnabled) return proposalDraft;
+    return {
+      ...proposalDraft,
+      valor_total_moeda: automaticProposalValue || proposalDraft?.valor_total_moeda || '',
+      valor_personalizado_moeda: '',
+    };
+  }, [automaticProposalValue, manualProposalValueEnabled, proposalDraft, proposalMode]);
+  const recurringProposalDraft = useMemo(
+    () => (proposalMode === 'mensal'
+      ? buildRecurringCalculatedDraft({
+        proposalDraft: {
+          ...proposalDraft,
+          valor_total_moeda: proposalDraft?.valor_total_moeda || automaticProposalValue,
+        },
+      })
+      : proposalDraft),
+    [automaticProposalValue, proposalDraft, proposalMode]
+  );
+  const activeProposalDraft = proposalMode === 'opcoes'
+    ? comparativeProposalDraft
+    : proposalMode === 'mensal'
+      ? recurringProposalDraft
+      : directProposalDraft;
   const activeProposalPrice = getActiveProposalPrice(proposalMode, activeProposalDraft);
   const activeProposalPriceLabel = activeProposalPrice > 0 ? fmtBRL(activeProposalPrice) : '—';
   const activeProposalOriginLabel = PROPOSAL_MODE_OPTIONS.find((mode) => mode.value === proposalMode)?.label
@@ -1163,13 +1240,13 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
     () => buildProposalPreviewModel({
       orc: proposalRecord,
       proposalMode,
-      proposalDraft: comparativeProposalDraft,
+      proposalDraft: activeProposalDraft,
     }),
-    [comparativeProposalDraft, proposalMode, proposalRecord]
+    [activeProposalDraft, proposalMode, proposalRecord]
   );
 
   function buildProposalDraftForMode(mode, currentDraft = proposalDraft) {
-    const normalizedMode = normalizeProposalMode(mode) || inferProposalModeFromFlow(proposalRecord, 'direta');
+    const normalizedMode = normalizeVisibleProposalMode(mode) || inferProposalModeFromFlow(proposalRecord, 'direta');
     const preset = PROPOSAL_MODE_PRESETS[normalizedMode] || PROPOSAL_MODE_PRESETS.direta;
     const next = {
       ...buildProposalDraftFromRecord(proposalRecord, normalizedMode, {
@@ -1197,7 +1274,10 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
       next.quantidade_mensal = next.quantidade_mensal || next.quantidade || preset.quantidade_mensal;
       next.duracao_contrato_meses = next.duracao_contrato_meses || preset.duracao_contrato_meses || '3';
       next.escopo_mensal = next.escopo_mensal || next.escopo_comercial || buildCommercialScopeText(proposalRecord);
-      next.valor_mensal_moeda = next.valor_mensal_moeda || next.valor_total_moeda || fmtBRL(valueReference || 0);
+      next.valor_total_moeda = next.valor_total_moeda || fmtBRL(valueReference || 0);
+      next.recorrente_desconto_percent = next.recorrente_desconto_percent || preset.recorrente_desconto_percent || '10%';
+      next.recorrente = 'true';
+      Object.assign(next, buildRecurringCalculatedDraft({ proposalDraft: next }));
     }
 
     if (normalizedMode === 'personalizada') {
@@ -1213,7 +1293,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
 
   function buildProposalDraftCommercialState() {
     const values = {};
-    const sourceDraft = proposalMode === 'opcoes' ? comparativeProposalDraft : proposalDraft;
+    const sourceDraft = activeProposalDraft;
     PROPOSAL_DRAW_FIELDS.forEach((field) => {
       if (field === 'valor_total_moeda' || field === 'valor_mensal_moeda') {
         values[field] = formatCurrencyBRKeepingMonthly(sourceDraft?.[field]);
@@ -1226,10 +1306,12 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
       values[field] = normalizeText(sourceDraft?.[field]);
     });
     values.data_validade = normalizeText(values.data_validade || getFallbackValidityDate(values.data_emissao));
-    if (proposalMode === 'personalizada') {
-      const singleValue = formatCurrencyBR(sourceDraft?.valor_total_moeda || sourceDraft?.valor_personalizado_moeda);
-      values.valor_total_moeda = singleValue;
-      values.valor_personalizado_moeda = singleValue;
+    if (proposalMode === 'mensal') {
+      values.recorrente = 'true';
+      values.valor_mensal_moeda = formatCurrencyBR(sourceDraft?.valor_mensal_moeda);
+      values.recorrente_total_avulso_moeda = formatCurrencyBR(sourceDraft?.recorrente_total_avulso_moeda);
+      values.recorrente_total_contrato_moeda = formatCurrencyBR(sourceDraft?.recorrente_total_contrato_moeda);
+      values.recorrente_economia_moeda = formatCurrencyBR(sourceDraft?.recorrente_economia_moeda);
     }
     return {
       proposal_mode: proposalMode,
@@ -1240,9 +1322,9 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
   }
 
   function buildProposalTemplateOverrides() {
-    const mode = normalizeProposalMode(proposalMode) || inferProposalModeFromFlow(proposalRecord, 'direta');
+    const mode = normalizeVisibleProposalMode(proposalMode) || inferProposalModeFromFlow(proposalRecord, 'direta');
     const nextDraft = {
-      ...(mode === 'opcoes' ? comparativeProposalDraft : proposalDraft),
+      ...activeProposalDraft,
     };
     nextDraft.data_validade = normalizeText(nextDraft.data_validade || getFallbackValidityDate(nextDraft.data_emissao));
     const validade = normalizeText(nextDraft.data_validade || '[data]');
@@ -1251,12 +1333,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
     }
 
     if (mode === 'mensal') {
-      const valorMensal = normalizeText(nextDraft.valor_mensal_moeda || nextDraft.valor_total_moeda);
-      if (valorMensal) {
-        nextDraft.valor_total_moeda = /\s*\/\s*m(?:e|\u00ea|\u00c3\u00aa)s/i.test(valorMensal)
-          ? valorMensal
-          : `${valorMensal}/mês`;
-      }
+      Object.assign(nextDraft, buildRecurringCalculatedDraft({ proposalDraft: nextDraft }));
       nextDraft.quantidade_mensal = normalizeText(nextDraft.quantidade_mensal || nextDraft.quantidade);
     }
 
@@ -1277,7 +1354,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
 
   function syncPreviewDraft(modeValue, draftValue, previewValue) {
     if (typeof window === 'undefined') return;
-    const safeMode = normalizeProposalMode(modeValue) || inferProposalModeFromFlow(proposalRecord, 'direta');
+    const safeMode = normalizeVisibleProposalMode(modeValue) || inferProposalModeFromFlow(proposalRecord, 'direta');
     const payload = {
       mode: safeMode,
       source: 'orcamento_drawer',
@@ -1389,7 +1466,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
   function syncProposalDraftPrice(mode, value) {
     const formatted = formatCurrencyBR(value);
     if (!formatted) return;
-    const normalizedMode = normalizeProposalMode(mode) || inferProposalModeFromFlow(proposalRecord, 'direta');
+    const normalizedMode = normalizeVisibleProposalMode(mode) || inferProposalModeFromFlow(proposalRecord, 'direta');
     setProposalDirtyFields((prev) => ({
       ...prev,
       valor_total_moeda: true,
@@ -1443,7 +1520,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
   }
 
   function applyProposalMode(mode) {
-    const normalizedMode = normalizeProposalMode(mode) || inferProposalModeFromFlow(proposalRecord, 'direta');
+    const normalizedMode = normalizeVisibleProposalMode(mode) || inferProposalModeFromFlow(proposalRecord, 'direta');
     setProposalMode(normalizedMode);
     setProposalDirtyFields({});
     setComparativeWarning('');
@@ -1546,7 +1623,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
     const proposalState = buildProposalDraftCommercialState();
     const activePriceValue = getActiveProposalPrice(
       proposalMode,
-      proposalMode === 'opcoes' ? comparativeProposalDraft : proposalDraft
+      activeProposalDraft
     );
     const finalPriceValue = parseCurrencyNumber(
       finalPriceOverride
@@ -1562,9 +1639,6 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
         proposalState.valor_mensal_moeda = formattedFinalPrice;
       } else {
         proposalState.valor_total_moeda = formattedFinalPrice;
-      }
-      if (proposalMode === 'personalizada') {
-        proposalState.valor_personalizado_moeda = formattedFinalPrice;
       }
       if (proposalMode === 'opcoes') {
         proposalState.opcao1_preco = formattedFinalPrice;
@@ -1664,7 +1738,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
     setPropostaPdfMeta(readPropostaPdfMeta(orc));
     const detalhes = parseDetalhes(orc?.detalhes);
     const comercial = parseDetalhes(detalhes?.comercial);
-    const nextMode = normalizeProposalMode(comercial?.proposta_modo || comercial?.proposal_mode || '')
+    const nextMode = normalizeVisibleProposalMode(comercial?.proposta_modo || comercial?.proposal_mode || '')
       || inferProposalModeFromFlow(orc, 'direta');
     const nextDraft = buildProposalDraftFromRecord(orc, nextMode, {
       pricingRules: COMMERCIAL_DEFAULTS.pricing,
@@ -1771,8 +1845,8 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
   }, [activeProposalPrice]);
 
   useEffect(() => {
-    syncPreviewDraft(proposalMode, proposalDraft, proposalPreview);
-  }, [orc?.id, proposalMode, proposalDraft, proposalPreview]);
+    syncPreviewDraft(proposalMode, activeProposalDraft, proposalPreview);
+  }, [orc?.id, proposalMode, activeProposalDraft, proposalPreview]);
 
   async function handleSaveProposalDraft() {
     if (!validateProposalState()) return;
@@ -1856,10 +1930,11 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
     setInfo('Gerando proposta PDF em modo teste...');
     try {
       const templateOverrides = buildProposalTemplateOverrides();
+      const pdfProposalMode = proposalMode === 'mensal' ? 'opcoes' : proposalMode;
       const result = await generateDealPdf(orc.id, {
         payload: {
           test_mode: true,
-          proposal_mode: proposalMode,
+          proposal_mode: pdfProposalMode,
           template_overrides: templateOverrides,
         },
       });
@@ -2547,33 +2622,37 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
                   placeholder="Ex.: PIX, cartao ou parcelado"
                 />
               </div>
-              <div>
-                <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Duração do contrato</label>
-                <input
-                  type="text"
-                  value={proposalDraft.duracao_contrato_meses || ''}
-                  onChange={(e) => updateProposalDraftField('duracao_contrato_meses', e.target.value)}
-                  className="hinput w-full"
-                  placeholder="Ex.: 3"
-                />
-              </div>
+              {proposalMode === 'mensal' && (
+                <div>
+                  <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Duração do contrato</label>
+                  <input
+                    type="text"
+                    value={proposalDraft.duracao_contrato_meses || ''}
+                    onChange={(e) => updateProposalDraftField('duracao_contrato_meses', e.target.value)}
+                    className="hinput w-full"
+                    placeholder="Ex.: 3"
+                  />
+                </div>
+              )}
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-2">
               <div>
                 <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">
-                  {proposalMode === 'personalizada' ? 'Título da proposta' : 'Serviço'}
+                  {proposalMode === 'direta' ? 'Título da proposta' : 'Serviço'}
                 </label>
                 <input
                   type="text"
                   value={proposalDraft.servico_principal || ''}
                   onChange={(e) => updateProposalDraftField('servico_principal', e.target.value)}
                   className="hinput w-full"
-                  placeholder={proposalMode === 'personalizada' ? 'Ex.: Proposta premium de edição' : 'Ex.: Reels / Shorts / TikTok'}
+                  placeholder={proposalMode === 'direta' ? 'Ex.: Proposta de edição' : 'Ex.: Reels / Shorts / TikTok'}
                 />
               </div>
               <div>
-                <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Quantidade</label>
+                <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">
+                  {proposalMode === 'mensal' ? 'Quantidade por mês' : 'Quantidade'}
+                </label>
                 <input
                   type="text"
                   value={proposalDraft.quantidade || ''}
@@ -2582,7 +2661,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
                   placeholder="Ex.: 10 vídeos"
                 />
               </div>
-              {proposalMode !== 'personalizada' && (
+              {proposalMode === 'opcoes' && (
                 <div>
                   <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Prazo</label>
                   <select
@@ -2598,61 +2677,98 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
               )}
               <div>
                 <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">
-                  {proposalMode === 'personalizada' ? 'Valor da proposta (R$)' : 'Valor total'}
+                  {proposalMode === 'mensal'
+                    ? 'Valor avulso mensal (R$)'
+                    : proposalMode === 'direta'
+                      ? 'Valor da proposta (R$)'
+                      : 'Valor base do pedido (R$)'}
                 </label>
                 <CurrencyInput
-                  value={proposalDraft.valor_total_moeda || ''}
+                  value={proposalMode === 'direta' && !manualProposalValueEnabled
+                    ? automaticProposalValue
+                    : proposalDraft.valor_total_moeda || ''}
                   onChange={(value) => updateProposalDraftField('valor_total_moeda', value)}
                   onBlur={(value) => updateProposalDraftField('valor_total_moeda', formatCurrencyBR(value))}
                   placeholder="1.500,00"
+                  disabled={proposalMode === 'direta' && !manualProposalValueEnabled}
                 />
+                {proposalMode === 'direta' && (
+                  <label className="mt-2 flex items-center gap-2 text-[11px] text-hagav-gray">
+                    <input
+                      type="checkbox"
+                      checked={manualProposalValueEnabled}
+                      onChange={(event) => {
+                        const enabled = event.target.checked;
+                        setProposalDirtyFields((prev) => ({
+                          ...prev,
+                          usar_valor_manual: true,
+                          valor_total_moeda: true,
+                        }));
+                        setProposalDraft((prev) => ({
+                          ...(prev && typeof prev === 'object' ? prev : {}),
+                          usar_valor_manual: enabled ? 'true' : 'false',
+                          valor_total_moeda: enabled
+                            ? (prev?.valor_total_moeda || automaticProposalValue)
+                            : automaticProposalValue,
+                        }));
+                      }}
+                      className="accent-hagav-gold"
+                    />
+                    Usar valor manual
+                  </label>
+                )}
               </div>
                 </div>
 
                 {proposalMode === 'mensal' && (
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
                     <div>
-                      <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Quantidade mensal</label>
+                      <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Título do plano avulso</label>
                       <input
                         type="text"
-                        value={proposalDraft.quantidade_mensal || ''}
-                        onChange={(e) => updateProposalDraftField('quantidade_mensal', e.target.value)}
+                        value={proposalDraft.opcao1_titulo || ''}
+                        onChange={(e) => updateProposalDraftField('opcao1_titulo', e.target.value)}
                         className="hinput w-full"
-                        placeholder="Ex.: 12 vídeos por mês"
+                        placeholder="Ex.: Plano Avulso"
                       />
                     </div>
                     <div>
-                      <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Valor mensal</label>
-                      <CurrencyInput
-                        value={proposalDraft.valor_mensal_moeda || ''}
-                        onChange={(value) => updateProposalDraftField('valor_mensal_moeda', value)}
-                        onBlur={(value) => updateProposalDraftField('valor_mensal_moeda', formatCurrencyBRKeepingMonthly(value))}
-                        placeholder="1.500,00/mês"
+                      <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Título do plano recorrente</label>
+                      <input
+                        type="text"
+                        value={proposalDraft.opcao2_titulo || ''}
+                        onChange={(e) => updateProposalDraftField('opcao2_titulo', e.target.value)}
+                        className="hinput w-full"
+                        placeholder="Ex.: Plano Trimestral"
                       />
                     </div>
                     <div>
-                  <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Escopo mensal</label>
+                  <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Desconto mensal</label>
                       <input
                         type="text"
-                        value={proposalDraft.escopo_mensal || ''}
-                        onChange={(e) => updateProposalDraftField('escopo_mensal', e.target.value)}
+                        value={proposalDraft.recorrente_desconto_percent || ''}
+                        onChange={(e) => updateProposalDraftField('recorrente_desconto_percent', e.target.value)}
+                        onBlur={(e) => updateProposalDraftField('recorrente_desconto_percent', formatPercentText(e.target.value, 10))}
                         className="hinput w-full"
-                        placeholder="Resumo da operação mensal"
+                        placeholder="Ex.: 10%"
                       />
                     </div>
+                    <CalculatedField label="Valor mensal recorrente" value={recurringProposalDraft.valor_mensal_moeda} />
+                    <CalculatedField label="Total do contrato" value={recurringProposalDraft.recorrente_total_contrato_moeda} />
+                    <CalculatedField label="Economia no período" value={recurringProposalDraft.recorrente_economia_moeda || 'R$ 0,00'} />
                   </div>
                 )}
 
                 <div>
                   <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">
-                    {proposalMode === 'personalizada' ? 'Descrição curta' : 'Escopo / descrição da proposta'}
+                    {proposalMode === 'direta' || proposalMode === 'mensal' ? 'Descrição curta' : 'Escopo / descrição da proposta'}
                   </label>
                   <textarea
                     value={proposalDraft.escopo_comercial || ''}
                     onChange={(e) => updateProposalDraftField('escopo_comercial', e.target.value)}
-                    rows={proposalMode === 'personalizada' ? 2 : 3}
+                    rows={proposalMode === 'direta' || proposalMode === 'mensal' ? 2 : 3}
                     className="hinput w-full resize-none"
-                    placeholder={proposalMode === 'personalizada' ? 'Resumo curto da proposta personalizada' : 'Descreva o escopo da proposta'}
+                    placeholder={proposalMode === 'direta' || proposalMode === 'mensal' ? 'Resumo curto da proposta' : 'Descreva o escopo da proposta'}
                   />
                 </div>
 

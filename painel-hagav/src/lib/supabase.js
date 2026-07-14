@@ -1622,6 +1622,15 @@ function getFinancialMonthKey(value) {
   return formatFinancialInputDate(value).slice(0, 7);
 }
 
+function getFinancialMonthStart(value) {
+  return `${getFinancialMonthKey(value)}-01`;
+}
+
+function getFinancialMonthEnd(value) {
+  const date = parseFinancialLocalDate(value);
+  return formatFinancialInputDate(new Date(date.getFullYear(), date.getMonth() + 1, 0));
+}
+
 function normalizeFinancialText(value) {
   return String(value || '')
     .normalize('NFD')
@@ -1843,6 +1852,8 @@ export async function syncFinancialEntriesForActiveClientContract(fields) {
   const startDate = formatFinancialInputDate(fields?.dataInicio || today);
   const durationMonths = Math.max(1, Number.parseInt(String(fields?.duracaoMeses || fields?.duracao_meses || 1), 10) || 1);
   const endDate = formatFinancialInputDate(addFinancialMonths(startDate, durationMonths - 1));
+  const legacySearchStart = getFinancialMonthStart(startDate);
+  const legacySearchEnd = getFinancialMonthEnd(endDate);
   const clientSearchTerms = Array.from(new Set([
     clientName,
     companyName,
@@ -1862,8 +1873,8 @@ export async function syncFinancialEntriesForActiveClientContract(fields) {
     .from('financial_entries')
     .select('*')
     .eq('tipo', 'receber')
-    .gte('vencimento', startDate)
-    .lte('vencimento', endDate)
+    .gte('vencimento', legacySearchStart)
+    .lte('vencimento', legacySearchEnd)
     .limit(500);
 
   if (legacyError) throw legacyError;

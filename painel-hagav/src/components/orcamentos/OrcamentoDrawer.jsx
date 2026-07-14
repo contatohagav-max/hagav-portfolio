@@ -1613,17 +1613,28 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
     if (normalizedMode === 'mensal' && capturedOneOffValue >= 10) {
       setLastKnownOneOffValue(capturedOneOffValue);
     }
-    const recurringSeedValue = normalizedMode === 'mensal'
-      ? lastManualRecurringBaseValue
-      : 0;
-    const seedDraft = recurringSeedValue >= 10
-      ? { valor_total_moeda: formatCurrencyBR(recurringSeedValue) }
-      : {};
+    if (normalizedMode === 'mensal') {
+      setProposalMode(normalizedMode);
+      setProposalDirtyFields((prev) => ({
+        ...prev,
+        valor_total_moeda: true,
+        valor_mensal_moeda: true,
+      }));
+      setRecurringValueTouched(false);
+      setComparativeWarning('');
+      setProposalDraft((prev) => ({
+        ...(prev && typeof prev === 'object' ? prev : {}),
+        recorrente: 'true',
+        duracao_contrato_meses: prev?.duracao_contrato_meses || '3',
+        recorrente_desconto_percent: prev?.recorrente_desconto_percent || '10%',
+      }));
+      return;
+    }
     setProposalMode(normalizedMode);
     setProposalDirtyFields({});
-    setRecurringValueTouched(normalizedMode === 'mensal' && lastManualRecurringBaseValue >= 10);
+    setRecurringValueTouched(false);
     setComparativeWarning('');
-    setProposalDraft(buildProposalDraftForMode(normalizedMode, seedDraft));
+    setProposalDraft(buildProposalDraftForMode(normalizedMode));
   }
 
   function applyOneOffValueToRecurring() {
@@ -1910,6 +1921,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
       let changed = false;
 
       AUTO_SYNC_PROPOSAL_FIELDS.forEach((field) => {
+        if (proposalMode === 'mensal' && ['valor_total_moeda', 'valor_mensal_moeda'].includes(field)) return;
         if (proposalDirtyFields[field]) return;
         const desired = normalizeText(autoProposalDraft?.[field] || '');
         if (normalizeText(nextDraft[field]) !== desired) {
@@ -1920,7 +1932,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
 
       return changed ? nextDraft : prev;
     });
-  }, [autoProposalDraft, proposalDirtyFields]);
+  }, [autoProposalDraft, proposalDirtyFields, proposalMode]);
 
   useEffect(() => {
     const detalhes = parseDetalhes(orc?.detalhes);

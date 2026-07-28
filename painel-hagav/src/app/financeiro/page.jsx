@@ -287,6 +287,10 @@ function isPaid(entry) {
   return effectiveFinancialStatus(entry) === 'pago';
 }
 
+function isPartial(entry) {
+  return effectiveFinancialStatus(entry) === 'parcial';
+}
+
 function getEntryValue(entry) {
   const value = Number(entry?.valor || 0);
   return Number.isFinite(value) ? Math.max(0, value) : 0;
@@ -637,10 +641,14 @@ export default function FinanceiroPage() {
       const dueDate = getDueDate(entry);
       const paidDate = getPaidDate(entry);
       const openAmount = getOpenAmount(entry);
+      const partialPaidAmount = getRawPaidValue(entry);
 
       if (isReceber(entry)) {
         if (isPaid(entry) && isSameMonth(paidDate, referenceDate)) {
           received += getPaidAmount(entry);
+        }
+        if (isPartial(entry) && partialPaidAmount > 0 && isSameMonth(paidDate, referenceDate)) {
+          received += partialPaidAmount;
         }
         if (!isPaid(entry) && isSameMonth(dueDate, referenceDate)) {
           pending += openAmount;
@@ -819,7 +827,7 @@ export default function FinanceiroPage() {
   }
 
   const metricCards = [
-    { label: 'Recebido no mês', value: metrics.received, helper: 'Entradas pagas', icon: ArrowDownCircle, tone: 'text-emerald-300' },
+    { label: 'Recebido no mês', value: metrics.received, helper: 'Pagas e parciais', icon: ArrowDownCircle, tone: 'text-emerald-300' },
     { label: 'A receber no mês', value: metrics.pending, helper: 'Pendentes e parciais', icon: CalendarClock, tone: 'text-blue-300' },
     { label: 'Em atraso', value: metrics.overdue, helper: 'Recebimentos vencidos', icon: CircleDollarSign, tone: 'text-red-300' },
     { label: 'Custos HAGAV', value: metrics.costsHagav, helper: 'Natureza Empresa', icon: ArrowUpCircle, tone: 'text-amber-300' },

@@ -684,7 +684,9 @@ export default function FinanceiroPage() {
     const margin = received - costsHagav;
     const realSurplus = received - costsHagav - personalCosts;
     const projectedResult = received + pending - costsHagav - personalCosts;
-    const targetGap = Math.max(0, monthlyGoal - projectedResult);
+    const projectedRevenue = received + pending;
+    const targetGap = Math.max(0, monthlyGoal - projectedRevenue);
+    const targetSurplus = Math.max(0, projectedRevenue - monthlyGoal);
     const neededClients = targetGap <= 0 ? 0 : Math.ceil(targetGap / averageTicket);
 
     return {
@@ -696,7 +698,9 @@ export default function FinanceiroPage() {
       margin,
       realSurplus,
       projectedResult,
+      projectedRevenue,
       targetGap,
+      targetSurplus,
       neededClients,
     };
   }, [averageTicket, entries, monthlyGoal, selectedMonth]);
@@ -890,13 +894,24 @@ export default function FinanceiroPage() {
       tone: 'text-amber-300',
     },
     { label: 'Sobra real', value: metrics.realSurplus, helper: `Projetado: ${fmtBRL(metrics.projectedResult)}`, icon: Building2, tone: metrics.realSurplus >= 0 ? 'text-emerald-300' : 'text-red-300' },
-    { label: 'Falta para meta', value: metrics.targetGap, helper: `Meta mensal: ${fmtBRL(monthlyGoal)}`, icon: CalendarClock, tone: metrics.targetGap <= 0 ? 'text-emerald-300' : 'text-amber-300' },
+    {
+      label: metrics.targetGap <= 0 ? 'Meta batida' : 'Falta para meta',
+      value: metrics.targetGap,
+      valueLabel: metrics.targetGap <= 0 ? `+${fmtBRL(metrics.targetSurplus)}` : '',
+      helper: metrics.targetGap <= 0
+        ? `Acima da meta de ${fmtBRL(monthlyGoal)}`
+        : `Meta de faturamento: ${fmtBRL(monthlyGoal)}`,
+      icon: CalendarClock,
+      tone: metrics.targetGap <= 0 ? 'text-emerald-300' : 'text-amber-300',
+    },
     {
       label: 'Clientes necessários',
       valueLabel: metrics.neededClients === 0
         ? '0'
         : `${metrics.neededClients} ${metrics.neededClients === 1 ? 'cliente' : 'clientes'}`,
-      helper: metrics.targetGap <= 0 ? 'Meta coberta' : `Baseado em ticket médio de ${fmtBRL(averageTicket)}`,
+      helper: metrics.targetGap <= 0
+        ? 'Meta de faturamento já batida'
+        : `Baseado no que falta para faturar e ticket médio de ${fmtBRL(averageTicket)}`,
       icon: UserRound,
       tone: 'text-blue-200',
     },

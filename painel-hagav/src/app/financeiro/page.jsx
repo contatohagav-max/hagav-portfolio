@@ -43,8 +43,10 @@ const FINANCEIRO_META_END = '[/HAGAV_FINANCEIRO_META]';
 const FINANCEIRO_META_REGEX = /\[HAGAV_FINANCEIRO_META\][\s\S]*?\[\/HAGAV_FINANCEIRO_META\]/g;
 const NATUREZA_OPTIONS = ['Empresa', 'Pessoal'];
 const FORMA_PAGAMENTO_OPTIONS = ['Pix', 'Cartão de crédito', 'Cartão de débito', 'Dinheiro', 'Boleto', 'Transferência', 'Outro'];
-const META_MINIMA_MENSAL = 6000;
-const TICKET_MEDIO_CLIENTE = 1500;
+const DEFAULT_META_MENSAL = 10000;
+const DEFAULT_TICKET_MEDIO_CLIENTE = 1500;
+const META_MENSAL_STORAGE_KEY = 'hagav_financeiro_meta_mensal';
+const TICKET_MEDIO_STORAGE_KEY = 'hagav_financeiro_ticket_medio';
 
 function normalizeNatureza(value) {
   return String(value || '').trim().toLowerCase() === 'pessoal' ? 'Pessoal' : 'Empresa';
@@ -603,6 +605,14 @@ export default function FinanceiroPage() {
   const [selectedMonth, setSelectedMonth] = useState(() => startOfMonth(new Date()));
   const [selected, setSelected] = useState(null);
   const [creating, setCreating] = useState(false);
+  const [monthlyGoal, setMonthlyGoal] = useState(DEFAULT_META_MENSAL);
+  const [averageTicket, setAverageTicket] = useState(DEFAULT_TICKET_MEDIO_CLIENTE);
+  const [goalEditorOpen, setGoalEditorOpen] = useState(false);
+  const [goalForm, setGoalForm] = useState({
+    monthlyGoal: formatCurrencyInput(DEFAULT_META_MENSAL),
+    averageTicket: formatCurrencyInput(DEFAULT_TICKET_MEDIO_CLIENTE),
+  });
+  const [goalError, setGoalError] = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -625,6 +635,14 @@ export default function FinanceiroPage() {
     const timer = setTimeout(load, 220);
     return () => clearTimeout(timer);
   }, [load]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const savedGoal = parseCurrencyValue(window.localStorage.getItem(META_MENSAL_STORAGE_KEY));
+    const savedTicket = parseCurrencyValue(window.localStorage.getItem(TICKET_MEDIO_STORAGE_KEY));
+    if (savedGoal > 0) setMonthlyGoal(savedGoal);
+    if (savedTicket > 0) setAverageTicket(savedTicket);
+  }, []);
 
   const metrics = useMemo(() => {
     const referenceDate = selectedMonth;
@@ -667,8 +685,8 @@ export default function FinanceiroPage() {
     const margin = received - costsHagav;
     const realSurplus = received - costsHagav - personalCosts;
     const projectedResult = received + pending - costsHagav - personalCosts;
-    const targetGap = Math.max(0, META_MINIMA_MENSAL - projectedResult);
-    const neededClients = targetGap <= 0 ? 0 : Math.ceil(targetGap / TICKET_MEDIO_CLIENTE);
+    const targetGap = Math.max(0, monthlyGoal - projectedResult);
+    const neededClients = targetGap <= 0 ? 0 : Math.ceil(targetGap / averageTicket);
 
     return {
       received,
@@ -682,7 +700,7 @@ export default function FinanceiroPage() {
       targetGap,
       neededClients,
     };
-  }, [entries, selectedMonth]);
+  }, [averageTicket, entries, monthlyGoal, selectedMonth]);
 
   function applyEntriesLocal(items) {
     const cleanItems = (Array.isArray(items) ? items : [items]).filter((item) => item?.id);
@@ -826,6 +844,39 @@ export default function FinanceiroPage() {
     setSelectedMonth(startOfMonth(new Date()));
   }
 
+  function openGoalEditor() {
+    setGoalForm({
+      monthlyGoal: formatCurrencyInput(monthlyGoal),
+      averageTicket: formatCurrencyInput(averageTicket),
+    });
+    setGoalError('');
+    setGoalEditorOpen(true);
+  }
+
+  function saveGoalEditor() {
+    const nextGoal = parseCurrencyValue(goalForm.monthlyGoal);
+    const nextTicket = parseCurrencyValue(goalForm.averageTicket);
+    if (nextGoal <= 0) {
+      setGoalError('Informe uma meta mensal maior que zero.');
+      return;
+    }
+    if (nextTicket <= 0) {
+      setGoalError('Informe um ticket médio maior que zero.');
+      return;
+    }
+
+    setMonthlyGoal(nextGoal);
+    setAverageTicket(nextTicket);
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(META_MENSAL_STORAGE_KEY, String(nextGoal));
+      window.localStorage.setItem(TICKET_MEDIO_STORAGE_KEY, String(nextTicket));
+    }
+    setGoalEditorOpen(false);
+    setGoalError('');
+    setFeedback('Meta mensal salva.');
+    setTimeout(() => setFeedback(''), 2200);
+  }
+
   const metricCards = [
     { label: 'Recebido no mês', value: metrics.received, helper: 'Pagas e parciais', icon: ArrowDownCircle, tone: 'text-emerald-300' },
     { label: 'A receber no mês', value: metrics.pending, helper: 'Pendentes e parciais', icon: CalendarClock, tone: 'text-blue-300' },
@@ -834,12 +885,14 @@ export default function FinanceiroPage() {
     { label: 'Custos pessoais', value: metrics.personalCosts, helper: 'Natureza Pessoal', icon: UserRound, tone: 'text-orange-300' },
     { label: 'Lucro HAGAV', value: metrics.margin, helper: 'Resultado operacional', icon: TrendingUp, tone: metrics.margin >= 0 ? 'text-emerald-300' : 'text-red-300' },
     { label: 'Sobra real', value: metrics.realSurplus, helper: `Projetado: ${fmtBRL(metrics.projectedResult)}`, icon: Building2, tone: metrics.realSurplus >= 0 ? 'text-emerald-300' : 'text-red-300' },
+    { label: 'Resultado projetado', value: metrics.projectedResult, helper: 'Recebido + a receber - custos', icon: TrendingUp, tone: metrics.projectedResult >= 0 ? 'text-emerald-300' : 'text-red-300' },
+    { label: 'Falta para meta', value: metrics.targetGap, helper: `Meta mensal: ${fmtBRL(monthlyGoal)}`, icon: CalendarClock, tone: metrics.targetGap <= 0 ? 'text-emerald-300' : 'text-amber-300' },
     {
       label: 'Clientes necessários',
       valueLabel: metrics.neededClients === 0
         ? '0'
         : `${metrics.neededClients} ${metrics.neededClients === 1 ? 'cliente' : 'clientes'}`,
-      helper: metrics.targetGap <= 0 ? 'Meta coberta' : `Baseado em ticket médio de ${fmtBRL(TICKET_MEDIO_CLIENTE)}`,
+      helper: metrics.targetGap <= 0 ? 'Meta coberta' : `Baseado em ticket médio de ${fmtBRL(averageTicket)}`,
       icon: UserRound,
       tone: 'text-blue-200',
     },
@@ -881,6 +934,9 @@ export default function FinanceiroPage() {
           <button type="button" onClick={load} disabled={loading} className="btn-ghost btn-sm">
             <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
             Atualizar
+          </button>
+          <button type="button" onClick={openGoalEditor} className="btn-ghost btn-sm">
+            Editar meta
           </button>
           <button type="button" onClick={() => setCreating(true)} className="btn-gold btn-sm">
             <Plus size={13} /> Novo lançamento
@@ -1036,6 +1092,45 @@ export default function FinanceiroPage() {
         onSaved={saveLocal}
         onDeleted={deleteLocal}
       />
+
+      <Modal
+        open={goalEditorOpen}
+        onClose={() => setGoalEditorOpen(false)}
+        title="Editar meta mensal"
+        width="max-w-md"
+      >
+        <div className="space-y-4">
+          <label className="text-xs text-hagav-gray block">
+            Meta mensal
+            <input
+              type="text"
+              inputMode="decimal"
+              value={goalForm.monthlyGoal}
+              onChange={(event) => setGoalForm((current) => ({ ...current, monthlyGoal: event.target.value }))}
+              onBlur={(event) => setGoalForm((current) => ({ ...current, monthlyGoal: formatCurrencyInput(event.target.value) }))}
+              className="hinput w-full mt-1.5"
+              placeholder="R$ 10.000,00"
+            />
+          </label>
+          <label className="text-xs text-hagav-gray block">
+            Ticket médio
+            <input
+              type="text"
+              inputMode="decimal"
+              value={goalForm.averageTicket}
+              onChange={(event) => setGoalForm((current) => ({ ...current, averageTicket: event.target.value }))}
+              onBlur={(event) => setGoalForm((current) => ({ ...current, averageTicket: formatCurrencyInput(event.target.value) }))}
+              className="hinput w-full mt-1.5"
+              placeholder="R$ 1.500,00"
+            />
+          </label>
+          {goalError && <p className="text-xs text-red-300">{goalError}</p>}
+          <div className="flex justify-end gap-2">
+            <button type="button" onClick={() => setGoalEditorOpen(false)} className="btn-ghost">Cancelar</button>
+            <button type="button" onClick={saveGoalEditor} className="btn-gold">Salvar meta</button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

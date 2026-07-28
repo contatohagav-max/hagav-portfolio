@@ -12,7 +12,6 @@ import {
   RefreshCw,
   Repeat,
   Search,
-  TrendingUp,
   UserRound,
 } from 'lucide-react';
 import Modal from '@/components/ui/Modal';
@@ -880,12 +879,17 @@ export default function FinanceiroPage() {
   const metricCards = [
     { label: 'Recebido no mês', value: metrics.received, helper: 'Pagas e parciais', icon: ArrowDownCircle, tone: 'text-emerald-300' },
     { label: 'A receber no mês', value: metrics.pending, helper: 'Pendentes e parciais', icon: CalendarClock, tone: 'text-blue-300' },
-    { label: 'Em atraso', value: metrics.overdue, helper: 'Recebimentos vencidos', icon: CircleDollarSign, tone: 'text-red-300' },
-    { label: 'Custos HAGAV', value: metrics.costsHagav, helper: 'Natureza Empresa', icon: ArrowUpCircle, tone: 'text-amber-300' },
-    { label: 'Custos pessoais', value: metrics.personalCosts, helper: 'Natureza Pessoal', icon: UserRound, tone: 'text-orange-300' },
-    { label: 'Lucro HAGAV', value: metrics.margin, helper: 'Resultado operacional', icon: TrendingUp, tone: metrics.margin >= 0 ? 'text-emerald-300' : 'text-red-300' },
+    ...(metrics.overdue > 0
+      ? [{ label: 'Em atraso', value: metrics.overdue, helper: 'Recebimentos vencidos', icon: CircleDollarSign, tone: 'text-red-300' }]
+      : []),
+    {
+      label: 'Custos do mês',
+      value: metrics.costsHagav + metrics.personalCosts,
+      helper: `HAGAV: ${fmtBRL(metrics.costsHagav)} · Pessoal: ${fmtBRL(metrics.personalCosts)} · Lucro HAGAV: ${fmtBRL(metrics.margin)}`,
+      icon: ArrowUpCircle,
+      tone: 'text-amber-300',
+    },
     { label: 'Sobra real', value: metrics.realSurplus, helper: `Projetado: ${fmtBRL(metrics.projectedResult)}`, icon: Building2, tone: metrics.realSurplus >= 0 ? 'text-emerald-300' : 'text-red-300' },
-    { label: 'Resultado projetado', value: metrics.projectedResult, helper: 'Recebido + a receber - custos', icon: TrendingUp, tone: metrics.projectedResult >= 0 ? 'text-emerald-300' : 'text-red-300' },
     { label: 'Falta para meta', value: metrics.targetGap, helper: `Meta mensal: ${fmtBRL(monthlyGoal)}`, icon: CalendarClock, tone: metrics.targetGap <= 0 ? 'text-emerald-300' : 'text-amber-300' },
     {
       label: 'Clientes necessários',
@@ -944,7 +948,7 @@ export default function FinanceiroPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-8 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6 gap-3">
         {metricCards.map(({ label, value, valueLabel, helper, icon: Icon, tone }) => (
           <div key={label} className="hcard p-3 min-h-[112px]">
             <p className="text-[10px] uppercase tracking-wider text-hagav-gray flex items-center gap-1.5">

@@ -255,10 +255,6 @@ function getDueDate(entry) {
   return parseDateSafe(entry?.vencimento);
 }
 
-function getPaidDate(entry) {
-  return parseDateSafe(entry?.pago_em) || getDueDate(entry);
-}
-
 function getNatureza(entry) {
   return getEntryMeta(entry).natureza;
 }
@@ -747,12 +743,11 @@ export default function FinanceiroPage() {
       if (isCancelled(entry)) return;
 
       const dueDate = getDueDate(entry);
-      const paidDate = getPaidDate(entry);
       const openAmount = getOpenAmount(entry);
       const receivedAmount = getReceivedAmount(entry);
 
       if (isReceber(entry)) {
-        if (receivedAmount > 0 && isSameMonth(paidDate, referenceDate)) {
+        if (receivedAmount > 0 && isSameMonth(dueDate, referenceDate)) {
           received += receivedAmount;
         }
         if (!isPaid(entry) && isSameMonth(dueDate, referenceDate)) {

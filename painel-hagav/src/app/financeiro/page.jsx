@@ -65,6 +65,10 @@ function readFinancialMetadata(observacoes) {
     recorrencia_mes: '',
     recorrencia_origem: false,
     gerado_por_recorrencia: false,
+    origem: '',
+    deal_id: '',
+    contrato: false,
+    contrato_mes: '',
     hasMeta: Boolean(match?.[0]),
   };
   if (!match?.[0]) return meta;
@@ -84,6 +88,10 @@ function readFinancialMetadata(observacoes) {
       if (key === 'recorrencia_mes') meta.recorrencia_mes = value;
       if (key === 'recorrencia_origem') meta.recorrencia_origem = parseBooleanMeta(value);
       if (key === 'gerado_por_recorrencia') meta.gerado_por_recorrencia = parseBooleanMeta(value);
+      if (key === 'origem') meta.origem = value;
+      if (key === 'deal_id') meta.deal_id = value;
+      if (key === 'contrato') meta.contrato = parseBooleanMeta(value);
+      if (key === 'contrato_mes') meta.contrato_mes = value;
     });
 
   return meta;
@@ -140,6 +148,15 @@ function normalizePaymentKey(value) {
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '');
+}
+
+function normalizeFinancialMetricKey(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 function resolveFormaPagamento(value) {
@@ -308,12 +325,69 @@ function getPaidAmount(entry) {
   return isPaid(entry) ? (paid > 0 ? paid : value) : paid;
 }
 
+function getValidPaidAmount(entry) {
+  const value = getEntryValue(entry);
+  const paid = Math.min(getRawPaidValue(entry), value);
+  if (isPaid(entry)) return paid > 0 ? paid : value;
+  if (isPartial(entry)) return paid;
+  return 0;
+}
+
+function getReceivedAmount(entry) {
+  return isReceber(entry) ? getValidPaidAmount(entry) : 0;
+}
+
 function getOpenAmount(entry) {
-  return Math.max(0, getEntryValue(entry) - getRawPaidValue(entry));
+  return Math.max(0, getEntryValue(entry) - getValidPaidAmount(entry));
 }
 
 function getCostAmount(entry) {
   return isPaid(entry) ? getPaidAmount(entry) : getOpenAmount(entry);
+}
+
+function getMetricDuplicateKey(entry) {
+  const effective = effectiveFinancialStatus(entry);
+  if (effective === 'pago' || effective === 'cancelado') return '';
+
+  const meta = getEntryMeta(entry);
+  const hasSafeOrigin = Boolean(
+    meta.gerado_por_recorrencia
+    || meta.recorrencia_origem_id
+    || meta.recorrencia_origem
+    || meta.deal_id
+    || meta.contrato
+    || meta.contrato_mes
+    || ['cliente_ativo', 'cliente_ativado'].includes(String(meta.origem || '').trim())
+  );
+  if (!hasSafeOrigin) return '';
+
+  const source = meta.recorrencia_origem_id
+    || meta.deal_id
+    || normalizeFinancialMetricKey(`${entry?.descricao || ''}|${entry?.cliente_fornecedor || ''}`);
+  const month = meta.recorrencia_mes || meta.contrato_mes || formatMonthKey(getDueDate(entry) || new Date(0));
+  const value = getEntryValue(entry).toFixed(2);
+  const date = String(entry?.vencimento || '').slice(0, 10);
+  const description = normalizeFinancialMetricKey(entry?.descricao);
+  return [
+    entry?.tipo || '',
+    effective,
+    source,
+    month,
+    date,
+    value,
+    description,
+  ].join('|');
+}
+
+function dedupeEntriesForMetrics(entries) {
+  const seen = new Set();
+  return entries.filter((entry) => {
+    const duplicateKey = getMetricDuplicateKey(entry);
+    if (!duplicateKey) return true;
+    if (seen.has(duplicateKey)) return false;
+    seen.add(duplicateKey);
+    return true;
+  });
 }
 
 function FinancialEditor({ entry, createMode, onClose, onSaved, onDeleted }) {
@@ -652,20 +726,17 @@ export default function FinanceiroPage() {
     let costsHagav = 0;
     let personalCosts = 0;
 
-    entries.forEach((entry) => {
+    dedupeEntriesForMetrics(entries).forEach((entry) => {
       if (isCancelled(entry)) return;
 
       const dueDate = getDueDate(entry);
       const paidDate = getPaidDate(entry);
       const openAmount = getOpenAmount(entry);
-      const partialPaidAmount = getRawPaidValue(entry);
+      const receivedAmount = getReceivedAmount(entry);
 
       if (isReceber(entry)) {
-        if (isPaid(entry) && isSameMonth(paidDate, referenceDate)) {
-          received += getPaidAmount(entry);
-        }
-        if (isPartial(entry) && partialPaidAmount > 0 && isSameMonth(paidDate, referenceDate)) {
-          received += partialPaidAmount;
+        if (receivedAmount > 0 && isSameMonth(paidDate, referenceDate)) {
+          received += receivedAmount;
         }
         if (!isPaid(entry) && isSameMonth(dueDate, referenceDate)) {
           pending += openAmount;

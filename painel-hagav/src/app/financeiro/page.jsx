@@ -298,15 +298,15 @@ function compareFinancialEntries(a, b) {
 }
 
 function isCancelled(entry) {
-  return effectiveFinancialStatus(entry) === 'cancelado';
+  return String(effectiveFinancialStatus(entry) || '').trim().toLowerCase() === 'cancelado';
 }
 
 function isPaid(entry) {
-  return effectiveFinancialStatus(entry) === 'pago';
+  return String(effectiveFinancialStatus(entry) || '').trim().toLowerCase() === 'pago';
 }
 
 function isPartial(entry) {
-  return effectiveFinancialStatus(entry) === 'parcial';
+  return String(effectiveFinancialStatus(entry) || '').trim().toLowerCase() === 'parcial';
 }
 
 function getEntryValue(entry) {
@@ -346,8 +346,8 @@ function getCostAmount(entry) {
 }
 
 function getMetricDuplicateKey(entry) {
-  const effective = effectiveFinancialStatus(entry);
-  if (effective === 'pago' || effective === 'cancelado') return '';
+  const effective = String(effectiveFinancialStatus(entry) || '').trim().toLowerCase();
+  if (effective === 'cancelado') return '';
 
   const meta = getEntryMeta(entry);
   const hasSafeOrigin = Boolean(
@@ -370,7 +370,6 @@ function getMetricDuplicateKey(entry) {
   const description = normalizeFinancialMetricKey(entry?.descricao);
   return [
     entry?.tipo || '',
-    effective,
     source,
     month,
     date,
@@ -380,14 +379,32 @@ function getMetricDuplicateKey(entry) {
 }
 
 function dedupeEntriesForMetrics(entries) {
-  const seen = new Set();
-  return entries.filter((entry) => {
+  const grouped = new Map();
+  const looseEntries = [];
+  entries.forEach((entry) => {
     const duplicateKey = getMetricDuplicateKey(entry);
-    if (!duplicateKey) return true;
-    if (seen.has(duplicateKey)) return false;
-    seen.add(duplicateKey);
-    return true;
+    if (!duplicateKey) {
+      looseEntries.push(entry);
+      return;
+    }
+    const current = grouped.get(duplicateKey) || [];
+    current.push(entry);
+    grouped.set(duplicateKey, current);
   });
+
+  const statusPriority = (entry) => {
+    const effective = String(effectiveFinancialStatus(entry) || '').trim().toLowerCase();
+    if (effective === 'parcial') return 0;
+    if (effective === 'pendente' || effective === 'atrasado') return 1;
+    if (effective === 'pago') return 2;
+    return 3;
+  };
+
+  const selectedEntries = Array.from(grouped.values()).map((group) => (
+    [...group].sort((a, b) => statusPriority(a) - statusPriority(b))[0]
+  ));
+
+  return [...looseEntries, ...selectedEntries];
 }
 
 function FinancialEditor({ entry, createMode, onClose, onSaved, onDeleted }) {

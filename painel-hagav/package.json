@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test:goals": "node --experimental-vm-modules scripts/test-goals-engine.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.39.7",

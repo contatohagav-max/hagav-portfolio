@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Clapperboard, FileText, Kanban, Landmark, LayoutDashboard, Settings, Users, X } from 'lucide-react';
+import { Clapperboard, FileText, Kanban, Landmark, LayoutDashboard, Settings, Target, Users, X } from 'lucide-react';
 import EduTooltip from '@/components/ui/EduTooltip';
 import { useAuth } from '@/context/AuthContext';
 import { classNames } from '@/lib/utils';
@@ -16,6 +16,7 @@ const NAV = [
   { href: '/pipeline', label: 'Pipeline', icon: Kanban, permission: 'readPipeline' },
   { href: '/producao', label: 'Produção', icon: Clapperboard, permission: 'readProducao' },
   { href: '/financeiro', label: 'Financeiro', icon: Landmark, permission: 'readFinanceiro' },
+  { href: '/metas', label: 'Metas da empresa', icon: Target, permission: 'readFinanceiro' },
   { href: '/configuracoes', label: 'Configurações', icon: Settings, permission: 'manageSettings' },
 ];
 
@@ -61,6 +62,12 @@ const NAV_TOOLTIPS = {
     whatIs: 'Caixa operacional ligado aos projetos aprovados.',
     purpose: 'Acompanhar recebimentos, custos, vencimentos e margem.',
     observe: 'Priorize contas atrasadas e atualize pagamentos realizados.',
+  },
+  '/metas': {
+    title: 'Metas da empresa',
+    whatIs: 'Planejamento de reservas, equipamentos e estudo.',
+    purpose: 'Decidir quanto guardar e quando liberar investimentos.',
+    observe: 'A meta principal deve proteger a distribuição semanal.',
   },
 };
 

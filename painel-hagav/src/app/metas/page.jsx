@@ -106,6 +106,21 @@ function formatPercent(value) {
   return `${amount.toFixed(amount >= 10 ? 0 : 1)}%`;
 }
 
+const USER_FACING_GOALS_ERRORS = new Set([
+  'Informe o nome da meta.',
+  'Informe o preço do equipamento.',
+  'Informe o valor alvo da meta.',
+  'Meta inválida.',
+  'Informe um valor maior que zero.',
+  'Objetivo inválido.',
+  'Informe o tema da sessão.',
+]);
+
+function goalsFormError(error, fallback) {
+  const message = String(error?.message || '').trim();
+  return USER_FACING_GOALS_ERRORS.has(message) ? message : fallback;
+}
+
 function priorityLabel(value) {
   return PRIORITIES.find((item) => item.value === value)?.label || 'Média';
 }
@@ -282,7 +297,7 @@ function GoalFormModal({ type, goal, open, onClose, onSaved }) {
       onClose();
     } catch (err) {
       console.error('[Metas][Salvar meta]', err);
-      setError(err?.message || 'Não foi possível salvar a meta.');
+      setError(goalsFormError(err, 'Não foi possível salvar a meta. Verifique o banco do módulo de metas e tente novamente.'));
     } finally {
       setSaving(false);
     }
@@ -452,7 +467,7 @@ function DepositModal({ goal, open, onClose, onSaved }) {
       onClose();
     } catch (err) {
       console.error('[Metas][Depósito]', err);
-      setError(err?.message || 'Não foi possível registrar o depósito.');
+      setError(goalsFormError(err, 'Não foi possível registrar o depósito. Verifique o banco do módulo de metas e tente novamente.'));
     } finally {
       setSaving(false);
     }
@@ -531,7 +546,7 @@ function StudySessionModal({ goal, open, onClose, onSaved }) {
       onClose();
     } catch (err) {
       console.error('[Metas][Sessão]', err);
-      setError(err?.message || 'Não foi possível registrar a sessão.');
+      setError(goalsFormError(err, 'Não foi possível registrar a sessão. Verifique o banco do módulo de metas e tente novamente.'));
     } finally {
       setSaving(false);
     }

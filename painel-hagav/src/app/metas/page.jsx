@@ -118,6 +118,7 @@ const USER_FACING_GOALS_ERRORS = new Set([
 
 function goalsFormError(error, fallback) {
   const message = String(error?.message || '').trim();
+  if (message.startsWith('A sessão deve estar dentro do período do objetivo,')) return message;
   return USER_FACING_GOALS_ERRORS.has(message) ? message : fallback;
 }
 
@@ -789,6 +790,8 @@ export default function MetasEmpresaPage() {
     stats: calculateEquipmentReadiness({
       price: goal.target_value,
       reserved: sumContributions(goal.id, contributions),
+      targetDate: goal.target_date,
+      referenceDate: new Date(),
     }),
   })), [contributions, equipmentGoals]);
 

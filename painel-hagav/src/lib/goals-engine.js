@@ -129,12 +129,18 @@ export function calculateGoalProgress({
   };
 }
 
-export function calculateEquipmentReadiness({ price, reserved } = {}) {
+export function calculateEquipmentReadiness({
+  price,
+  reserved,
+  targetDate,
+  referenceDate = new Date(),
+} = {}) {
   const targetValue = toMoneyNumber(price);
   const reservedValue = toMoneyNumber(reserved);
   const remainingAmount = calculateRemainingAmount(targetValue, reservedValue);
   const progressPercent = targetValue > 0 ? Math.min(100, (reservedValue / targetValue) * 100) : 0;
   const isReady = targetValue > 0 && reservedValue >= targetValue;
+  const daysRemaining = targetDate ? countCalendarDays(referenceDate, targetDate) : 0;
   let status = 'Planejando';
   if (isReady) status = 'Liberado para compra';
   else if (progressPercent >= 75) status = 'Quase liberado';
@@ -144,6 +150,7 @@ export function calculateEquipmentReadiness({ price, reserved } = {}) {
     reservedValue,
     remainingAmount,
     progressPercent,
+    daysRemaining,
     isReady,
     status,
   };

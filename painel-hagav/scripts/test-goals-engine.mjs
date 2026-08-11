@@ -39,6 +39,14 @@ assert.equal(equipmentNotReady.isReady, false);
 const equipmentReady = calculateEquipmentReadiness({ price: 1800, reserved: 1800 });
 assert.equal(equipmentReady.isReady, true);
 
+const equipmentWithDeadline = calculateEquipmentReadiness({
+  price: 6000,
+  reserved: 10,
+  targetDate: '2026-12-20',
+  referenceDate: '2026-08-10',
+});
+assert.equal(equipmentWithDeadline.daysRemaining, 133);
+
 const allocation = calculateWeeklyAllocation({
   availableAmount: 500,
   primaryGoal: {
@@ -65,6 +73,33 @@ assert.equal(allocation.allocations[1].amount, 100);
 assert.equal(
   allocation.allocations.reduce((sum, item) => sum + item.amount, 0) <= 500,
   true,
+);
+
+const allocationWithRemainder = calculateWeeklyAllocation({
+  availableAmount: 600,
+  primaryGoal: {
+    id: 'primary',
+    title: 'RESERVA HAGAV',
+    category: 'financial',
+    isPrimary: true,
+    requiredWeekly: 526.32,
+    remainingAmount: 9000,
+  },
+  equipmentGoals: [
+    {
+      id: 'camera',
+      title: 'CÂMERA',
+      category: 'equipment',
+      remainingAmount: 5990,
+      priority: 'low',
+    },
+  ],
+});
+assert.equal(Math.round(allocationWithRemainder.allocations[0].amount * 100), 52632);
+assert.equal(Math.round(allocationWithRemainder.allocations[1].amount * 100), 7368);
+assert.equal(
+  Math.round(allocationWithRemainder.allocations.reduce((sum, item) => sum + item.amount, 0) * 100),
+  60000,
 );
 
 const personalAllocation = calculateWeeklyAllocation({

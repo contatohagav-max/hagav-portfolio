@@ -1,4 +1,5 @@
 import { getSupabase } from '@/lib/supabase';
+import { parseCalendarDate } from '@/lib/goals-engine';
 
 function normalizeMoney(value) {
   const parsed = Number(value || 0);
@@ -35,6 +36,30 @@ function normalizeStudySession(row) {
     completed_minutes: Number(row.completed_minutes || 0),
     completed: Boolean(row.completed),
   };
+}
+
+function calendarDateKey(value) {
+  const date = parseCalendarDate(value);
+  return date.getFullYear() * 10000 + (date.getMonth() + 1) * 100 + date.getDate();
+}
+
+function formatCalendarDateBR(value) {
+  const date = parseCalendarDate(value);
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  return `${day}/${month}/${date.getFullYear()}`;
+}
+
+function validateStudySessionPeriod(goal, sessionDate) {
+  if (!goal?.start_date || !goal?.target_date) return;
+  const sessionKey = calendarDateKey(sessionDate);
+  const startKey = calendarDateKey(goal.start_date);
+  const targetKey = calendarDateKey(goal.target_date);
+  if (sessionKey < startKey || sessionKey > targetKey) {
+    throw new Error(
+      `A sessão deve estar dentro do período do objetivo, de ${formatCalendarDateBR(goal.start_date)} a ${formatCalendarDateBR(goal.target_date)}.`,
+    );
+  }
 }
 
 export async function fetchCompanyGoalsBundle() {
@@ -209,6 +234,15 @@ export async function createGoalStudySession(fields) {
 
   if (!payload.goal_id) throw new Error('Objetivo inválido.');
   if (!payload.topic) throw new Error('Informe o tema da sessão.');
+
+  const { data: goalData, error: goalError } = await client
+    .from('goals')
+    .select('id, start_date, target_date')
+    .eq('id', payload.goal_id)
+    .single();
+
+  if (goalError) throw goalError;
+  validateStudySessionPeriod(goalData, payload.session_date);
 
   const { data, error } = await client
     .from('goal_study_sessions')

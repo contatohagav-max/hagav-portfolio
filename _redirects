@@ -1,5 +1,3 @@
 # SPA fallback para o painel interno — Cloudflare Pages
-/reels-teste  /reels-teste.html  200
-/reels-teste/  /reels-teste.html  200
 /admin    /admin/index.html  200
 /admin/*  /admin/index.html  200

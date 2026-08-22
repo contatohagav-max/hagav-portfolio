@@ -3,6 +3,8 @@
 
   var config = window.HAGAV_REELS_CONFIG || {};
   var reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var mobileMedia = window.matchMedia && window.matchMedia("(max-width: 767px)");
+  var featuredMobileIndex = 1;
 
   function qs(selector, root) {
     return (root || document).querySelector(selector);
@@ -53,8 +55,10 @@
     var root = qs("[data-authority]");
     if (!root) return;
     root.innerHTML = "";
-    (config.authority || []).forEach(function (item) {
-      var card = createEl("div", "reels-authority__item reveal");
+    (config.authority || []).concat(config.authority || []).forEach(function (item, index) {
+      var duplicate = index >= (config.authority || []).length;
+      var card = createEl("div", "reels-authority__item reveal" + (duplicate ? " reels-authority__item--duplicate" : ""));
+      if (duplicate) card.setAttribute("aria-hidden", "true");
       card.appendChild(createEl("span", "", "•"));
       card.appendChild(createEl("p", "", item));
       root.appendChild(card);
@@ -139,10 +143,24 @@
     return button;
   }
 
+  function createSoundControl(item) {
+    var button = createEl("button", "reels-video-sound", "Ativar som");
+    button.type = "button";
+    button.setAttribute("data-video-sound", "");
+    button.setAttribute("aria-label", "Ativar som de " + text(item.title || item.label || "vídeo HAGAV"));
+    return button;
+  }
+
   function createVideoSlot(item, mode, index) {
     var card = createEl("article", mode === "hero" ? "reels-phone reels-phone--" + (index + 1) : "reels-video-card reveal");
     var frame = createEl("div", "reels-phone__screen reels-media-shell");
     var hasVideo = !!item.videoUrl;
+
+    if (mode === "hero") {
+      card.setAttribute("data-featured-card", "");
+      card.setAttribute("data-featured-index", String(index));
+      frame.setAttribute("data-featured-media", "");
+    }
 
     if (hasVideo) {
       var isYouTube = item.provider === "youtube" || /youtube(?:-nocookie)?\.com/i.test(item.videoUrl);
@@ -151,6 +169,7 @@
       frame.setAttribute("data-media-title", item.title || item.label || "Vídeo HAGAV");
       frame.setAttribute("data-autoplay", item.autoPlay ? "true" : "false");
       frame.setAttribute("data-playing", "false");
+      frame.setAttribute("data-muted", "true");
 
       if (isYouTube) {
         var poster = createEl("img", "reels-video-poster");
@@ -173,6 +192,7 @@
         frame.appendChild(video);
       }
       frame.appendChild(createMediaControl(item));
+      if (mode === "hero") frame.appendChild(createSoundControl(item));
     } else {
       frame.appendChild(mediaPlaceholder(item));
     }
@@ -193,6 +213,21 @@
       (config.featuredVideos || config.heroVideos || []).forEach(function (item, index) {
         heroRoot.appendChild(createVideoSlot(item, "hero", index));
       });
+      var mobileUi = createEl("div", "reels-featured-mobile-ui");
+      mobileUi.appendChild(createEl("span", "reels-featured-mobile-ui__label", "Toque para assistir"));
+      var dots = createEl("div", "reels-featured-dots");
+      dots.setAttribute("role", "group");
+      dots.setAttribute("aria-label", "Selecionar vídeo em destaque");
+      (config.featuredVideos || config.heroVideos || []).forEach(function (item, index) {
+        var dot = createEl("button", "reels-featured-dot");
+        dot.type = "button";
+        dot.setAttribute("data-featured-dot", String(index));
+        dot.setAttribute("aria-label", "Mostrar " + text(item.title || item.label || ("vídeo " + (index + 1))));
+        dots.appendChild(dot);
+      });
+      mobileUi.appendChild(dots);
+      mobileUi.appendChild(createEl("span", "reels-featured-mobile-ui__count", "02 / 03"));
+      heroRoot.appendChild(mobileUi);
     }
 
     var portfolioRoot = qs("[data-portfolio]");
@@ -208,6 +243,51 @@
       note.textContent = config.contentPendingNote || "";
       note.hidden = !note.textContent;
     }
+  }
+
+  function renderBeforeAfter() {
+    var section = qs("[data-before-after-section]");
+    var root = qs("[data-before-after]");
+    var items = config.beforeAfterVideos || [];
+    if (!section || !root) return;
+    if (!items.length) {
+      section.hidden = true;
+      return;
+    }
+
+    section.hidden = false;
+    root.innerHTML = "";
+    items.forEach(function (item, index) {
+      var number = String(index + 1).padStart(2, "0");
+      var card = createEl("article", "reels-before-after__card reveal");
+      var frame = createEl("div", "reels-instagram-shell");
+      frame.setAttribute("data-instagram-embed", item.embedUrl || "");
+      frame.setAttribute("data-instagram-title", "Antes e depois " + number + " publicado pela HAGAV no Instagram");
+
+      var placeholder = createEl("div", "reels-instagram-placeholder");
+      placeholder.appendChild(createEl("span", "reels-before-after__tag", "Antes → Depois"));
+      placeholder.appendChild(createEl("strong", "", number));
+      placeholder.appendChild(createEl("p", "", "Comparação completa no Reel"));
+      var loadButton = createEl("button", "reels-instagram-load", "Carregar Reel");
+      loadButton.type = "button";
+      loadButton.setAttribute("data-instagram-load", "");
+      loadButton.setAttribute("aria-label", "Carregar antes e depois " + number);
+      placeholder.appendChild(loadButton);
+      frame.appendChild(placeholder);
+
+      var meta = createEl("div", "reels-before-after__meta");
+      meta.appendChild(createEl("h3", "", "Antes e depois " + number));
+      var link = createEl("a", "reels-instagram-link", "Assistir no Instagram");
+      link.href = item.url;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      link.setAttribute("aria-label", "Assistir antes e depois " + number + " no Instagram, abre em nova aba");
+      meta.appendChild(link);
+
+      card.appendChild(frame);
+      card.appendChild(meta);
+      root.appendChild(card);
+    });
   }
 
   function renderProcess() {
@@ -379,6 +459,108 @@
     items.forEach(function (item) { observer.observe(item); });
   }
 
+  function setFeaturedMobileIndex(index, focusDot) {
+    var root = qs("[data-hero-videos]");
+    if (!root) return;
+    var cards = qsa("[data-featured-card]", root);
+    if (!cards.length) return;
+    featuredMobileIndex = (Number(index) + cards.length) % cards.length;
+    var previous = (featuredMobileIndex + cards.length - 1) % cards.length;
+    var next = (featuredMobileIndex + 1) % cards.length;
+
+    cards.forEach(function (card, cardIndex) {
+      card.classList.toggle("is-mobile-active", cardIndex === featuredMobileIndex);
+      card.classList.toggle("is-mobile-previous", cardIndex === previous);
+      card.classList.toggle("is-mobile-next", cardIndex === next);
+      card.setAttribute("data-mobile-position", cardIndex === featuredMobileIndex ? "active" : (cardIndex === previous ? "previous" : "next"));
+    });
+
+    qsa("[data-featured-dot]", root).forEach(function (dot, dotIndex) {
+      var active = dotIndex === featuredMobileIndex;
+      dot.classList.toggle("is-active", active);
+      dot.setAttribute("aria-current", active ? "true" : "false");
+      if (active && focusDot) dot.focus({ preventScroll: true });
+    });
+
+    var count = qs(".reels-featured-mobile-ui__count", root);
+    if (count) count.textContent = String(featuredMobileIndex + 1).padStart(2, "0") + " / " + String(cards.length).padStart(2, "0");
+  }
+
+  function setupFeaturedMobile() {
+    var root = qs("[data-hero-videos]");
+    if (!root) return;
+    setFeaturedMobileIndex(featuredMobileIndex, false);
+
+    qsa("[data-featured-dot]", root).forEach(function (dot) {
+      dot.addEventListener("click", function () {
+        setFeaturedMobileIndex(Number(dot.getAttribute("data-featured-dot")), false);
+      });
+    });
+
+    qsa("[data-featured-card]", root).forEach(function (card) {
+      card.addEventListener("click", function (event) {
+        if (!mobileMedia || !mobileMedia.matches || event.target.closest("button, a, iframe")) return;
+        setFeaturedMobileIndex(Number(card.getAttribute("data-featured-index")), false);
+      });
+    });
+
+    var touchStartX = 0;
+    root.addEventListener("touchstart", function (event) {
+      touchStartX = event.changedTouches[0].clientX;
+    }, { passive: true });
+    root.addEventListener("touchend", function (event) {
+      var delta = event.changedTouches[0].clientX - touchStartX;
+      if (Math.abs(delta) < 42) return;
+      setFeaturedMobileIndex(featuredMobileIndex + (delta < 0 ? 1 : -1), false);
+    }, { passive: true });
+  }
+
+  function setupBeforeAfter() {
+    var shells = qsa("[data-instagram-embed]");
+    if (!shells.length) return;
+
+    function loadInstagram(shell) {
+      if (qs("iframe", shell)) return;
+      var value = shell.getAttribute("data-instagram-embed");
+      var embedUrl = "";
+      try {
+        var url = new URL(value, window.location.href);
+        if (url.hostname !== "www.instagram.com" || !/\/reel\/[^/]+\/embed\/?$/i.test(url.pathname)) return;
+        embedUrl = url.toString();
+      } catch (error) {
+        return;
+      }
+
+      var iframe = createEl("iframe", "reels-instagram-embed");
+      iframe.title = shell.getAttribute("data-instagram-title") || "Reel de antes e depois no Instagram";
+      iframe.loading = "lazy";
+      iframe.referrerPolicy = "strict-origin-when-cross-origin";
+      iframe.allow = "encrypted-media; picture-in-picture; fullscreen";
+      iframe.setAttribute("allowfullscreen", "");
+      iframe.addEventListener("load", function () {
+        shell.classList.add("is-loaded");
+      });
+      iframe.src = embedUrl;
+      shell.appendChild(iframe);
+      shell.classList.add("is-loading");
+    }
+
+    shells.forEach(function (shell) {
+      var button = qs("[data-instagram-load]", shell);
+      if (button) button.addEventListener("click", function () { loadInstagram(shell); });
+    });
+
+    if (!("IntersectionObserver" in window)) return;
+    var observer = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (!entry.isIntersecting) return;
+        loadInstagram(entry.target);
+        observer.unobserve(entry.target);
+      });
+    }, { rootMargin: "160px 0px", threshold: 0.01 });
+    shells.forEach(function (shell) { observer.observe(shell); });
+  }
+
   function setupVideos() {
     var shells = qsa(".reels-media-shell[data-src]");
     if (!shells.length) return;
@@ -396,12 +578,26 @@
       iframe.contentWindow.postMessage(JSON.stringify({ event: "command", func: command, args: [] }), "*");
     }
 
+    function setMuted(shell, muted) {
+      var iframe = qs("iframe", shell);
+      var video = qs("video", shell);
+      var button = qs("[data-video-sound]", shell);
+      var title = shell.getAttribute("data-media-title") || "vídeo HAGAV";
+      shell.setAttribute("data-muted", muted ? "true" : "false");
+      if (iframe) youtubeCommand(iframe, muted ? "mute" : "unMute");
+      if (video) video.muted = muted;
+      if (button) {
+        button.textContent = muted ? "Ativar som" : "Desativar som";
+        button.setAttribute("aria-label", (muted ? "Ativar" : "Desativar") + " som de " + title);
+      }
+    }
+
     function loadYouTube(shell, shouldPlay) {
       var iframe = qs("iframe", shell);
       shell.setAttribute("data-requested-play", shouldPlay ? "true" : "false");
       if (iframe) {
         if (shouldPlay) {
-          youtubeCommand(iframe, "mute");
+          youtubeCommand(iframe, shell.getAttribute("data-muted") === "false" ? "unMute" : "mute");
           youtubeCommand(iframe, "playVideo");
           setPlaying(shell, true);
         }
@@ -418,7 +614,7 @@
       iframe.setAttribute("allowfullscreen", "");
       iframe.addEventListener("load", function () {
         shell.classList.add("is-loaded");
-        youtubeCommand(iframe, "mute");
+        youtubeCommand(iframe, shell.getAttribute("data-muted") === "false" ? "unMute" : "mute");
         if (shell.getAttribute("data-requested-play") === "true") {
           youtubeCommand(iframe, "playVideo");
           setPlaying(shell, true);
@@ -434,12 +630,16 @@
       if (!video) return;
       if (!video.src) video.src = video.getAttribute("data-src");
       if (shouldPlay) {
-        video.muted = true;
+        video.muted = shell.getAttribute("data-muted") !== "false";
         video.play().then(function () { setPlaying(shell, true); }).catch(function () { setPlaying(shell, false); });
       }
     }
 
-    function play(shell) {
+    function play(shell, withSound) {
+      shells.forEach(function (other) {
+        if (other !== shell && other.getAttribute("data-playing") === "true") pause(other);
+      });
+      setMuted(shell, !withSound);
       if (shell.getAttribute("data-media-provider") === "youtube") {
         loadYouTube(shell, true);
       } else {
@@ -466,11 +666,22 @@
 
     shells.forEach(function (shell) {
       var button = qs("[data-video-control]", shell);
+      var soundButton = qs("[data-video-sound]", shell);
       var video = qs("video", shell);
       if (button) {
         button.addEventListener("click", function () {
+          var card = shell.closest("[data-featured-card]");
+          if (card && mobileMedia && mobileMedia.matches) {
+            setFeaturedMobileIndex(Number(card.getAttribute("data-featured-index")), false);
+          }
           if (shell.getAttribute("data-playing") === "true") pause(shell);
-          else play(shell);
+          else play(shell, false);
+        });
+      }
+      if (soundButton) {
+        soundButton.addEventListener("click", function () {
+          if (shell.getAttribute("data-muted") !== "false") play(shell, true);
+          else setMuted(shell, true);
         });
       }
       if (video) {
@@ -487,8 +698,9 @@
       entries.forEach(function (entry) {
         var shell = entry.target;
         if (entry.isIntersecting) {
+          if (shell.hasAttribute("data-featured-media") && mobileMedia && mobileMedia.matches) return;
           load(shell);
-          if (!reduceMotion && shell.getAttribute("data-autoplay") === "true") play(shell);
+          if (!reduceMotion && shell.getAttribute("data-autoplay") === "true") play(shell, false);
         } else {
           pause(shell);
         }
@@ -527,6 +739,7 @@
     renderBenefits();
     renderMarquee();
     renderVideos();
+    renderBeforeAfter();
     renderProcess();
     renderDashboard();
     renderTestimonials();
@@ -536,8 +749,10 @@
     renderFAQ();
     injectSchema();
     setupMenu();
+    setupFeaturedMobile();
     setupReveal();
     setupVideos();
+    setupBeforeAfter();
     updateYear();
   }
 

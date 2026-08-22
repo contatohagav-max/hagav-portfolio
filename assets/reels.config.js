@@ -148,6 +148,26 @@
     videoLibrary: videoLibrary,
     featuredVideos: [videoLibrary.daianeViana, videoLibrary.paulCabannes, videoLibrary.taisVoila],
     portfolioVideos: [videoLibrary.reels12, videoLibrary.taisVoila, videoLibrary.creativeAds11],
+    beforeAfterVideos: [
+      {
+        id: "DaVUuOUzc6w",
+        platform: "instagram",
+        url: "https://www.instagram.com/reel/DaVUuOUzc6w/",
+        embedUrl: "https://www.instagram.com/reel/DaVUuOUzc6w/embed/"
+      },
+      {
+        id: "DaNsKVbTDUf",
+        platform: "instagram",
+        url: "https://www.instagram.com/reel/DaNsKVbTDUf/",
+        embedUrl: "https://www.instagram.com/reel/DaNsKVbTDUf/embed/"
+      },
+      {
+        id: "DaQGizATgDG",
+        platform: "instagram",
+        url: "https://www.instagram.com/reel/DaQGizATgDG/",
+        embedUrl: "https://www.instagram.com/reel/DaQGizATgDG/embed/"
+      }
+    ],
     process: [
       {
         title: "Alinhamento",

@@ -31,6 +31,8 @@ body.reels-page {
     radial-gradient(circle at 4% 48%, rgba(234, 125, 0, 0.18), transparent 32%),
     linear-gradient(180deg, var(--reels-black) 0%, var(--reels-black) 100%);
   font-family: "Manrope", system-ui, sans-serif;
+  font-size: clamp(16px, calc(0.35vw + 15px), 18px);
+  line-height: 1.55;
   overflow-x: hidden;
 }
 
@@ -136,7 +138,7 @@ img, video {
   align-items: center;
   gap: 24px;
   color: var(--reels-muted);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0;
@@ -194,7 +196,7 @@ img, video {
   color: var(--reels-black);
   background: linear-gradient(135deg, var(--reels-yellow), var(--reels-orange));
   box-shadow: 0 0 32px var(--reels-glow);
-  font-size: 13px;
+  font-size: clamp(15px, calc(0.2vw + 13px), 16px);
   font-weight: 900;
   letter-spacing: 0;
   text-decoration: none;
@@ -233,7 +235,7 @@ img, video {
 .reels-button--compact {
   min-height: 42px;
   padding-inline: 14px;
-  font-size: 12px;
+  font-size: 14px;
 }
 
 .reels-hero {
@@ -258,7 +260,7 @@ img, video {
   gap: 8px;
   max-width: 100%;
   color: var(--reels-yellow);
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 900;
   line-height: 1.2;
   text-transform: uppercase;
@@ -286,7 +288,7 @@ img, video {
 .reels-hero h1 {
   max-width: 720px;
   margin-top: 18px;
-  font-size: clamp(54px, 8vw, 104px);
+  font-size: clamp(64px, 6vw, 80px);
 }
 
 .reels-hero h1 span,
@@ -300,8 +302,8 @@ img, video {
 .reels-content-note,
 .reels-offer-note {
   color: var(--reels-text);
-  font-size: clamp(16px, 1.5vw, 19px);
-  line-height: 1.62;
+  font-size: clamp(17px, calc(0.55vw + 12px), 21px);
+  line-height: 1.65;
 }
 
 .reels-lead {
@@ -323,7 +325,7 @@ img, video {
 .reels-microcopy {
   margin: 18px 0 0;
   color: var(--reels-muted);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
 }
 
@@ -414,7 +416,7 @@ img, video {
 .reels-dashboard__top,
 .reels-dashboard-card__status {
   color: var(--reels-yellow);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 900;
   text-transform: uppercase;
   letter-spacing: 0;
@@ -429,8 +431,8 @@ img, video {
 .reels-fit-card h3 {
   margin: 0;
   color: var(--reels-white);
-  font-size: 18px;
-  line-height: 1.15;
+  font-size: clamp(19px, calc(0.45vw + 14px), 22px);
+  line-height: 1.2;
 }
 
 .reels-video-card__meta p,
@@ -439,7 +441,8 @@ img, video {
 .reels-pricing-card__description {
   margin: 0;
   color: var(--reels-muted);
-  line-height: 1.55;
+  font-size: clamp(16px, calc(0.25vw + 13px), 17px);
+  line-height: 1.6;
 }
 
 .reels-video,
@@ -574,7 +577,7 @@ img, video {
 .reels-video-placeholder strong {
   margin-top: 14px;
   color: var(--reels-white);
-  font-size: 13px;
+  font-size: 15px;
   text-transform: uppercase;
 }
 
@@ -582,8 +585,8 @@ img, video {
   max-width: 190px;
   margin-top: 7px;
   color: var(--reels-muted);
-  font-size: 11px;
-  line-height: 1.4;
+  font-size: 13px;
+  line-height: 1.5;
   word-break: break-word;
 }
 
@@ -612,8 +615,8 @@ img, video {
 .reels-authority__item p {
   margin: 0;
   color: var(--reels-text);
-  font-size: 13px;
-  line-height: 1.35;
+  font-size: clamp(15px, calc(0.25vw + 12px), 17px);
+  line-height: 1.5;
 }
 
 .reels-section {
@@ -648,7 +651,7 @@ img, video {
 .reels-section__heading h2,
 .reels-final-cta h2 {
   margin-top: 14px;
-  font-size: clamp(42px, 5.8vw, 76px);
+  font-size: clamp(44px, 4.2vw, 60px);
 }
 
 .reels-section__heading p {
@@ -685,14 +688,14 @@ img, video {
 .reels-pricing-card,
 .reels-fit-card,
 .reels-testimonial-card {
-  padding: 18px;
+  padding: 22px;
 }
 
 .reels-card-number,
 .reels-process-step__number {
   display: inline-flex;
   color: var(--reels-yellow);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 900;
   margin-bottom: 18px;
 }
@@ -717,7 +720,7 @@ img, video {
   border-radius: var(--reels-radius);
   color: var(--reels-white);
   background: rgba(255, 188, 1, 0.06);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 900;
   text-transform: uppercase;
 }
@@ -781,15 +784,15 @@ img, video {
   margin-top: 28px;
   color: var(--reels-white);
   font-family: "League Spartan", "Manrope", system-ui, sans-serif;
-  font-size: 44px;
+  font-size: 48px;
   line-height: 1;
 }
 
 .reels-dashboard-card p {
   margin: 12px 0 0;
   color: var(--reels-muted);
-  font-size: 13px;
-  line-height: 1.35;
+  font-size: 15px;
+  line-height: 1.45;
 }
 
 .reels-pricing {
@@ -801,7 +804,7 @@ img, video {
   display: flex;
   min-height: 100%;
   flex-direction: column;
-  padding: 24px;
+  padding: 28px;
 }
 
 .reels-pricing-card--featured {
@@ -818,7 +821,7 @@ img, video {
   border-radius: var(--reels-radius);
   color: var(--reels-black);
   background: var(--reels-yellow);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 900;
   text-transform: uppercase;
 }
@@ -838,7 +841,7 @@ img, video {
 
 .reels-price span {
   color: var(--reels-yellow);
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 900;
   text-transform: uppercase;
 }
@@ -861,7 +864,8 @@ img, video {
   position: relative;
   padding-left: 22px;
   color: var(--reels-text);
-  line-height: 1.45;
+  font-size: clamp(16px, calc(0.25vw + 13px), 18px);
+  line-height: 1.55;
 }
 
 .reels-check-list li::before,
@@ -888,7 +892,7 @@ img, video {
   margin: 20px auto 0;
   text-align: center;
   color: var(--reels-muted);
-  font-size: 14px;
+  font-size: 15px;
 }
 
 .reels-fit-grid {
@@ -920,7 +924,9 @@ img, video {
   color: var(--reels-white);
   background: transparent;
   font: inherit;
+  font-size: 18px;
   font-weight: 900;
+  line-height: 1.4;
   text-align: left;
   cursor: pointer;
 }
@@ -939,7 +945,8 @@ img, video {
 .reels-faq-item__answer {
   padding: 0 18px 18px;
   color: var(--reels-muted);
-  line-height: 1.62;
+  font-size: 17px;
+  line-height: 1.68;
 }
 
 .reels-faq-item__answer p {
@@ -995,7 +1002,7 @@ img, video {
   justify-content: flex-end;
   gap: 14px 20px;
   color: var(--reels-muted);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 800;
 }
 
@@ -1003,7 +1010,7 @@ img, video {
   grid-column: 1 / -1;
   margin: 0;
   color: var(--reels-muted);
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .reveal {
@@ -1134,8 +1141,8 @@ img, video {
 
   .reels-header .reels-button {
     min-height: 40px;
-    padding-inline: 10px;
-    font-size: 11px;
+    padding-inline: 8px;
+    font-size: clamp(9px, 2.5vw, 11px);
   }
 
   .reels-nav {
@@ -1147,7 +1154,24 @@ img, video {
   }
 
   .reels-hero h1 {
-    font-size: clamp(42px, 13.5vw, 58px);
+    font-size: clamp(40px, 13.2vw, 52px);
+  }
+
+  .reels-hero h1 span {
+    display: block;
+  }
+
+  .reels-eyebrow {
+    display: block;
+    font-size: 12px;
+    line-height: 1.35;
+  }
+
+  .reels-eyebrow::before {
+    display: inline-block;
+    width: 24px;
+    margin-right: 8px;
+    vertical-align: 0.22em;
   }
 
   .reels-hero__visual,
@@ -1193,7 +1217,13 @@ img, video {
 
   .reels-section__heading h2,
   .reels-final-cta h2 {
-    font-size: clamp(38px, 13vw, 56px);
+    font-size: clamp(34px, 9.5vw, 40px);
+  }
+
+  .reels-lead,
+  .reels-section__heading p,
+  .reels-final-cta p {
+    font-size: 17px;
   }
 
   .reels-footer__inner {

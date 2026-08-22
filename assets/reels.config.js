@@ -1,6 +1,78 @@
 (function () {
   "use strict";
 
+  var videoLibrary = {
+    daianeViana: {
+      title: "Daiane Viana",
+      label: "Short com presença e ritmo",
+      category: "Conteúdo vertical",
+      type: "Short vertical",
+      client: "Daiane Viana",
+      status: "Publicado",
+      provider: "youtube",
+      videoUrl: "https://www.youtube-nocookie.com/embed/_XgE-UY-JII",
+      poster: "https://i.ytimg.com/vi/_XgE-UY-JII/maxresdefault.jpg",
+      altText: "Thumbnail do Short vertical de Daiane Viana, editado pela HAGAV.",
+      autoPlay: true
+    },
+    paulCabannes: {
+      title: "Paul Cabannes",
+      label: "Short criativo e dinâmico",
+      category: "Conteúdo vertical",
+      type: "Short vertical",
+      client: "Paul Cabannes",
+      status: "Publicado",
+      provider: "youtube",
+      videoUrl: "https://www.youtube-nocookie.com/embed/zmFo2_v9QRo",
+      poster: "https://i.ytimg.com/vi/zmFo2_v9QRo/maxresdefault.jpg",
+      altText: "Thumbnail do Short vertical de Paul Cabannes, editado pela HAGAV.",
+      autoPlay: false
+    },
+    taisVoila: {
+      title: "Tais - Escola Voilà",
+      label: "Lettering e apoio visual",
+      category: "Lettering e apoio visual",
+      type: "Reels vertical",
+      client: "Escola Voilà",
+      format: "9:16",
+      description: "Lettering, enquadramento e apoio visual para organizar a mensagem no celular.",
+      status: "Publicado",
+      provider: "youtube",
+      videoUrl: "https://www.youtube-nocookie.com/embed/mzN4WzVtlqM",
+      poster: "https://i.ytimg.com/vi/mzN4WzVtlqM/maxresdefault.jpg",
+      altText: "Thumbnail do Reels vertical de Tais para a Escola Voilà, editado pela HAGAV.",
+      autoPlay: false
+    },
+    reels12: {
+      title: "Reels, TikTok, Shorts — 12",
+      label: "Talking head dinâmico",
+      category: "Talking head dinâmico",
+      type: "Talking head",
+      format: "9:16",
+      description: "Cortes, ritmo, legendas e identidade visual aplicada ao formato vertical.",
+      status: "Publicado",
+      provider: "youtube",
+      videoUrl: "https://www.youtube-nocookie.com/embed/5ORpPc86nb8",
+      poster: "https://i.ytimg.com/vi_webp/5ORpPc86nb8/hqdefault.webp",
+      altText: "Frame de um Reels vertical com apresentador e identidade visual em rosa.",
+      autoPlay: false
+    },
+    creativeAds11: {
+      title: "Criativo para Ads — 11",
+      label: "Criativo de produto",
+      category: "Criativo com identidade visual",
+      type: "Criativo",
+      format: "9:16",
+      description: "Composição de produto, ritmo e identidade visual forte para mídia vertical.",
+      status: "Publicado",
+      provider: "youtube",
+      videoUrl: "https://www.youtube-nocookie.com/embed/eE7aAgiNvDI",
+      poster: "https://i.ytimg.com/vi_webp/eE7aAgiNvDI/hqdefault.webp",
+      altText: "Frame de um criativo vertical de produto com composição em amarelo e preto.",
+      autoPlay: false
+    }
+  };
+
   window.HAGAV_REELS_CONFIG = {
     whatsappNumber: "5573982284382",
     instagramUrl: "https://www.instagram.com/hagav.studio/",
@@ -73,79 +145,9 @@
       "Reels profissionais",
       "Cortes verticais"
     ],
-    heroVideos: [
-      {
-        title: "Reels, TikTok, Shorts — 12",
-        label: "Talking head dinâmico",
-        category: "Talking head dinâmico",
-        type: "Reels vertical",
-        status: "Publicado",
-        provider: "youtube",
-        videoUrl: "https://www.youtube.com/embed/5ORpPc86nb8",
-        poster: "https://i.ytimg.com/vi_webp/5ORpPc86nb8/hqdefault.webp",
-        altText: "Frame de um Reels vertical com apresentador e identidade visual em rosa.",
-        autoPlay: true
-      },
-      {
-        title: "Reels, TikTok, Shorts — 16",
-        label: "Lettering e apoio visual",
-        category: "Lettering e apoio visual",
-        type: "Reels vertical",
-        status: "Publicado",
-        provider: "youtube",
-        videoUrl: "https://www.youtube.com/embed/mzN4WzVtlqM",
-        poster: "https://i.ytimg.com/vi_webp/mzN4WzVtlqM/hqdefault.webp",
-        altText: "Frame de um Reels vertical com apresentadora, lettering e composição visual.",
-        autoPlay: false
-      },
-      {
-        title: "Criativo para Ads — 11",
-        label: "Criativo de produto",
-        category: "Criativo com identidade visual",
-        type: "Anúncio vertical",
-        status: "Publicado",
-        provider: "youtube",
-        videoUrl: "https://www.youtube.com/embed/eE7aAgiNvDI",
-        poster: "https://i.ytimg.com/vi_webp/eE7aAgiNvDI/hqdefault.webp",
-        altText: "Frame de um criativo vertical de produto com composição em amarelo e preto.",
-        autoPlay: false
-      }
-    ],
-    portfolioItems: [
-      {
-        title: "Reels, TikTok, Shorts — 12",
-        category: "Talking head dinâmico",
-        type: "Talking head",
-        format: "9:16",
-        description: "Cortes, ritmo, legendas e identidade visual aplicada ao formato vertical.",
-        provider: "youtube",
-        videoUrl: "https://www.youtube.com/embed/5ORpPc86nb8",
-        poster: "https://i.ytimg.com/vi_webp/5ORpPc86nb8/hqdefault.webp",
-        altText: "Frame de um Reels vertical com apresentador e identidade visual em rosa."
-      },
-      {
-        title: "Reels, TikTok, Shorts — 16",
-        category: "Lettering e apoio visual",
-        type: "Reels",
-        format: "9:16",
-        description: "Lettering, enquadramento e apoio visual para organizar a mensagem no celular.",
-        provider: "youtube",
-        videoUrl: "https://www.youtube.com/embed/mzN4WzVtlqM",
-        poster: "https://i.ytimg.com/vi_webp/mzN4WzVtlqM/hqdefault.webp",
-        altText: "Frame de um Reels vertical com apresentadora, lettering e composição visual."
-      },
-      {
-        title: "Criativo para Ads — 11",
-        category: "Criativo com identidade visual",
-        type: "Criativo",
-        format: "9:16",
-        description: "Composição de produto, ritmo e identidade visual forte para mídia vertical.",
-        provider: "youtube",
-        videoUrl: "https://www.youtube.com/embed/eE7aAgiNvDI",
-        poster: "https://i.ytimg.com/vi_webp/eE7aAgiNvDI/hqdefault.webp",
-        altText: "Frame de um criativo vertical de produto com composição em amarelo e preto."
-      }
-    ],
+    videoLibrary: videoLibrary,
+    featuredVideos: [videoLibrary.daianeViana, videoLibrary.paulCabannes, videoLibrary.taisVoila],
+    portfolioVideos: [videoLibrary.reels12, videoLibrary.taisVoila, videoLibrary.creativeAds11],
     process: [
       {
         title: "Alinhamento",

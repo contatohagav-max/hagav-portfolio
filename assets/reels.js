@@ -115,8 +115,14 @@
       url.searchParams.set("playsinline", "1");
       url.searchParams.set("controls", "1");
       url.searchParams.set("rel", "0");
+      url.searchParams.set("modestbranding", "1");
       url.searchParams.set("mute", "1");
       url.searchParams.set("autoplay", "0");
+      var videoId = url.pathname.split("/").filter(Boolean).pop();
+      if (videoId) {
+        url.searchParams.set("loop", "1");
+        url.searchParams.set("playlist", videoId);
+      }
       url.searchParams.set("origin", window.location.origin);
       return url.toString();
     } catch (error) {
@@ -174,7 +180,7 @@
     var meta = createEl("div", mode === "hero" ? "reels-phone__meta" : "reels-video-card__meta");
     meta.appendChild(createEl("span", "", item.type || item.format || "9:16"));
     meta.appendChild(createEl("h3", "", item.title || item.label));
-    if (item.description) meta.appendChild(createEl("p", "", item.description));
+    if (mode !== "hero" && item.description) meta.appendChild(createEl("p", "", item.description));
     card.appendChild(frame);
     card.appendChild(meta);
     return card;
@@ -184,7 +190,7 @@
     var heroRoot = qs("[data-hero-videos]");
     if (heroRoot) {
       heroRoot.innerHTML = "";
-      (config.heroVideos || []).forEach(function (item, index) {
+      (config.featuredVideos || config.heroVideos || []).forEach(function (item, index) {
         heroRoot.appendChild(createVideoSlot(item, "hero", index));
       });
     }
@@ -192,7 +198,7 @@
     var portfolioRoot = qs("[data-portfolio]");
     if (portfolioRoot) {
       portfolioRoot.innerHTML = "";
-      (config.portfolioItems || []).forEach(function (item, index) {
+      (config.portfolioVideos || config.portfolioItems || []).forEach(function (item, index) {
         portfolioRoot.appendChild(createVideoSlot(item, "portfolio", index));
       });
     }

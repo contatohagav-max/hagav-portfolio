@@ -17,6 +17,7 @@ const nextConfig = {
   reactStrictMode: true,
   experimental: {
     externalDir: true,
+    workerThreads: true,
   },
 
   // Static export para hospedar em /admin no mesmo domínio

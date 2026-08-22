@@ -12,6 +12,10 @@
 /orcamentos-admin.html
   X-Robots-Tag: noindex, nofollow
 
+/reels-teste*
+  X-Robots-Tag: noindex, nofollow
+  Permissions-Policy: accelerometer=(), autoplay=(self "https://www.youtube.com"), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=(), interest-cohort=()
+
 # ─── Painel Interno /admin ────────────────────────────────────────────────────
 
 /admin/*

@@ -1339,15 +1339,17 @@ img, video {
   }
 
   .reels-hero {
-    padding: 34px 0 24px;
+    padding: 28px 0 18px;
   }
 
   .reels-hero__grid {
-    gap: 28px;
+    gap: 14px;
   }
 
   .reels-hero h1 {
-    font-size: clamp(40px, 13.2vw, 52px);
+    margin-top: 10px;
+    font-size: clamp(36px, 10vw, 48px);
+    line-height: 0.98;
   }
 
   .reels-hero h1 span {
@@ -1387,7 +1389,7 @@ img, video {
   }
 
   .reels-hero__visual::before {
-    inset: 12% 20%;
+    display: none;
   }
 
   .reels-phone {
@@ -1557,7 +1559,22 @@ img, video {
   }
 
   .reels-microcopy {
+    margin-top: 12px;
     text-align: center;
+  }
+
+  .reels-hero .reels-lead {
+    margin-top: 14px;
+    font-size: 16px;
+    line-height: 1.5;
+  }
+
+  .reels-hero .reels-actions {
+    margin-top: 18px;
+  }
+
+  .reels-hero .reels-button {
+    min-height: 54px;
   }
 
   .reels-section {

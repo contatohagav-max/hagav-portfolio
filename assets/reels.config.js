@@ -13,7 +13,7 @@
       videoUrl: "https://www.youtube-nocookie.com/embed/_XgE-UY-JII",
       poster: "https://i.ytimg.com/vi/_XgE-UY-JII/maxresdefault.jpg",
       altText: "Thumbnail do Short vertical de Daiane Viana, editado pela HAGAV.",
-      autoPlay: true
+      autoPlay: false
     },
     paulCabannes: {
       title: "Paul Cabannes",
@@ -82,6 +82,7 @@
       "Os valores e condições desta página fazem parte de uma oferta em validação e poderão ser ajustados antes do lançamento oficial.",
     whatsappMessages: {
       start: "Olá! Quero começar uma operação de edição recorrente de Reels com a HAGAV.",
+      delegate: "Olá! Quero delegar minha edição de vídeos para a HAGAV.",
       specialist: "Olá! Quero falar com um especialista da HAGAV sobre edição recorrente de Reels.",
       test: "Olá! Quero testar o plano de 3 vídeos da HAGAV.",
       flow: "Olá! Tenho interesse no plano mensal de 12 vídeos.",

@@ -245,13 +245,32 @@ img, video {
 .reels-hero__grid {
   display: grid;
   grid-template-columns: minmax(0, 0.9fr) minmax(360px, 1fr);
-  align-items: center;
-  gap: clamp(34px, 6vw, 82px);
+  grid-template-areas:
+    "copy visual"
+    "details visual";
+  align-items: start;
+  column-gap: clamp(34px, 6vw, 82px);
+  row-gap: 26px;
 }
 
 .reels-hero__copy,
-.reels-hero__visual {
+.reels-hero__visual,
+.reels-hero__details {
   min-width: 0;
+}
+
+.reels-hero__copy {
+  grid-area: copy;
+  align-self: end;
+}
+
+.reels-hero__visual {
+  grid-area: visual;
+}
+
+.reels-hero__details {
+  grid-area: details;
+  align-self: start;
 }
 
 .reels-eyebrow {
@@ -287,7 +306,7 @@ img, video {
 
 .reels-hero h1 {
   max-width: 720px;
-  margin-top: 18px;
+  margin-top: 0;
   font-size: clamp(64px, 6vw, 80px);
 }
 
@@ -309,6 +328,52 @@ img, video {
 .reels-lead {
   max-width: 650px;
   margin: 22px 0 0;
+}
+
+.reels-hero__savings {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 18px 0 0;
+  color: var(--reels-white);
+  font-size: clamp(18px, 1.8vw, 24px);
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.reels-hero__savings span {
+  display: inline-block;
+  min-width: 14ch;
+  color: var(--reels-yellow);
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+
+.reels-hero__savings span.is-changing {
+  opacity: 0;
+  transform: translateY(5px);
+}
+
+.reels-hero__details p {
+  margin: 0;
+  color: var(--reels-text);
+  font-size: 16px;
+  line-height: 1.65;
+}
+
+.reels-hero__details p + p {
+  margin-top: 16px;
+}
+
+.reels-hero__authority {
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 188, 1, 0.28);
+  color: var(--reels-muted) !important;
+  font-size: 14px !important;
+  font-weight: 700;
+}
+
+.reels-hero__authority strong {
+  color: var(--reels-yellow);
 }
 
 .reels-actions {
@@ -349,6 +414,7 @@ img, video {
 .reels-phone,
 .reels-video-card,
 .reels-benefit-card,
+.reels-trial-card,
 .reels-pricing-card,
 .reels-fit-card,
 .reels-faq-item,
@@ -392,6 +458,7 @@ img, video {
 .reels-phone:hover,
 .reels-video-card:hover,
 .reels-benefit-card:hover,
+.reels-trial-card:hover,
 .reels-pricing-card:hover {
   transform: translateY(-4px);
   border-color: rgba(255, 188, 1, 0.42);
@@ -429,6 +496,7 @@ img, video {
 .reels-phone__meta h3,
 .reels-video-card__meta h3,
 .reels-benefit-card h3,
+.reels-trial-card h3,
 .reels-problem-card h3,
 .reels-process-step h3,
 .reels-pricing-card h3,
@@ -441,6 +509,7 @@ img, video {
 
 .reels-video-card__meta p,
 .reels-benefit-card p,
+.reels-trial-card__description,
 .reels-process-step p,
 .reels-pricing-card__description {
   margin: 0;
@@ -691,6 +760,7 @@ img, video {
 .reels-problem-grid,
 .reels-benefit-grid,
 .reels-video-grid,
+.reels-trials,
 .reels-pricing,
 .reels-fit-grid,
 .reels-testimonials {
@@ -705,6 +775,12 @@ img, video {
 .reels-benefit-grid {
   grid-template-columns: repeat(4, minmax(0, 1fr));
   margin-top: 36px;
+}
+
+.reels-trials {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  max-width: 920px;
+  margin: 36px auto 0;
 }
 
 .reels-video-grid {
@@ -864,6 +940,7 @@ img, video {
 
 .reels-problem-card,
 .reels-benefit-card,
+.reels-trial-card,
 .reels-process-step,
 .reels-pricing-card,
 .reels-fit-card,
@@ -884,6 +961,17 @@ img, video {
   overflow: hidden;
   border-block: 1px solid rgba(255, 255, 255, 0.08);
   background: var(--reels-black);
+}
+
+.reels-marquee__headline {
+  margin: 0;
+  padding: 18px 20px 0;
+  color: var(--reels-yellow);
+  font-size: clamp(13px, 1.4vw, 16px);
+  font-weight: 900;
+  line-height: 1.4;
+  text-align: center;
+  text-transform: uppercase;
 }
 
 .reels-marquee__track {
@@ -908,7 +996,7 @@ img, video {
 .reels-process {
   position: relative;
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 14px;
   margin-top: 34px;
 }
@@ -929,6 +1017,21 @@ img, video {
   position: relative;
   min-height: 214px;
   background: rgba(0, 0, 0, 0.56);
+}
+
+.reels-process-note,
+.reels-credit-note {
+  max-width: 920px;
+  margin: 24px auto 0;
+  padding: 18px 20px;
+  border: 1px solid rgba(255, 188, 1, 0.38);
+  border-radius: var(--reels-radius);
+  color: var(--reels-white);
+  background: rgba(255, 188, 1, 0.08);
+  font-size: 16px;
+  font-weight: 900;
+  line-height: 1.5;
+  text-align: center;
 }
 
 .reels-dashboard {
@@ -979,6 +1082,7 @@ img, video {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+.reels-trial-card,
 .reels-pricing-card {
   position: relative;
   display: flex;
@@ -987,11 +1091,20 @@ img, video {
   padding: 28px;
 }
 
+.reels-trial-card--featured,
 .reels-pricing-card--featured {
   border-color: rgba(255, 188, 1, 0.62);
   background:
     linear-gradient(180deg, rgba(255, 188, 1, 0.13), rgba(255, 255, 255, 0.04)),
     rgba(0, 0, 0, 0.74);
+}
+
+.reels-offer-volume {
+  margin: 12px 0 0;
+  color: var(--reels-yellow);
+  font-size: 20px;
+  font-weight: 900;
+  line-height: 1.3;
 }
 
 .reels-badge {
@@ -1061,9 +1174,18 @@ img, video {
   box-shadow: 0 0 18px var(--reels-glow);
 }
 
+.reels-trial-card .reels-button,
 .reels-pricing-card .reels-button {
   width: 100%;
   margin-top: auto;
+}
+
+.reels-panel-list {
+  margin-top: 18px;
+}
+
+.reels-panel-closing {
+  color: var(--reels-white) !important;
 }
 
 .reels-offer-note,
@@ -1152,6 +1274,13 @@ img, video {
 .reels-final-cta p {
   max-width: 760px;
   margin: 18px auto 0;
+}
+
+.reels-final-cta .reels-final-cta__note {
+  max-width: 680px;
+  color: var(--reels-yellow);
+  font-size: 15px;
+  font-weight: 900;
 }
 
 .reels-footer {
@@ -1288,6 +1417,13 @@ img, video {
     grid-template-columns: 1fr;
   }
 
+  .reels-hero__grid {
+    grid-template-areas:
+      "copy"
+      "visual"
+      "details";
+  }
+
   .reels-hero__visual {
     min-height: auto;
   }
@@ -1347,7 +1483,7 @@ img, video {
   }
 
   .reels-hero h1 {
-    margin-top: 10px;
+    margin-top: 0;
     font-size: clamp(36px, 10vw, 48px);
     line-height: 0.98;
   }
@@ -1372,6 +1508,7 @@ img, video {
   .reels-hero__visual,
   .reels-benefit-grid,
   .reels-video-grid,
+  .reels-trials,
   .reels-authority__grid,
   .reels-problem-grid,
   .reels-process,
@@ -1544,6 +1681,25 @@ img, video {
     line-height: 1.35;
   }
 
+  .reels-hero__savings {
+    gap: 6px;
+    margin-top: 14px;
+    font-size: 16px;
+  }
+
+  .reels-hero__savings span {
+    min-width: 13.5ch;
+  }
+
+  .reels-hero__details {
+    padding-top: 8px;
+  }
+
+  .reels-hero__details p {
+    font-size: 15px;
+    line-height: 1.6;
+  }
+
   .reels-actions,
   .reels-footer__links {
     flex-direction: column;
@@ -1552,10 +1708,6 @@ img, video {
 
   .reels-button {
     width: 100%;
-  }
-
-  .reels-actions .reels-button--secondary {
-    display: none;
   }
 
   .reels-microcopy {
@@ -1624,6 +1776,10 @@ img, video {
   }
 
   .reels-pricing-card--featured {
+    order: -1;
+  }
+
+  .reels-trial-card--featured {
     order: -1;
   }
 

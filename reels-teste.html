@@ -30,10 +30,10 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=League+Spartan:wght@700;800;900&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/assets/reels.css?v=20260822-7" />
+  <link rel="stylesheet" href="/assets/reels.css?v=20260828-1" />
 
-  <script src="/assets/reels.config.js?v=20260822-7" defer></script>
-  <script src="/assets/reels.js?v=20260822-7" defer></script>
+  <script src="/assets/reels.config.js?v=20260828-1" defer></script>
+  <script src="/assets/reels.js?v=20260828-1" defer></script>
   <script src="/assets/whatsapp-tracking.js" defer></script>
 </head>
 <body class="reels-page">
@@ -52,6 +52,7 @@
       <nav class="reels-nav" id="reels-nav" aria-label="Navegação da página">
         <a href="#como-funciona">Como funciona</a>
         <a href="#portfolio">Portfólio</a>
+        <a href="#teste">Teste</a>
         <a href="#planos">Planos</a>
         <a href="#duvidas">Dúvidas</a>
       </nav>
@@ -65,49 +66,29 @@
     <section class="reels-hero" aria-labelledby="hero-title">
       <div class="reels-container reels-hero__grid">
         <div class="reels-hero__copy reveal">
-          <span class="reels-eyebrow">Pós-produção recorrente</span>
-          <h1 id="hero-title">Gravou. Mas <span>não consegue postar?</span></h1>
+          <h1 id="hero-title">Pare de perder tempo com <span>vídeo.</span></h1>
           <p class="reels-lead">
-            A HAGAV transforma suas gravações em vídeos prontos para publicar — com ritmo, identidade e acabamento profissional.
+            Você grava do seu jeito. A HAGAV transforma seu material em Reels profissionais, prontos para publicar.
           </p>
+          <p class="reels-hero__savings">Economize: <span data-savings-word>TEMPO</span></p>
           <div class="reels-actions">
-            <a class="reels-button" href="#" data-whatsapp-link="delegate" data-whatsapp-track data-track-page="reels-teste" data-track-origin="REELS - HERO DELEGAR">Quero delegar minha edição</a>
+            <a class="reels-button" href="#teste">Testar a partir de R$ 47</a>
+            <a class="reels-button reels-button--secondary" href="#planos">Ver pacotes mensais</a>
           </div>
-          <p class="reels-microcopy">Você grava. A gente cuida da pós-produção.</p>
+          <p class="reels-microcopy">Veja o resultado no seu próprio material em até 48 horas após o envio.</p>
         </div>
 
         <div class="reels-hero__visual reveal" data-hero-videos aria-label="Painel visual com vídeos verticais da HAGAV"></div>
-      </div>
-    </section>
 
-    <section class="reels-authority" aria-label="Pontos de autoridade">
-      <div class="reels-container reels-authority__grid" data-authority></div>
-    </section>
-
-    <section class="reels-section" aria-labelledby="problema-title">
-      <div class="reels-container reels-split">
-        <div class="reels-section__heading reveal">
-          <span class="reels-eyebrow">O gargalo</span>
-          <h2 id="problema-title">Editar não deveria ser o gargalo do seu conteúdo.</h2>
-          <p>
-            Você já fez a parte que depende da sua voz e da sua experiência. A HAGAV assume a pós-produção para transformar gravações brutas em conteúdo com ritmo, clareza e acabamento profissional.
-          </p>
+        <div class="reels-hero__details reveal">
+          <p>Envie sua gravação em qualquer formato. A HAGAV cuida dos cortes, ritmo, legendas, música, áudio e identidade visual para você manter seu conteúdo ativo sem precisar acompanhar cada detalhe da edição.</p>
+          <p class="reels-hero__authority"><strong>5 anos de mercado</strong> • Capacidade para +30 vídeos por dia • Conteúdos de clientes com 50 mil e 100 mil visualizações • Plataforma exclusiva de acompanhamento</p>
         </div>
-        <div class="reels-problem-grid reveal" data-problems></div>
-      </div>
-    </section>
-
-    <section class="reels-section reels-section--band" aria-labelledby="incluido-title">
-      <div class="reels-container">
-        <div class="reels-section__heading reveal">
-          <span class="reels-eyebrow">O que está incluído</span>
-          <h2 id="incluido-title">Pós-produção com padrão, contexto e intenção.</h2>
-        </div>
-        <div class="reels-benefit-grid" data-benefits></div>
       </div>
     </section>
 
     <section class="reels-marquee" aria-label="Formatos e serviços">
+      <p class="reels-marquee__headline">Conteúdo para todo objetivo. Qualquer formato de gravação.</p>
       <div class="reels-marquee__track" data-marquee></div>
     </section>
 
@@ -115,8 +96,8 @@
       <div class="reels-container">
         <div class="reels-section__heading reveal">
           <span class="reels-eyebrow">Showcase</span>
-          <h2 id="portfolio-title">Veja o que a HAGAV consegue fazer com uma gravação.</h2>
-          <p>Diferentes estilos, nichos e objetivos. A identidade muda. O padrão de acabamento permanece.</p>
+          <h2 id="portfolio-title">Veja o que podemos fazer com as suas gravações</h2>
+          <p>Do celular, câmera, podcast, aula ou entrevista para um Reel profissional, dinâmico e pronto para publicar.</p>
         </div>
         <div class="reels-video-grid" data-portfolio></div>
         <p class="reels-content-note reveal" data-portfolio-note></p>
@@ -135,22 +116,46 @@
       </div>
     </section>
 
+    <section class="reels-section reels-section--band reels-trial-section" id="teste" aria-labelledby="teste-title">
+      <div class="reels-container">
+        <div class="reels-section__heading reels-section__heading--center reveal">
+          <span class="reels-eyebrow">Comece com baixo risco</span>
+          <h2 id="teste-title">Teste com seu próprio material</h2>
+          <p>Envie uma gravação de até 3 minutos e receba um Reel de até 60 segundos pronto para publicar.</p>
+          <p>Veja nossa qualidade e velocidade no seu próprio conteúdo antes de contratar um pacote mensal.</p>
+        </div>
+        <div class="reels-trials" data-trials></div>
+        <p class="reels-credit-note reveal" data-trial-credit></p>
+      </div>
+    </section>
+
     <section class="reels-section reels-section--band" id="como-funciona" aria-labelledby="processo-title">
       <div class="reels-container">
         <div class="reels-section__heading reveal">
           <span class="reels-eyebrow">Como funciona</span>
-          <h2 id="processo-title">Um fluxo simples para quem precisa produzir sem parar.</h2>
+          <h2 id="processo-title">Do material gravado ao Reel pronto</h2>
         </div>
         <div class="reels-process" data-process></div>
+        <p class="reels-process-note reveal">O resultado do teste fica pronto em até 48 horas após o envio.</p>
       </div>
     </section>
 
     <section class="reels-section" aria-labelledby="operacao-title">
       <div class="reels-container reels-dashboard-layout">
         <div class="reels-section__heading reveal">
-          <span class="reels-eyebrow">Diferencial operacional</span>
-          <h2 id="operacao-title">Mais do que editar: organizamos a sua pós-produção.</h2>
-          <p>O painel abaixo é uma representação visual do processo, não um acesso a software ou área do cliente.</p>
+          <span class="reels-eyebrow">Painel HAGAV</span>
+          <h2 id="operacao-title">Você acompanha tudo sem precisar perguntar “cadê meu vídeo?”</h2>
+          <p>Nada de procurar demandas em conversas antigas ou tentar descobrir qual arquivo é o mais recente.</p>
+          <p>No painel HAGAV, você acompanha:</p>
+          <ul class="reels-check-list reels-panel-list">
+            <li>Materiais enviados</li>
+            <li>Vídeos em produção</li>
+            <li>Conteúdos em revisão</li>
+            <li>Vídeos finalizados</li>
+            <li>Prazos e entregas</li>
+            <li>Arquivos disponíveis para download</li>
+          </ul>
+          <p class="reels-panel-closing"><strong>Você acompanha o processo. A HAGAV mantém a produção andando.</strong></p>
         </div>
         <div class="reels-dashboard reveal" aria-label="Representação visual do fluxo de produção">
           <div class="reels-dashboard__top">
@@ -162,44 +167,14 @@
       </div>
     </section>
 
-    <section class="reels-section reels-section--band" id="provas" aria-labelledby="provas-title" data-testimonials-section hidden>
-      <div class="reels-container">
-        <div class="reels-section__heading reveal">
-          <span class="reels-eyebrow">Provas sociais</span>
-          <h2 id="provas-title">Quem trabalha com a HAGAV sente a diferença no processo.</h2>
-        </div>
-        <div class="reels-testimonials" data-testimonials></div>
-      </div>
-    </section>
-
     <section class="reels-section" id="planos" aria-labelledby="planos-title">
       <div class="reels-container">
         <div class="reels-section__heading reels-section__heading--center reveal">
           <span class="reels-eyebrow">Planos</span>
-          <h2 id="planos-title">Escolha o ritmo de produção ideal para o seu momento.</h2>
-          <p>Comece com um teste ou transforme a edição em uma operação recorrente.</p>
+          <h2 id="planos-title">Escolha a frequência ideal para o seu conteúdo</h2>
+          <p>Envie suas gravações e receba novos Reels durante todo o mês, com entregas organizadas pelo painel HAGAV.</p>
         </div>
         <div class="reels-pricing" data-pricing></div>
-        <p class="reels-offer-note reveal" data-offer-note></p>
-      </div>
-    </section>
-
-    <section class="reels-section reels-section--band" aria-labelledby="perfil-title">
-      <div class="reels-container">
-        <div class="reels-section__heading reveal">
-          <span class="reels-eyebrow">Para quem é</span>
-          <h2 id="perfil-title">Uma operação para quem já quer produzir com frequência.</h2>
-        </div>
-        <div class="reels-fit-grid">
-          <article class="reels-fit-card reveal">
-            <h3>É para você se</h3>
-            <ul data-good-fit></ul>
-          </article>
-          <article class="reels-fit-card reels-fit-card--quiet reveal">
-            <h3>Talvez não seja para você se</h3>
-            <ul data-bad-fit></ul>
-          </article>
-        </div>
       </div>
     </section>
 
@@ -208,7 +183,6 @@
         <div class="reels-section__heading reveal">
           <span class="reels-eyebrow">FAQ</span>
           <h2 id="faq-title">Dúvidas frequentes.</h2>
-          <p>As respostas abaixo são conservadoras nesta versão de validação. Condições comerciais específicas devem ser confirmadas com a equipe.</p>
         </div>
         <div class="reels-faq" data-faq></div>
       </div>
@@ -217,12 +191,13 @@
     <section class="reels-final-cta" aria-labelledby="cta-final-title">
       <div class="reels-container reels-final-cta__inner reveal">
         <span class="reels-eyebrow">Próximo passo</span>
-        <h2 id="cta-final-title">Você continua gravando. A HAGAV cuida do resto.</h2>
-        <p>Tenha uma equipe de pós-produção preparada para transformar suas ideias em conteúdo consistente, profissional e pronto para publicar.</p>
+        <h2 id="cta-final-title">Você não precisa perder mais tempo com vídeo.</h2>
+        <p>Grave o conteúdo. Envie para a HAGAV. Receba pronto para publicar.</p>
         <div class="reels-actions reels-actions--center">
-          <a class="reels-button" href="#" data-whatsapp-link="start" data-whatsapp-track data-track-page="reels-teste" data-track-origin="REELS - CTA FINAL">Quero começar</a>
-          <a class="reels-button reels-button--secondary" href="#" data-whatsapp-link="specialist" data-whatsapp-track data-track-page="reels-teste" data-track-origin="REELS - CTA ESPECIALISTA">Falar com especialista</a>
+          <a class="reels-button" href="#teste">Testar a partir de R$ 47</a>
+          <a class="reels-button reels-button--secondary" href="#planos">Ver pacotes mensais</a>
         </div>
+        <p class="reels-final-cta__note">Se contratar um pacote em até 7 dias, o valor do teste vira crédito na primeira mensalidade.</p>
       </div>
     </section>
   </main>

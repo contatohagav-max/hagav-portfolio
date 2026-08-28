@@ -78,73 +78,26 @@
     instagramUrl: "https://www.instagram.com/hagav.studio/",
     logoUrl: "/assets/logo-oficial-master-bg.png",
     contentPendingNote: "",
-    offerNote:
-      "Os valores e condições desta página fazem parte de uma oferta em validação e poderão ser ajustados antes do lançamento oficial.",
+    savingsWords: ["TEMPO", "DINHEIRO", "RETRABALHO", "DOR DE CABEÇA"],
+    trialCredit:
+      "Contratou um pacote mensal em até 7 dias? O valor pago no teste vira crédito na sua primeira mensalidade.",
     whatsappMessages: {
-      start: "Olá! Quero começar uma operação de edição recorrente de Reels com a HAGAV.",
-      delegate: "Olá! Quero delegar minha edição de vídeos para a HAGAV.",
       specialist: "Olá! Quero falar com um especialista da HAGAV sobre edição recorrente de Reels.",
-      test: "Olá! Quero testar o plano de 3 vídeos da HAGAV.",
-      flow: "Olá! Tenho interesse no plano mensal de 12 vídeos.",
-      scale: "Olá! Quero conversar sobre uma operação de 30 vídeos mensais."
+      trialEssential: "Olá! Quero o Teste Essencial de edição de Reel por R$ 47.",
+      trialComplete: "Olá! Quero o Teste Completo de edição de Reel por R$ 97.",
+      begin: "Olá! Quero o pacote Começo com 5 Reels por mês por R$ 597/mês.",
+      consistency: "Olá! Quero o pacote Constância com 12 Reels por mês por R$ 1.197/mês.",
+      everyDay: "Olá! Quero o pacote Todo Dia com 30 Reels por mês por R$ 2.197/mês."
     },
-    authority: [
-      "Formatos para Reels, Shorts e TikTok",
-      "Pós-produção organizada para demandas recorrentes",
-      "Vídeos adaptados à identidade de cada projeto",
-      "Atendimento humano e acompanhamento próximo"
-    ],
-    problems: [
-      "Horas perdidas na edição",
-      "Falta de consistência visual",
-      "Atrasos nas publicações",
-      "Comunicação confusa com editores",
-      "Conteúdo gravado acumulando",
-      "Dificuldade para aumentar o volume"
-    ],
-    benefits: [
-      {
-        title: "Identidade preservada",
-        text: "Cada projeto recebe uma direção visual alinhada à sua marca, ao seu público e ao seu posicionamento."
-      },
-      {
-        title: "Atendimento próximo",
-        text: "Você fala diretamente com a equipe responsável pela organização e pelo acompanhamento da sua demanda."
-      },
-      {
-        title: "Entregas organizadas",
-        text: "Os conteúdos são recebidos, editados, revisados e entregues por um fluxo claro, sem arquivos espalhados."
-      },
-      {
-        title: "Edição dinâmica",
-        text: "Cortes, mudanças de enquadramento, destaques, prints, elementos gráficos, transições e efeitos aplicados com intenção."
-      },
-      {
-        title: "B-roll e apoio visual",
-        text: "Cenas, imagens e elementos complementares ajudam a sustentar a atenção e contextualizar a mensagem."
-      },
-      {
-        title: "Áudio tratado",
-        text: "Redução de ruído, equilíbrio de volume, tratamento de voz, música e efeitos sonoros."
-      },
-      {
-        title: "Correção de cor",
-        text: "Ajustes de exposição, pele, contraste e consistência visual."
-      },
-      {
-        title: "Formato pronto para publicar",
-        text: "Entrega otimizada para Reels, Shorts ou TikTok, respeitando áreas seguras e leitura no celular."
-      }
-    ],
     marquee: [
-      "Talking head",
-      "Legendas dinâmicas",
-      "B-roll",
-      "Motion graphics",
-      "Criativos de anúncio",
-      "Conteúdo educacional",
       "Reels profissionais",
-      "Cortes verticais"
+      "Conteúdo educativo",
+      "Cortes de podcast",
+      "Talking head",
+      "Vídeos para experts",
+      "Conteúdo para empresas",
+      "Shorts",
+      "Criativos verticais"
     ],
     videoLibrary: videoLibrary,
     featuredVideos: [videoLibrary.daianeViana, videoLibrary.paulCabannes, videoLibrary.taisVoila],
@@ -169,146 +122,160 @@
         embedUrl: "https://www.instagram.com/reel/DaQGizATgDG/embed/"
       }
     ],
+    trials: [
+      {
+        key: "trialEssential",
+        name: "Teste Essencial",
+        price: "R$ 47",
+        description: "Para conhecer a qualidade da HAGAV em uma edição mais direta.",
+        cta: "Quero o Teste Essencial",
+        featured: false,
+        includes: [
+          "1 Reel de até 60 segundos",
+          "Material bruto de até 3 minutos",
+          "Cortes e remoção de pausas",
+          "Legendas revisadas",
+          "Música e tratamento de áudio",
+          "Acabamento visual profissional",
+          "Entrega em até 48 horas após o envio"
+        ]
+      },
+      {
+        key: "trialComplete",
+        name: "Teste Completo",
+        price: "R$ 97",
+        description: "Para experimentar uma edição mais dinâmica e completa.",
+        cta: "Quero o Teste Completo",
+        badge: "Mais escolhido",
+        featured: true,
+        includes: [
+          "1 Reel de até 60 segundos",
+          "Material bruto de até 3 minutos",
+          "Cortes, ritmo e remoção de pausas",
+          "Legendas com destaques",
+          "Música, efeitos e tratamento de áudio",
+          "Imagens de apoio quando necessário",
+          "Identidade visual",
+          "Entrega em até 48 horas após o envio"
+        ]
+      }
+    ],
     process: [
       {
-        title: "Alinhamento",
-        text: "Entendemos seu conteúdo, referências, identidade e objetivo."
+        title: "Envie",
+        text: "Grave pelo celular, câmera ou envie um material que já possui."
       },
       {
-        title: "Envio do material",
-        text: "Você envia as gravações e orientações pelo canal definido com a equipe."
+        title: "A HAGAV edita",
+        text: "Cuidamos dos cortes, ritmo, legendas, música, áudio e acabamento visual."
       },
       {
-        title: "Pós-produção",
-        text: "A HAGAV organiza, edita, trata áudio, cor, legendas e elementos visuais."
-      },
-      {
-        title: "Revisão e entrega",
-        text: "Você recebe o conteúdo, solicita os ajustes previstos e aprova a versão final."
+        title: "Receba e publique",
+        text: "Acompanhe pelo painel e receba seus Reels organizados e prontos para Instagram, TikTok e YouTube Shorts."
       }
     ],
     dashboard: [
       { label: "Material recebido", count: "03", status: "Entrada" },
       { label: "Em edição", count: "06", status: "Produção" },
-      { label: "Em revisão", count: "02", status: "Ajustes" },
+      { label: "Em revisão", count: "02", status: "Revisão" },
       { label: "Aprovado", count: "04", status: "Validação" },
       { label: "Exportado", count: "08", status: "Entrega" }
     ],
     testimonials: [],
     pricing: [
       {
-        key: "test",
-        name: "Plano Teste",
-        price: "R$ 375",
-        cadence: "pagamento único",
-        description: "Para validar o padrão HAGAV antes de uma rotina mensal.",
-        cta: "Quero testar",
+        key: "begin",
+        name: "Começo",
+        volume: "5 Reels por mês",
+        price: "R$ 597/mês",
+        description: "Para começar a publicar com qualidade e consistência.",
+        cta: "Quero 5 Reels",
         featured: false,
         includes: [
-          "3 vídeos",
-          "Até 2 minutos por vídeo",
-          "Edição vertical",
-          "Tratamento de áudio e cor",
-          "Legendas e elementos visuais",
-          "1 rodada de ajustes"
+          "5 Reels de até 60 segundos",
+          "Entregas organizadas durante o mês",
+          "Cortes e remoção de pausas",
+          "Legendas revisadas",
+          "Música e tratamento de áudio",
+          "Identidade visual",
+          "Arquivos prontos para Instagram, TikTok e YouTube Shorts",
+          "Acompanhamento pelo painel HAGAV"
         ]
       },
       {
-        key: "flow",
-        name: "Plano Fluxo",
-        price: "R$ 1.500/mês",
-        cadence: "12 vídeos mensais",
-        description: "Para manter uma cadência recorrente com organização.",
-        cta: "Escolher plano",
+        key: "consistency",
+        name: "Constância",
+        volume: "12 Reels por mês",
+        price: "R$ 1.197/mês",
+        description: "Para publicar aproximadamente três vezes por semana sem acumular edição.",
+        cta: "Quero 12 Reels",
         badge: "Mais escolhido",
         featured: true,
         includes: [
-          "12 vídeos mensais",
-          "Até 2 minutos por vídeo",
-          "Entregas organizadas em lotes",
-          "Identidade visual alinhada",
-          "Tratamento de áudio e cor",
-          "Legendas, B-roll e elementos dinâmicos",
-          "1 rodada de ajustes por lote"
+          "12 Reels de até 60 segundos",
+          "Entregas semanais",
+          "Cortes, ritmo e remoção de pausas",
+          "Legendas revisadas com destaques",
+          "Música e tratamento de áudio",
+          "Identidade visual",
+          "Imagens de apoio quando necessário",
+          "Arquivos prontos para Instagram, TikTok e YouTube Shorts",
+          "Acompanhamento pelo painel HAGAV"
         ]
       },
       {
-        key: "scale",
-        name: "Plano Escala",
-        price: "R$ 3.050/mês",
-        cadence: "30 vídeos mensais",
-        description: "Para alta demanda com fluxo semanal de produção.",
-        cta: "Falar com especialista",
+        key: "everyDay",
+        name: "Todo Dia",
+        volume: "30 Reels por mês",
+        price: "R$ 2.197/mês",
+        description: "Para transformar suas gravações em uma operação constante de conteúdo.",
+        cta: "Quero 30 Reels",
         featured: false,
         includes: [
-          "30 vídeos mensais",
-          "Até 2 minutos por vídeo",
-          "Entregas semanais em lotes",
-          "Fluxo de alta demanda",
-          "Identidade visual alinhada",
-          "Tratamento completo",
-          "1 rodada de ajustes por lote"
+          "30 Reels de até 60 segundos",
+          "Entregas semanais prioritárias",
+          "Até 7 Reels por semana em lotes organizados",
+          "Cortes, ritmo e remoção de pausas",
+          "Legendas revisadas com destaques",
+          "Música, efeitos e tratamento de áudio",
+          "Identidade visual",
+          "Imagens de apoio quando necessário",
+          "Arquivos prontos para Instagram, TikTok e YouTube Shorts",
+          "Reunião mensal de avaliação",
+          "Análise dos conteúdos que tiveram melhor resultado",
+          "Sugestões de pautas e ganchos para o próximo mês",
+          "Acompanhamento completo pelo painel HAGAV"
         ]
       }
     ],
-    goodFit: [
-      "Publica conteúdo com frequência",
-      "Já possui gravações ou consegue gravar",
-      "Precisa de consistência",
-      "Quer delegar a pós-produção",
-      "Precisa aumentar o volume com organização"
-    ],
-    badFit: [
-      "Busca apenas o menor preço possível",
-      "Ainda não consegue enviar o material",
-      "Precisa de captação presencial incluída",
-      "Espera resultados garantidos de alcance ou vendas",
-      "Precisa de alterações ilimitadas"
-    ],
     faq: [
       {
-        question: "Vocês também criam os roteiros?",
-        answer: "Esta oferta foi estruturada para pós-produção. Demandas de roteiro podem ser conversadas com a equipe, mas não estão incluídas automaticamente nos planos desta página."
+        question: "Posso enviar uma gravação feita pelo celular?",
+        answer: "Sim. Você pode gravar pelo celular, câmera ou enviar materiais de podcast, entrevista, aula e outros formatos."
       },
       {
-        question: "Vocês selecionam cortes de podcasts e aulas?",
-        answer: "Sim, a HAGAV trabalha com cortes e trechos quando o material permite essa curadoria. O volume, a duração e o critério de seleção devem ser alinhados no atendimento."
+        question: "Qual é a diferença entre o teste de R$ 47 e o de R$ 97?",
+        answer: "O teste de R$ 47 oferece uma edição mais direta, com cortes, legendas, música, áudio e acabamento visual. O teste de R$ 97 oferece uma edição mais dinâmica, com destaques nas legendas, efeitos, imagens de apoio e identidade visual."
       },
       {
-        question: "Os vídeos precisam chegar prontos para editar?",
-        answer: "Não precisam chegar finalizados, mas precisam vir com gravação, contexto e orientação mínima para que a equipe entenda objetivo, referência e prioridade."
+        question: "O que recebo no teste?",
+        answer: "Um Reel profissional de até 60 segundos, finalizado e pronto para publicar."
       },
       {
-        question: "Posso pedir vídeos adicionais?",
-        answer: "Pode. Vídeos adicionais devem ser combinados com a equipe conforme disponibilidade, volume e formato."
+        question: "Em quanto tempo recebo?",
+        answer: "O resultado do teste é entregue em até 48 horas após o envio correto do material."
       },
       {
-        question: "Quantos ajustes estão incluídos?",
-        answer: "A estrutura inicial considera uma rodada de ajustes. Pedidos fora do escopo, mudanças completas de direção ou revisões extras devem ser alinhados com a equipe."
+        question: "O valor do teste é descontado do pacote?",
+        answer: "Sim. Contratando qualquer pacote mensal em até 7 dias, o valor pago no teste vira crédito na primeira mensalidade."
       },
       {
-        question: "Qual é o prazo de entrega?",
-        answer: "O prazo é confirmado no atendimento de acordo com volume, fila de produção e complexidade do material. Esta página teste não promete um prazo fixo."
+        question: "Os vídeos servem para outras plataformas?",
+        answer: "Sim. Os arquivos são entregues em formato vertical e ficam prontos para Instagram Reels, TikTok e YouTube Shorts."
       },
       {
-        question: "Vocês editam vídeos para YouTube?",
-        answer: "Sim, mas vídeos longos ou formatos horizontais devem ser orçados separadamente com base em duração, complexidade e objetivo."
-      },
-      {
-        question: "Existe fidelidade nos planos mensais?",
-        answer: "As condições contratuais devem ser confirmadas no atendimento. Esta página apresenta uma oferta em validação, sem criar regras comerciais definitivas."
-      },
-      {
-        question: "Como envio os arquivos?",
-        answer: "O canal de envio é definido com a equipe após o alinhamento. A prioridade é manter o material organizado e fácil de acompanhar."
-      },
-      {
-        question: "Posso manter o estilo que já utilizo?",
-        answer: "Sim. A HAGAV pode preservar referências visuais existentes e adaptar a edição ao padrão da sua marca."
-      },
-      {
-        question: "A HAGAV também faz criativos para anúncios?",
-        answer: "Sim. Criativos para anúncios podem ser avaliados conforme objetivo, formato, roteiro e volume necessário."
+        question: "Vocês selecionam trechos de podcasts, aulas e vídeos longos?",
+        answer: "Podemos selecionar os melhores momentos. O valor será calculado conforme o tempo total do material enviado."
       }
     ]
   };

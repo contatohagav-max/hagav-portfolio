@@ -316,6 +316,52 @@
     });
   }
 
+  function createOfferCard(offer, kind) {
+    var baseClass = kind === "trial" ? "reels-trial-card" : "reels-pricing-card";
+    var card = createEl("article", baseClass + " reveal" + (offer.featured ? " " + baseClass + "--featured" : ""));
+    if (offer.badge) card.appendChild(createEl("span", "reels-badge", offer.badge));
+    card.appendChild(createEl("h3", "", offer.name));
+    if (offer.volume) card.appendChild(createEl("p", "reels-offer-volume", offer.volume));
+
+    var price = createEl("div", "reels-price");
+    price.appendChild(createEl("strong", "", offer.price));
+    if (offer.cadence) price.appendChild(createEl("span", "", offer.cadence));
+    var description = createEl("p", baseClass + "__description", offer.description);
+    if (kind === "trial") {
+      card.appendChild(price);
+      card.appendChild(description);
+    } else {
+      card.appendChild(description);
+      card.appendChild(price);
+    }
+
+    var list = createEl("ul", "reels-check-list");
+    (offer.includes || []).forEach(function (item) {
+      list.appendChild(createEl("li", "", item));
+    });
+    card.appendChild(list);
+
+    var cta = createEl("a", "reels-button" + (offer.featured ? "" : " reels-button--secondary"), offer.cta);
+    cta.href = waUrl(config.whatsappMessages && config.whatsappMessages[offer.key]);
+    cta.setAttribute("data-whatsapp-track", "");
+    cta.setAttribute("data-track-page", "reels-teste");
+    cta.setAttribute("data-track-origin", "REELS - " + (kind === "trial" ? "TESTE " : "PLANO ") + offer.name.toUpperCase());
+    card.appendChild(cta);
+    return card;
+  }
+
+  function renderTrials() {
+    var root = qs("[data-trials]");
+    if (!root) return;
+    root.innerHTML = "";
+    (config.trials || []).forEach(function (trial) {
+      root.appendChild(createOfferCard(trial, "trial"));
+    });
+
+    var credit = qs("[data-trial-credit]");
+    if (credit) credit.textContent = config.trialCredit || "";
+  }
+
   function renderTestimonials() {
     var section = qs("[data-testimonials-section]");
     var root = qs("[data-testimonials]");
@@ -341,30 +387,8 @@
     if (!root) return;
     root.innerHTML = "";
     (config.pricing || []).forEach(function (plan) {
-      var card = createEl("article", "reels-pricing-card reveal" + (plan.featured ? " reels-pricing-card--featured" : ""));
-      if (plan.badge) card.appendChild(createEl("span", "reels-badge", plan.badge));
-      card.appendChild(createEl("h3", "", plan.name));
-      card.appendChild(createEl("p", "reels-pricing-card__description", plan.description));
-      var price = createEl("div", "reels-price");
-      price.appendChild(createEl("strong", "", plan.price));
-      price.appendChild(createEl("span", "", plan.cadence));
-      card.appendChild(price);
-      var list = createEl("ul", "reels-check-list");
-      (plan.includes || []).forEach(function (item) {
-        list.appendChild(createEl("li", "", item));
-      });
-      card.appendChild(list);
-      var cta = createEl("a", "reels-button" + (plan.featured ? "" : " reels-button--secondary"), plan.cta);
-      cta.href = waUrl(config.whatsappMessages && config.whatsappMessages[plan.key]);
-      cta.setAttribute("data-whatsapp-track", "");
-      cta.setAttribute("data-track-page", "reels-teste");
-      cta.setAttribute("data-track-origin", "REELS - PLANO " + plan.name.toUpperCase());
-      card.appendChild(cta);
-      root.appendChild(card);
+      root.appendChild(createOfferCard(plan, "pricing"));
     });
-
-    var note = qs("[data-offer-note]");
-    if (note) note.textContent = config.offerNote || "";
   }
 
   function renderFAQ() {
@@ -732,23 +756,36 @@
     });
   }
 
+  function setupSavingsRotation() {
+    var word = qs("[data-savings-word]");
+    var words = config.savingsWords || [];
+    if (!word || words.length < 2 || reduceMotion) return;
+
+    var index = 0;
+    window.setInterval(function () {
+      if (document.hidden) return;
+      word.classList.add("is-changing");
+      window.setTimeout(function () {
+        index = (index + 1) % words.length;
+        word.textContent = words[index];
+        word.classList.remove("is-changing");
+      }, 180);
+    }, 2400);
+  }
+
   function init() {
     setWhatsAppLinks();
-    renderAuthority();
-    renderProblems();
-    renderBenefits();
     renderMarquee();
     renderVideos();
     renderBeforeAfter();
+    renderTrials();
     renderProcess();
     renderDashboard();
-    renderTestimonials();
     renderPricing();
-    renderList(qs("[data-good-fit]"), config.goodFit || []);
-    renderList(qs("[data-bad-fit]"), config.badFit || []);
     renderFAQ();
     injectSchema();
     setupMenu();
+    setupSavingsRotation();
     setupFeaturedMobile();
     setupReveal();
     setupVideos();

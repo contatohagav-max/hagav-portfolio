@@ -1,81 +1,282 @@
 (function () {
   "use strict";
 
-  function youtubeVideo(id, title, label, source) {
-    return {
-      id: id,
-      title: title,
-      label: label,
-      source: source || "Canal oficial HAGAV no YouTube",
+  var videoLibrary = {
+    daianeViana: {
+      title: "Daiane Viana",
+      label: "Short com presença e ritmo",
+      category: "Conteúdo vertical",
+      type: "Short vertical",
+      client: "Daiane Viana",
+      status: "Publicado",
       provider: "youtube",
-      videoUrl: "https://www.youtube-nocookie.com/embed/" + id,
-      poster: "https://i.ytimg.com/vi/" + id + "/hqdefault.jpg",
-      altText: "Thumbnail de " + title + ", trabalho oficial da HAGAV."
-    };
-  }
-
-  var videos = {
-    daiane: youtubeVideo("_XgE-UY-JII", "Daiane Viana", "Narrativa vertical"),
-    paul: youtubeVideo("zmFo2_v9QRo", "Paul Cabannes", "Ritmo e humor"),
-    tais: youtubeVideo("mzN4WzVtlqM", "Tais - Escola Voila", "Lettering e apoio visual"),
-    reels16: youtubeVideo("SCHvQrYctn4", "Reels, TikTok, Shorts - 16", "Talking head"),
-    reels15: youtubeVideo("e1PgXkM4QZE", "Reels, TikTok, Shorts - 15", "Conteudo vertical"),
-    ads11: youtubeVideo("eE7aAgiNvDI", "Criativo para Ads - 11", "Criativo de produto"),
-    farofa: youtubeVideo("RaP_riXANEQ", "AD01 Farofa", "Criativo para anuncios"),
-    brasboat: youtubeVideo("8u5C4RG_spg", "Os Barcos da Brasboat", "Criativo vertical"),
-    ads08: youtubeVideo("oVQraLDd_Pw", "Criativo para Ads - 08", "Composicao e ritmo"),
-    reels14: youtubeVideo("vgINgvVWvcM", "Reels, TikTok, Shorts - 14", "Edicao dinamica"),
-    reels13: youtubeVideo("hQ4DgwdBMNg", "Reels, TikTok, Shorts - 13", "Legendas e motion"),
-    corte09: youtubeVideo("VNQDGTkcNeg", "Corte - 09", "Corte vertical")
+      videoUrl: "https://www.youtube-nocookie.com/embed/_XgE-UY-JII",
+      poster: "https://i.ytimg.com/vi/_XgE-UY-JII/maxresdefault.jpg",
+      altText: "Thumbnail do Short vertical de Daiane Viana, editado pela HAGAV.",
+      autoPlay: false
+    },
+    paulCabannes: {
+      title: "Paul Cabannes",
+      label: "Short criativo e dinâmico",
+      category: "Conteúdo vertical",
+      type: "Short vertical",
+      client: "Paul Cabannes",
+      status: "Publicado",
+      provider: "youtube",
+      videoUrl: "https://www.youtube-nocookie.com/embed/zmFo2_v9QRo",
+      poster: "https://i.ytimg.com/vi/zmFo2_v9QRo/maxresdefault.jpg",
+      altText: "Thumbnail do Short vertical de Paul Cabannes, editado pela HAGAV.",
+      autoPlay: false
+    },
+    taisVoila: {
+      title: "Tais - Escola Voilà",
+      label: "Lettering e apoio visual",
+      category: "Lettering e apoio visual",
+      type: "Reels vertical",
+      client: "Escola Voilà",
+      format: "9:16",
+      description: "Lettering, enquadramento e apoio visual para organizar a mensagem no celular.",
+      status: "Publicado",
+      provider: "youtube",
+      videoUrl: "https://www.youtube-nocookie.com/embed/mzN4WzVtlqM",
+      poster: "https://i.ytimg.com/vi/mzN4WzVtlqM/maxresdefault.jpg",
+      altText: "Thumbnail do Reels vertical de Tais para a Escola Voilà, editado pela HAGAV.",
+      autoPlay: false
+    },
+    reels12: {
+      title: "Reels, TikTok, Shorts — 12",
+      label: "Talking head dinâmico",
+      category: "Talking head dinâmico",
+      type: "Talking head",
+      format: "9:16",
+      description: "Cortes, ritmo, legendas e identidade visual aplicada ao formato vertical.",
+      status: "Publicado",
+      provider: "youtube",
+      videoUrl: "https://www.youtube-nocookie.com/embed/5ORpPc86nb8",
+      poster: "https://i.ytimg.com/vi_webp/5ORpPc86nb8/hqdefault.webp",
+      altText: "Frame de um Reels vertical com apresentador e identidade visual em rosa.",
+      autoPlay: false
+    },
+    creativeAds11: {
+      title: "Criativo para Ads — 11",
+      label: "Criativo de produto",
+      category: "Criativo com identidade visual",
+      type: "Criativo",
+      format: "9:16",
+      description: "Composição de produto, ritmo e identidade visual forte para mídia vertical.",
+      status: "Publicado",
+      provider: "youtube",
+      videoUrl: "https://www.youtube-nocookie.com/embed/eE7aAgiNvDI",
+      poster: "https://i.ytimg.com/vi_webp/eE7aAgiNvDI/hqdefault.webp",
+      altText: "Frame de um criativo vertical de produto com composição em amarelo e preto.",
+      autoPlay: false
+    }
   };
 
   window.HAGAV_REELS_CONFIG = {
     whatsappNumber: "5573982284382",
     instagramUrl: "https://www.instagram.com/hagav.studio/",
     logoUrl: "/assets/logo-oficial-master-bg.png",
+    contentPendingNote: "",
+    savingsWords: ["TEMPO", "DINHEIRO", "RETRABALHO", "DOR DE CABEÇA"],
+    trialCredit:
+      "Contratou um pacote mensal em até 7 dias? O valor pago no teste vira crédito na sua primeira mensalidade.",
     whatsappMessages: {
-      delegate: "Ola! Acessei a pagina da HAGAV e quero delegar minha edicao de videos.",
-      specialist: "Ola! Acessei a pagina da HAGAV e quero falar com um especialista sobre edicao de videos.",
-      sample: "Ola! Acessei a pagina da HAGAV e quero solicitar minha amostra de edicao com 50% de desconto.",
-      test: "Ola! Tenho interesse no Plano Teste de 3 videos da HAGAV.",
-      flow: "Ola! Tenho interesse no Plano Fluxo de 12 videos mensais da HAGAV.",
-      scale: "Ola! Tenho interesse no Plano Escala de 30 videos mensais da HAGAV."
+      specialist: "Olá! Quero falar com um especialista da HAGAV sobre edição recorrente de Reels.",
+      trialEssential: "Olá! Quero o Teste Essencial de edição de Reel por R$ 47.",
+      trialComplete: "Olá! Quero o Teste Completo de edição de Reel por R$ 97.",
+      begin: "Olá! Quero o pacote Começo com 5 Reels por mês por R$ 597/mês.",
+      consistency: "Olá! Quero o pacote Constância com 12 Reels por mês por R$ 1.197/mês.",
+      everyDay: "Olá! Quero o pacote Todo Dia com 30 Reels por mês por R$ 2.197/mês."
     },
-    marquee: ["Reels profissionais", "Cortes verticais", "Shorts", "TikTok", "Criativos para anuncios", "Talking head", "Cortes de podcast", "Conteudo educacional", "VSL", "Videos para YouTube", "Legendas e motion", "Localizacao de conteudo"],
-    videoLibrary: videos,
-    featuredVideos: [videos.daiane, videos.paul, videos.tais],
-    showcaseVideos: [videos.reels16, videos.reels15, videos.ads11, videos.farofa, videos.brasboat, videos.ads08, videos.reels14, videos.reels13, videos.corte09],
+    marquee: [
+      "Reels profissionais",
+      "Conteúdo educativo",
+      "Cortes de podcast",
+      "Talking head",
+      "Vídeos para experts",
+      "Conteúdo para empresas",
+      "Shorts",
+      "Criativos verticais"
+    ],
+    videoLibrary: videoLibrary,
+    featuredVideos: [videoLibrary.daianeViana, videoLibrary.paulCabannes, videoLibrary.taisVoila],
+    portfolioVideos: [videoLibrary.reels12, videoLibrary.taisVoila, videoLibrary.creativeAds11],
+    beforeAfterVideos: [
+      {
+        id: "DaVUuOUzc6w",
+        platform: "instagram",
+        url: "https://www.instagram.com/reel/DaVUuOUzc6w/",
+        embedUrl: "https://www.instagram.com/reel/DaVUuOUzc6w/embed/"
+      },
+      {
+        id: "DaNsKVbTDUf",
+        platform: "instagram",
+        url: "https://www.instagram.com/reel/DaNsKVbTDUf/",
+        embedUrl: "https://www.instagram.com/reel/DaNsKVbTDUf/embed/"
+      },
+      {
+        id: "DaQGizATgDG",
+        platform: "instagram",
+        url: "https://www.instagram.com/reel/DaQGizATgDG/",
+        embedUrl: "https://www.instagram.com/reel/DaQGizATgDG/embed/"
+      }
+    ],
+    trials: [
+      {
+        key: "trialEssential",
+        name: "Teste Essencial",
+        price: "R$ 47",
+        description: "Para conhecer a qualidade da HAGAV em uma edição mais direta.",
+        cta: "Quero o Teste Essencial",
+        featured: false,
+        includes: [
+          "1 Reel de até 60 segundos",
+          "Material bruto de até 3 minutos",
+          "Cortes e remoção de pausas",
+          "Legendas revisadas",
+          "Música e tratamento de áudio",
+          "Acabamento visual profissional",
+          "Entrega em até 48 horas após o envio"
+        ]
+      },
+      {
+        key: "trialComplete",
+        name: "Teste Completo",
+        price: "R$ 97",
+        description: "Para experimentar uma edição mais dinâmica e completa.",
+        cta: "Quero o Teste Completo",
+        badge: "Mais escolhido",
+        featured: true,
+        includes: [
+          "1 Reel de até 60 segundos",
+          "Material bruto de até 3 minutos",
+          "Cortes, ritmo e remoção de pausas",
+          "Legendas com destaques",
+          "Música, efeitos e tratamento de áudio",
+          "Imagens de apoio quando necessário",
+          "Identidade visual",
+          "Entrega em até 48 horas após o envio"
+        ]
+      }
+    ],
     process: [
-      { title: "Alinhamento", text: "Entendemos seu conteudo, referencias e identidade." },
-      { title: "Envio", text: "Voce envia as gravacoes e orientacoes pelo fluxo definido." },
-      { title: "Pos-producao", text: "Organizamos cortes, ritmo, audio, cor, legendas e elementos visuais." },
-      { title: "Revisao e entrega", text: "Voce acompanha, solicita os ajustes previstos e aprova." }
+      {
+        title: "Envie",
+        text: "Grave pelo celular, câmera ou envie um material que já possui."
+      },
+      {
+        title: "A HAGAV edita",
+        text: "Cuidamos dos cortes, ritmo, legendas, música, áudio e acabamento visual."
+      },
+      {
+        title: "Receba e publique",
+        text: "Acompanhe pelo painel e receba seus Reels organizados e prontos para Instagram, TikTok e YouTube Shorts."
+      }
     ],
-    trackingFlow: {
-      label: "Fluxo visual de acompanhamento HAGAV",
-      disclaimer: "Representacao do fluxo de acompanhamento.",
-      client: "Projeto Demonstracao",
-      columns: ["Material recebido", "Em edicao", "Em revisao", "Entregue"],
-      cards: ["Reel 01 - Hook principal", "Reel 02 - Conteudo educativo", "Reel 03 - Criativo de anuncio", "Reel 04 - Corte vertical"],
-      statuses: ["Editor atribuido", "Edicao em andamento", "Primeira versao disponivel", "Video aprovado"]
-    },
+    dashboard: [
+      { label: "Material recebido", count: "03", status: "Entrada" },
+      { label: "Em edição", count: "06", status: "Produção" },
+      { label: "Em revisão", count: "02", status: "Revisão" },
+      { label: "Aprovado", count: "04", status: "Validação" },
+      { label: "Exportado", count: "08", status: "Entrega" }
+    ],
+    testimonials: [],
     pricing: [
-      { key: "test", name: "Plano Teste", price: "R$ 375", cadence: "pagamento unico", description: "Para validar o padrao HAGAV antes de uma rotina mensal.", cta: "Quero testar", includes: ["3 videos", "Ate 2 minutos por video", "Edicao vertical", "Tratamento de audio e cor", "Legendas e elementos visuais", "1 rodada de ajustes"] },
-      { key: "flow", name: "Plano Fluxo", price: "R$ 1.500/mes", cadence: "12 videos mensais", description: "Para manter uma cadencia recorrente com organizacao.", cta: "Escolher plano", badge: "Mais escolhido", featured: true, includes: ["12 videos mensais", "Ate 2 minutos por video", "Entregas organizadas em lotes", "Identidade visual alinhada", "Tratamento de audio e cor", "Legendas, B-roll e elementos dinamicos", "1 rodada de ajustes por lote"] },
-      { key: "scale", name: "Plano Escala", price: "R$ 3.050/mes", cadence: "30 videos mensais", description: "Para alta demanda com fluxo semanal de producao.", cta: "Falar com especialista", includes: ["30 videos mensais", "Ate 2 minutos por video", "Entregas semanais em lotes", "Fluxo de alta demanda", "Identidade visual alinhada", "Tratamento completo", "1 rodada de ajustes por lote"], bonus: { title: "1 reuniao estrategica de alinhamento", items: ["Analise do conteudo atual", "Sugestoes de temas, formatos e oportunidades de melhoria", "Leitura de desempenho e visualizacoes disponiveis"], note: "Recomendacoes baseadas no conteudo e nos dados disponibilizados pelo cliente." } }
+      {
+        key: "begin",
+        name: "Começo",
+        volume: "5 Reels por mês",
+        price: "R$ 597/mês",
+        description: "Para começar a publicar com qualidade e consistência.",
+        cta: "Quero 5 Reels",
+        featured: false,
+        includes: [
+          "5 Reels de até 60 segundos",
+          "Entregas organizadas durante o mês",
+          "Cortes e remoção de pausas",
+          "Legendas revisadas",
+          "Música e tratamento de áudio",
+          "Identidade visual",
+          "Arquivos prontos para Instagram, TikTok e YouTube Shorts",
+          "Acompanhamento pelo painel HAGAV"
+        ]
+      },
+      {
+        key: "consistency",
+        name: "Constância",
+        volume: "12 Reels por mês",
+        price: "R$ 1.197/mês",
+        description: "Para publicar aproximadamente três vezes por semana sem acumular edição.",
+        cta: "Quero 12 Reels",
+        badge: "Mais escolhido",
+        featured: true,
+        includes: [
+          "12 Reels de até 60 segundos",
+          "Entregas semanais",
+          "Cortes, ritmo e remoção de pausas",
+          "Legendas revisadas com destaques",
+          "Música e tratamento de áudio",
+          "Identidade visual",
+          "Imagens de apoio quando necessário",
+          "Arquivos prontos para Instagram, TikTok e YouTube Shorts",
+          "Acompanhamento pelo painel HAGAV"
+        ]
+      },
+      {
+        key: "everyDay",
+        name: "Todo Dia",
+        volume: "30 Reels por mês",
+        price: "R$ 2.197/mês",
+        description: "Para transformar suas gravações em uma operação constante de conteúdo.",
+        cta: "Quero 30 Reels",
+        featured: false,
+        includes: [
+          "30 Reels de até 60 segundos",
+          "Entregas semanais prioritárias",
+          "Até 7 Reels por semana em lotes organizados",
+          "Cortes, ritmo e remoção de pausas",
+          "Legendas revisadas com destaques",
+          "Música, efeitos e tratamento de áudio",
+          "Identidade visual",
+          "Imagens de apoio quando necessário",
+          "Arquivos prontos para Instagram, TikTok e YouTube Shorts",
+          "Reunião mensal de avaliação",
+          "Análise dos conteúdos que tiveram melhor resultado",
+          "Sugestões de pautas e ganchos para o próximo mês",
+          "Acompanhamento completo pelo painel HAGAV"
+        ]
+      }
     ],
-    goodFit: ["Grava, mas nao consegue manter frequencia", "Quer delegar a edicao", "Precisa preservar a identidade", "Deseja aumentar o volume", "Busca um processo organizado"],
-    badFit: ["Busca somente o menor preco", "Ainda nao consegue enviar materiais", "Precisa de mudancas ilimitadas", "Espera alcance ou vendas garantidas", "Precisa de captacao presencial incluida"],
     faq: [
-      { question: "Vocês também criam os roteiros?", answer: "Esta oferta foi estruturada para pós-produção. Demandas de roteiro podem ser avaliadas separadamente com a equipe." },
-      { question: "Vocês selecionam cortes de podcasts e aulas?", answer: "Sim, quando o material permite essa curadoria. Volume, duração e critérios de seleção são alinhados antes do início." },
-      { question: "Os vídeos precisam chegar prontos para editar?", answer: "Não. Precisamos da gravação completa, contexto, referências e orientações mínimas para confirmar o briefing." },
-      { question: "Quantos ajustes estão incluídos?", answer: "A estrutura atual considera uma rodada de ajustes. Revisões extras ou mudanças completas de direção são alinhadas separadamente." },
-      { question: "Todos os vídeos ficam prontos em 48 horas?", answer: "O prazo de até 48 horas úteis se refere à primeira prévia, após o recebimento completo do material e do alinhamento. Os demais prazos dependem do plano, volume e complexidade da demanda." },
-      { question: "Como acompanho meus vídeos?", answer: "A equipe organiza demandas, prazos, revisões e entregas em um fluxo visual de acompanhamento. O formato de acesso e o canal usado são confirmados no alinhamento inicial." },
-      { question: "Vocês editam vídeos para YouTube?", answer: "Sim. Vídeos longos e formatos horizontais são orçados conforme duração, complexidade e objetivo." },
-      { question: "Como envio os arquivos?", answer: "O canal de envio é definido com a equipe. A contagem da primeira prévia começa apenas após material completo, referências enviadas e briefing confirmado." }
-    ],
-    sampleOffer: { enabled: true, discountPercentage: 50, durationDays: 7, appliesTo: "uma amostra de edicao", onePerCustomer: true, storageKey: "hagav_sample_offer_started_at" }
+      {
+        question: "Posso enviar uma gravação feita pelo celular?",
+        answer: "Sim. Você pode gravar pelo celular, câmera ou enviar materiais de podcast, entrevista, aula e outros formatos."
+      },
+      {
+        question: "Qual é a diferença entre o teste de R$ 47 e o de R$ 97?",
+        answer: "O teste de R$ 47 oferece uma edição mais direta, com cortes, legendas, música, áudio e acabamento visual. O teste de R$ 97 oferece uma edição mais dinâmica, com destaques nas legendas, efeitos, imagens de apoio e identidade visual."
+      },
+      {
+        question: "O que recebo no teste?",
+        answer: "Um Reel profissional de até 60 segundos, finalizado e pronto para publicar."
+      },
+      {
+        question: "Em quanto tempo recebo?",
+        answer: "O resultado do teste é entregue em até 48 horas após o envio correto do material."
+      },
+      {
+        question: "O valor do teste é descontado do pacote?",
+        answer: "Sim. Contratando qualquer pacote mensal em até 7 dias, o valor pago no teste vira crédito na primeira mensalidade."
+      },
+      {
+        question: "Os vídeos servem para outras plataformas?",
+        answer: "Sim. Os arquivos são entregues em formato vertical e ficam prontos para Instagram Reels, TikTok e YouTube Shorts."
+      },
+      {
+        question: "Vocês selecionam trechos de podcasts, aulas e vídeos longos?",
+        answer: "Podemos selecionar os melhores momentos. O valor será calculado conforme o tempo total do material enviado."
+      }
+    ]
   };
 })();

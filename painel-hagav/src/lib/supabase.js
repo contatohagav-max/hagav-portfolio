@@ -1196,11 +1196,14 @@ async function generatePdfDocument(endpoint, id, { adminKey, payload } = {}) {
       has_admin_key_header: Boolean(key),
       has_session_token: Boolean(token),
     });
-    throw new Error('Falha ao gerar PDF: resposta inesperada do servidor.');
+    const statusLabel = Number(response.status || 0) || 'desconhecido';
+    const contentTypeLabel = responseContentType || 'não informado';
+    throw new Error(`Falha ao gerar PDF: HTTP ${statusLabel} retornou conteúdo não JSON (${contentTypeLabel}).`);
   }
 
   if (!response.ok || parsed?.ok === false) {
     const reason = String(parsed?.error || '').trim();
+    const backendMessage = String(parsed?.message || '').trim();
     const stage = String(parsed?.stage || '').trim();
     const requestId = String(parsed?.request_id || '').trim();
     const uploadReason = String(parsed?.upload_reason || '').trim();
@@ -1253,8 +1256,14 @@ async function generatePdfDocument(endpoint, id, { adminKey, payload } = {}) {
     if (reason === 'admin_key_not_configured_or_session_missing') {
       throw new Error(withMeta('Sua sessão administrativa expirou ou não está autorizada. Refaça o login no painel.'));
     }
+    if (reason === 'unauthenticated') {
+      throw new Error(withMeta(backendMessage || 'Sua sessão administrativa expirou. Refaça o login no painel.'));
+    }
     if (reason === 'unauthorized') {
       throw new Error(withMeta('Sem autorizacao para gerar PDF. Verifique chave admin ou sessao autenticada.'));
+    }
+    if (reason === 'forbidden') {
+      throw new Error(withMeta(backendMessage || 'Seu perfil não tem permissão para gerar PDF.'));
     }
     if (reason === 'supabase_not_configured') {
       throw new Error(withMeta('Supabase não configurado no endpoint de PDF.'));
@@ -1279,6 +1288,12 @@ async function generatePdfDocument(endpoint, id, { adminKey, payload } = {}) {
     }
     if (reason === 'template_placeholders_missing') {
       throw new Error(withMeta('Template de PDF com placeholders sem valor. Revise mapeamento de campos antes de gerar para uso comercial.'));
+    }
+    if (reason === 'contrato_pdf_unexpected_error') {
+      throw new Error(withMeta(backendMessage || 'Erro inesperado ao gerar o contrato PDF.'));
+    }
+    if (backendMessage) {
+      throw new Error(withMeta(backendMessage));
     }
     throw new Error(withMeta(reason || `Falha ao gerar PDF (${response.status})`));
   }

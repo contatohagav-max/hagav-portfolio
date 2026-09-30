@@ -32,6 +32,30 @@ function logPdf(requestId, stage, message, extra = {}) {
   console.log(`[HAGAV][PDF][CONTRATO] ${message}`, payload);
 }
 
+function contractPdfErrorMessage(error) {
+  const messages = {
+    unauthenticated: "Sua sessão administrativa expirou. Entre novamente no painel.",
+    unauthorized: "Sua sessão não tem permissão para gerar contratos.",
+    forbidden: "Seu perfil não tem permissão para gerar contratos.",
+    supabase_not_configured: "O Supabase não está configurado na função de contrato.",
+    json_invalido: "A solicitação de geração do contrato é inválida.",
+    id_invalido: "O contrato informado é inválido.",
+    deal_nao_encontrado: "O cliente ou contrato não foi encontrado.",
+    deal_fetch_failed: "Não foi possível carregar os dados do contrato.",
+    template_not_found: "O template oficial do contrato não foi encontrado no deploy.",
+    template_render_failed: "Não foi possível montar o HTML do contrato.",
+    template_placeholders_missing: "O template do contrato contém campos sem valor.",
+    pdf_engine_not_configured: "O motor de PDF não está configurado no deploy.",
+    pdf_engine_not_supported: "O motor de PDF configurado não é compatível.",
+    pdf_render_failed: "Falha ao gerar o PDF pelo serviço configurado.",
+    pdf_upload_failed: "Falha ao enviar o PDF para o armazenamento.",
+    deal_link_update_failed: "O PDF foi gerado, mas não foi possível salvar o link no contrato.",
+    rate_limited: "Muitas tentativas de geração. Aguarde um minuto e tente novamente.",
+    contrato_pdf_unexpected_error: "Ocorreu um erro inesperado ao gerar o contrato PDF.",
+  };
+  return messages[String(error || "").trim()] || "Não foi possível gerar o contrato PDF.";
+}
+
 function fail(requestId, stage, error, status, extra = {}) {
   logPdf(requestId, stage, "Falha no fluxo de contrato PDF", {
     error,
@@ -43,6 +67,7 @@ function fail(requestId, stage, error, status, extra = {}) {
     error,
     stage,
     request_id: requestId,
+    message: contractPdfErrorMessage(error),
     ...extra,
   }, status);
 }
@@ -834,6 +859,14 @@ function sanitizeContractInput(rawInput = {}) {
   return out;
 }
 
+function isTruthyFlag(value) {
+  if (value === true) return true;
+  const normalized = String(value ?? "")
+    .trim()
+    .toLowerCase();
+  return normalized === "true" || normalized === "1" || normalized === "yes" || normalized === "sim";
+}
+
 function buildContractRuntimeData(row, contractInput = {}) {
   const detalhes = readDetalhes(row);
   const contratoAtual = (detalhes?.contrato && typeof detalhes.contrato === "object")
@@ -1354,9 +1387,8 @@ async function updateContractLink(config, row, linkPdf, pdfMeta = {}, runtime = 
   );
 }
 
-export async function onRequestPost(context) {
+async function handleContractPdfPost(context, requestId) {
   const { request, env } = context;
-  const requestId = createRequestId();
   const config = getSupabaseConfig(env);
   const hasAdminKey = Boolean(getAdminKey(env));
   logPdf(requestId, "start", "Inicio da geracao de contrato PDF", {
@@ -1400,6 +1432,7 @@ export async function onRequestPost(context) {
   }
 
   const contractInput = sanitizeContractInput(body?.contrato || body?.contract);
+  const testMode = isTruthyFlag(body?.test_mode) || isTruthyFlag(body?.modo_teste) || isTruthyFlag(body?.preview_mode);
 
   const id = stripDangerousText(String(body?.id || ""), 120);
   if (!id || !/^[a-zA-Z0-9-]+$/.test(id)) {
@@ -1607,6 +1640,17 @@ export async function onRequestPost(context) {
     request_id: requestId,
     pdf_base64: bytesToBase64(pdfContent)
   });
+}
+
+export async function onRequestPost(context) {
+  const requestId = createRequestId();
+  try {
+    return await handleContractPdfPost(context, requestId);
+  } catch (err) {
+    return fail(requestId, "unexpected", "contrato_pdf_unexpected_error", 500, {
+      detail: stripDangerousText(String(err?.message || "erro_desconhecido"), 240),
+    });
+  }
 }
 
 export async function onRequest(context) {

@@ -852,6 +852,8 @@ function sanitizeContractInput(rawInput = {}) {
     observacoes: normalizeTemplateText(input?.observacoes, 1200, { allowEmpty: true }),
     status: normalizeTemplateText(input?.status, 40, { allowEmpty: true }),
     recorrente: typeof input?.recorrente === "boolean" ? input.recorrente : undefined,
+    data_inicio: toIsoDate(input?.data_inicio ?? input?.inicio_contrato),
+    data_fim: toIsoDate(input?.data_fim ?? input?.data_termino ?? input?.vencimento ?? input?.vencimento_contrato),
     duracao_meses: numericDuracao || undefined,
     valor_total: Number.isFinite(numericValor) ? numericValor : undefined,
   };
@@ -873,14 +875,26 @@ function buildContractRuntimeData(row, contractInput = {}) {
     ? detalhes.contrato
     : {};
   const nowIso = new Date().toISOString();
-  const startIso = toIsoDate(nowIso) || toIsoDate(row?.created_at) || toIsoDate(Date.now());
+  const startIso = (
+    toIsoDate(contractInput?.data_inicio)
+    || toIsoDate(contratoAtual?.data_inicio)
+    || toIsoDate(row?.created_at)
+    || toIsoDate(nowIso)
+    || toIsoDate(Date.now())
+  );
   const duracaoMeses = Math.max(
     1,
     Math.round(
       Number(contractInput?.duracao_meses ?? contratoAtual?.duracao_meses ?? 12) || 12
     )
   );
-  const endIso = addMonthsIso(startIso, duracaoMeses, startIso);
+  const endIso = (
+    toIsoDate(contractInput?.data_fim)
+    || toIsoDate(contratoAtual?.data_fim)
+    || toIsoDate(contratoAtual?.data_termino)
+    || toIsoDate(contratoAtual?.vencimento)
+    || addMonthsIso(startIso, duracaoMeses, startIso)
+  );
   const previousVersion = Math.max(
     parseContractVersionValue(contratoAtual?.numero_geracao),
     parseContractVersionValue(contratoAtual?.contractVersion),

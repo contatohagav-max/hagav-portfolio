@@ -1,0 +1,115 @@
+{
+ "schema": "hagav-auto.plan.v1",
+ "id": "d006-glass-cta-v1",
+ "sequence": {
+  "id": "611b539a-571c-46d0-8a28-a2678f7244d7",
+  "name": "D006_EDITADO_V005"
+ },
+ "ops": [
+  {
+   "id": "glass-1",
+   "type": "place_item",
+   "track": "V3",
+   "start": 47.4,
+   "end": 51.6,
+   "media": "X:/midia/D006-GLASS-TOP-CARD.png"
+  },
+  {
+   "id": "glass-2",
+   "type": "place_item",
+   "track": "V8",
+   "start": 47.4,
+   "end": 51.6,
+   "media": "X:/midia/D006-GLASS-TOP-DATA.png"
+  },
+  {
+   "id": "glass-3",
+   "type": "place_item",
+   "track": "V9",
+   "start": 47.4,
+   "end": 51.6,
+   "media": "X:/midia/D006-GLASS-TOP-HORA.png"
+  },
+  {
+   "id": "glass-4",
+   "type": "place_item",
+   "track": "V10",
+   "start": 47.4,
+   "end": 51.6,
+   "media": "X:/midia/D006-GLASS-BUTTON-SURFACE.png"
+  },
+  {
+   "id": "glass-5",
+   "type": "place_item",
+   "track": "V11",
+   "start": 47.4,
+   "end": 51.6,
+   "media": "X:/midia/D006-GLASS-BUTTON-LABEL.png"
+  },
+  {
+   "id": "glass-6",
+   "type": "place_item",
+   "track": "V13",
+   "start": 47.4,
+   "end": 51.6,
+   "media": "X:/midia/D006-GLASS-BUTTON-ARROWS.png"
+  },
+  {
+   "id": "cta",
+   "type": "place_item",
+   "track": "V13",
+   "start": 51.6,
+   "end": 54.0333333333,
+   "srcIn": 1.5,
+   "media": "X:/midia/CTA-05NOV-BOTAO.mp4"
+  },
+  {
+   "id": "cam-v4-off",
+   "type": "set_enabled",
+   "clip": {
+    "track": "V4",
+    "start": 6.3333333333
+   },
+   "enabled": false
+  },
+  {
+   "id": "cam-v5-on",
+   "type": "set_enabled",
+   "clip": {
+    "track": "V5",
+    "start": 6.3333333333
+   },
+   "enabled": true
+  },
+  {
+   "id": "mk-glass",
+   "type": "set_marker",
+   "match": {
+    "time": 47.4,
+    "name": ""
+   },
+   "name": "CONCLUÍDO - LEMBRETE GLASS E SAIBA MAIS",
+   "comments": "Notificação em camadas: Lembrete / 5 de novembro / às 20h. Botão SAIBA MAIS com duas setas discretas para baixo. Entrada/leitura/saída inspecionadas em quadros nativos. Sem SFX ou música. Intervalo 47,40–51,60 s."
+  },
+  {
+   "id": "mk-cta",
+   "type": "set_marker",
+   "match": {
+    "time": 51.6,
+    "name": ""
+   },
+   "name": "CONCLUÍDO - CTA APROVADO 05/11 ÀS 20H",
+   "comments": "Reutilizado CTA-05NOV-BOTAO.mp4 dos dois professores. Fonte 1,50–3,933333 s, montagem 51,60–54,033333 s; 73 quadros a 30 fps. Apenas arte sustentada após a voz. Quadros de entrada/final inspecionados. Sem áudio acrescentado."
+  },
+  {
+   "id": "mk-qc",
+   "type": "set_marker",
+   "match": {
+    "time": 0,
+    "nameContains": "TELAS V4/V5"
+   },
+   "name": "QC D006 - COR E ENCERRAMENTO APLICADOS",
+   "comments": "Ajustes desta revisão: 33 clipes das quatro fontes com um Lumetri cada; takes e áudio existentes preservados. Imagem final reativada e alinhada à voz (fonte 57,266667–63,80 s). Notificação glass 47,40–51,60 s e CTA aprovado 51,60–54,033333 s. Troca de câmera em 6,33–8,80 s confirmada pelo usuário e mantida. Quadros e avanço de reprodução final conferidos; escuta integral não realizada."
+  }
+ ]
+}

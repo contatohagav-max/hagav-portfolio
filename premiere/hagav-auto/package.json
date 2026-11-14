@@ -1,0 +1,7 @@
+{
+  "name": "hagav-auto",
+  "version": "0.1.0",
+  "private": true,
+  "description": "HAGAV AUTO — executor de planos de edicao dentro do Premiere Pro",
+  "scripts": { "test": "node --test test/hagav-auto.test.js" }
+}

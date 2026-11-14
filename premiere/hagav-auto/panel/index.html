@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <title>HAGAV AUTO</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <header><h1>HAGAV AUTO</h1><span id="ver">v0.1.0</span></header>
+  <label for="job">Pasta do trabalho (snapshot, plano e recibos)</label>
+  <input id="job" type="text" spellcheck="false" placeholder="definida pela sequência ativa">
+  <div class="row">
+    <button id="snapshot" title="Lê faixas, clipes, legendas e marcadores e grava snapshot.json">1. Ler timeline</button>
+    <button id="check" title="Valida plan.json sem escrever nada">2. Conferir plano</button>
+  </div>
+  <button id="apply" class="primary" title="Backup, aplica plan.json, relê e confere">3. Aplicar plano</button>
+  <button id="diagnostico" class="ghost" title="Somente leitura. Selecione 1 legenda e 1 clipe antes.">Diagnóstico do Premiere</button>
+  <p id="status" role="status">Abra a sequência e clique em “Ler timeline”.</p>
+  <pre id="log" aria-live="polite"></pre>
+  <script src="js/main.js"></script>
+</body>
+</html>

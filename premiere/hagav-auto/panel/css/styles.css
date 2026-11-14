@@ -1,0 +1,20 @@
+:root { color-scheme: dark; }
+* { box-sizing: border-box; }
+body { margin: 0; padding: 12px; background: #1d1d1d; color: #e6e6e6; font: 12px/1.45 "Segoe UI", system-ui, sans-serif; }
+header { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 10px; }
+h1 { margin: 0; font-size: 14px; letter-spacing: .08em; }
+#ver { color: #8a8a8a; font-size: 11px; }
+label { display: block; color: #a8a8a8; margin-bottom: 4px; }
+input { width: 100%; padding: 6px 8px; margin-bottom: 10px; background: #111; color: #e6e6e6; border: 1px solid #3a3a3a; border-radius: 4px; font: 11px Consolas, monospace; }
+.row { display: flex; gap: 8px; }
+button { flex: 1; width: 100%; padding: 8px; margin-bottom: 8px; background: #2e2e2e; color: #e6e6e6; border: 1px solid #454545; border-radius: 4px; font: inherit; cursor: pointer; }
+button:hover { background: #3a3a3a; }
+button:focus-visible, input:focus-visible { outline: 2px solid #ff9d4d; outline-offset: 1px; }
+button:disabled { opacity: .5; cursor: default; }
+button.primary { background: #c8641c; border-color: #e07a2e; color: #fff; font-weight: 600; }
+button.primary:hover { background: #d9701f; }
+button.ghost { background: transparent; color: #a8a8a8; }
+#status { margin: 6px 0; padding: 8px; border-radius: 4px; background: #262626; }
+#status.ok { background: #1f3324; color: #b7e4c0; }
+#status.bad { background: #3a1f1f; color: #f1b5b5; }
+#log { margin: 0; padding: 8px; max-height: 300px; overflow: auto; background: #111; border-radius: 4px; white-space: pre-wrap; word-break: break-word; font: 11px/1.4 Consolas, monospace; color: #bdbdbd; }

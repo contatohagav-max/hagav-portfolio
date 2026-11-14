@@ -1,0 +1,975 @@
+{
+ "schema": "hagav-auto.snapshot.v1",
+ "source": "prproj",
+ "project": {
+  "name": "projeto.prproj",
+  "path": ""
+ },
+ "sequence": {
+  "id": "611b539a-571c-46d0-8a28-a2678f7244d7",
+  "name": "D006_EDITADO_V005",
+  "fps": 30,
+  "width": 1080,
+  "height": 1920,
+  "durationSec": 51.733333333333334
+ },
+ "videoTracks": [
+  {
+   "index": 0,
+   "id": "V1",
+   "name": "V1_SIGRID_CORTES_VOZ",
+   "locked": false,
+   "muted": false,
+   "clips": [
+    {
+     "nodeId": "x925",
+     "name": "clip-1.mov",
+     "start": 0,
+     "end": 16.733333333333334,
+     "inPoint": 6.3,
+     "outPoint": 23.033333333333335,
+     "enabled": true,
+     "isMGT": false,
+     "mediaPath": "X:/midia/clip-1.mov"
+    },
+    {
+     "nodeId": "x926",
+     "name": "clip-2.mov",
+     "start": 16.733333333333334,
+     "end": 20.466666666666665,
+     "inPoint": 23.833333333333332,
+     "outPoint": 27.566666666666666,
+     "enabled": true,
+     "isMGT": false,
+     "mediaPath": "X:/midia/clip-2.mov"
+    },
+    {
+     "nodeId": "x927",
+     "name": "clip-3.mov",
+     "start": 20.466666666666665,
+     "end": 45.2,
+     "inPoint": 28.1,
+     "outPoint": 52.833333333333336,
+     "enabled": true,
+     "isMGT": false,
+     "mediaPath": "X:/midia/clip-3.mov"
+    },
+    {
+     "nodeId": "x928",
+     "name": "clip-4.mov",
+     "start": 45.2,
+     "end": 51.733333333333334,
+     "inPoint": 61.4,
+     "outPoint": 67.93333333333334,
+     "enabled": false,
+     "isMGT": false,
+     "mediaPath": "X:/midia/clip-4.mov"
+    }
+   ]
+  },
+  {
+   "index": 1,
+   "id": "V2",
+   "name": "V2_PONTALTI_CONTRAPLANOS",
+   "locked": false,
+   "muted": false,
+   "clips": [
+    {
+     "nodeId": "x845",
+     "name": "clip-5.mov",
+     "start": 0,
+     "end": 6.333333333333333,
+     "inPoint": 6.3,
+     "outPoint": 12.633333333333333,
+     "enabled": true,
+     "isMGT": false,
+     "mediaPath": "X:/midia/clip-5.mov"
+    },
+    {
+     "nodeId": "x929",
+     "name": "clip-6.mov",
+     "start": 8.8,
+     "end": 14.766666666666667,
+     "inPoint": 15.1,
+     "outPoint": 21.066666666666666,
+     "enabled": true,
+     "isMGT": false,
+     "mediaPath": "X:/midia/clip-6.mov"
+    },
+    {
+     "nodeId": "x930",
+     "name": "clip-7.mov",
+     "start": 17.866666666666667,
+     "end": 20.466666666666665,
+     "inPoint": 24.966666666666665,
+     "outPoint": 27.566666666666666,
+     "enabled": true,
+     "isMGT": false,
+     "mediaPath": "X:/midia/clip-7.mov"
+    },
+    {
+     "nodeId": "x931",
+     "name": "clip-8.mov",
+     "start": 23.4,
+     "end": 33.03333333333333,
+     "inPoint": 31.033333333333335,
+     "outPoint": 40.666666666666664,
+     "enabled": true,
+     "isMGT": false,
+     "mediaPath": "X:/midia/clip-8.mov"
+    },
+    {
+     "nodeId": "x932",
+     "name": "clip-9.mov",
+     "start": 37.36666666666667,
+     "end": 42.2,
+     "inPoint": 45,
+     "outPoint": 49.833333333333336,
+     "enabled": true,
+     "isMGT": false,
+     "mediaPath": "X:/midia/clip-9.mov"
+    }
+   ]
+  },
+  {
+   "index": 2,
+   "id": "V3",
+   "name": "V3_LEGENDA_ANIMADA_AMARELA",
+   "locked": false,
+   "muted": false,
+   "clips": []
+  },
+  {
+   "index": 3,
+   "id": "V4",
+   "name": "V4_TELA_PONTALTI - ALTERNATIVA SYNC A CONFERIR",
+   "locked": false,
+   "muted": false,
+   "clips": [
+    {
+     "nodeId": "x933",
+     "name": "clip-10",
+     "start": 6.333333333333333,
+     "end": 8.8,
+     "inPoint": 71.6,
+     "outPoint": 74.06666666666666,
+     "enabled": true,
+     "isMGT": false,
+     "mediaPath": "X:/midia/clip-10"
+    },
+    {
+     "nodeId": "x934",
+     "name": "clip-11",
+     "start": 16.733333333333334,
+     "end": 17.866666666666667,
+     "inPoint": 82.76666666666667,
+     "outPoint": 83.9,
+     "enabled": true,
+     "isMGT": false,
+     "mediaPath": "X:/midia/clip-11"
+    },
+    {
+     "nodeId": "x935",
+     "name": "clip-12",
+     "start": 17.866666666666667,
+     "end": 19.333333333333332,
+     "inPoint": 83.9,
+     "outPoint": 85.36666666666666,
+     "enabled": true,
+     "isMGT": false,
+     "mediaPath": "X:/midia/clip-12"
+    },
+    {
+     "nodeId": "x936",
+     "name": "clip-13",
+     "start": 19.333333333333332,
+     "end": 20.466666666666665,
+     "inPoint": 85.36666666666666,
+     "outPoint": 86.5,
+     "enabled": false,
+     "isMGT": false,
+     "mediaPath": "X:/midia/clip-13"
+    },
+    {
+     "nodeId": "x937",
+     "name": "clip-14",
+     "start": 20.466666666666665,
+     "end": 23.4,
+     "inPoint": 87.16666666666667,
+     "outPoint": 90.1,
+     "enabled": true,
+     "isMGT": false,
+     "mediaPath": "X:/midia/clip-14"
+    },
+    {
+     "nodeId": "x938",
+     "name": "clip-15",
+     "start": 33.03333333333333,
+     "end": 37.36666666666667,
+     "inPoint": 99.73333333333333,
+     "outPoint": 104.06666666666666,
+     "enabled": true,
+     "isMGT": false,
+     "mediaPath": "X:/midia/clip-15"
+    },
+    {
+     "nodeId": "x939",
+     "name": "clip-16",
+     "start": 42.2,
+     "end": 45.2,
+     "inPoint": 108.9,
+     "outPoint": 111.9,
+     "enabled": true,
+     "isMGT": false,
+     "mediaPath": "X:/midia/clip-16"
+    }
+   ]
+  },
+  {
+   "index": 4,
+   "id": "V5",
+   "name": "V5_TELA_SIGRID - ALTERNATIVA SYNC A CONFERIR",
+   "locked": false,
+   "muted": false,
+   "clips": [
+    {
+     "nodeId": "x846",
+     "name": "clip-17.mp4",
+     "start": 0,
+     "end": 6.333333333333333,
+     "inPoint": 3.6333333333333333,
+     "outPoint": 9.966666666666667,
+     "enabled": true,
+     "isMGT": false,
+     "mediaPath": "X:/midia/clip-17.mp4"
+    },
+    {
+     "nodeId": "x940",
+     "name": "clip-18.mp4",
+     "start": 6.333333333333333,
+     "end": 8.8,
+     "inPoint": 9.966666666666667,
+     "outPoint": 12.433333333333334,
+     "enabled": false,
+     "isMGT": false,
+     "mediaPath": "X:/midia/clip-18.mp4"
+    },
+    {
+     "nodeId": "x941",
+     "name": "clip-19.mp4",
+     "start": 14.766666666666667,
+     "end": 16.733333333333334,
+     "inPoint": 18.4,
+     "outPoint": 20.366666666666667,
+     "enabled": true,
+     "isMGT": false,
+     "mediaPath": "X:/midia/clip-19.mp4"
+    },
+    {
+     "nodeId": "x942",
+     "name": "clip-20.mp4",
+     "start": 16.733333333333334,
+     "end": 17.866666666666667,
+     "inPoint": 21.166666666666668,
+     "outPoint": 22.3,
+     "enabled": true,
+     "isMGT": false,
+     "mediaPath": "X:/midia/clip-20.mp4"
+    },
+    {
+     "nodeId": "x849",
+     "name": "clip-21.mp4",
+     "start": 20.466666666666665,
+     "end": 23.4,
+     "inPoint": 25.433333333333334,
+     "outPoint": 28.366666666666667,
+     "enabled": false,
+     "isMGT": false,
+     "mediaPath": "X:/midia/clip-21.mp4"
+    },
+    {
+     "nodeId": "x943",
+     "name": "clip-22.mp4",
+     "start": 23.4,
+     "end": 32.766666666666666,
+     "inPoint": 28.366666666666667,
+     "outPoint": 37.733333333333334,
+     "enabled": false,
+     "isMGT": false,
+     "mediaPath": "X:/midia/clip-22.mp4"
+    },
+    {
+     "nodeId": "x944",
+     "name": "clip-23.mp4",
+     "start": 32.766666666666666,
+     "end": 33.03333333333333,
+     "inPoint": 37.733333333333334,
+     "outPoint": 38,
+     "enabled": false,
+     "isMGT": false,
+     "mediaPath": "X:/midia/clip-23.mp4"
+    },
+    {
+     "nodeId": "x945",
+     "name": "clip-24.mp4",
+     "start": 33.03333333333333,
+     "end": 35.2,
+     "inPoint": 38,
+     "outPoint": 40.166666666666664,
+     "enabled": true,
+     "isMGT": false,
+     "mediaPath": "X:/midia/clip-24.mp4"
+    },
+    {
+     "nodeId": "x946",
+     "name": "clip-25.mp4",
+     "start": 35.2,
+     "end": 37.36666666666667,
+     "inPoint": 40.166666666666664,
+     "outPoint": 42.333333333333336,
+     "enabled": false,
+     "isMGT": false,
+     "mediaPath": "X:/midia/clip-25.mp4"
+    }
+   ]
+  },
+  {
+   "index": 5,
+   "id": "V6",
+   "name": "",
+   "locked": false,
+   "muted": false,
+   "clips": [
+    {
+     "nodeId": "x947",
+     "name": "clip-26",
+     "start": 0,
+     "end": 6.333333333333333,
+     "inPoint": 61.266666666666666,
+     "outPoint": 67.6,
+     "enabled": true,
+     "isMGT": false,
+     "mediaPath": "X:/midia/clip-26"
+    },
+    {
+     "nodeId": "x948",
+     "name": "clip-27",
+     "start": 11.8,
+     "end": 14.766666666666667,
+     "inPoint": 73.1,
+     "outPoint": 76.06666666666666,
+     "enabled": false,
+     "isMGT": false,
+     "mediaPath": "X:/midia/clip-27"
+    },
+    {
+     "nodeId": "x949",
+     "name": "clip-28",
+     "start": 14.766666666666667,
+     "end": 16.7,
+     "inPoint": 76.06666666666666,
+     "outPoint": 78,
+     "enabled": true,
+     "isMGT": false,
+     "mediaPath": "X:/midia/clip-28"
+    },
+    {
+     "nodeId": "x950",
+     "name": "clip-29",
+     "start": 16.7,
+     "end": 17.833333333333332,
+     "inPoint": 78.8,
+     "outPoint": 79.93333333333334,
+     "enabled": false,
+     "isMGT": false,
+     "mediaPath": "X:/midia/clip-29"
+    },
+    {
+     "nodeId": "x951",
+     "name": "clip-30",
+     "start": 17.833333333333332,
+     "end": 20.466666666666665,
+     "inPoint": 79.93333333333334,
+     "outPoint": 82.56666666666666,
+     "enabled": true,
+     "isMGT": false,
+     "mediaPath": "X:/midia/clip-30"
+    },
+    {
+     "nodeId": "x952",
+     "name": "clip-31",
+     "start": 23.133333333333333,
+     "end": 33.03333333333333,
+     "inPoint": 85.76666666666667,
+     "outPoint": 95.66666666666667,
+     "enabled": true,
+     "isMGT": false,
+     "mediaPath": "X:/midia/clip-31"
+    },
+    {
+     "nodeId": "x953",
+     "name": "clip-32",
+     "start": 37.36666666666667,
+     "end": 42.2,
+     "inPoint": 100.4,
+     "outPoint": 105.23333333333333,
+     "enabled": true,
+     "isMGT": false,
+     "mediaPath": "X:/midia/clip-32"
+    }
+   ]
+  },
+  {
+   "index": 6,
+   "id": "V7",
+   "name": "",
+   "locked": false,
+   "muted": false,
+   "clips": [
+    {
+     "nodeId": "x954",
+     "name": "clip-33",
+     "start": 8.8,
+     "end": 14.766666666666667,
+     "inPoint": 70.1,
+     "outPoint": 76.06666666666666,
+     "enabled": true,
+     "isMGT": false,
+     "mediaPath": "X:/midia/clip-33"
+    }
+   ]
+  },
+  {
+   "index": 7,
+   "id": "V8",
+   "name": "",
+   "locked": false,
+   "muted": false,
+   "clips": []
+  },
+  {
+   "index": 8,
+   "id": "V9",
+   "name": "",
+   "locked": false,
+   "muted": false,
+   "clips": []
+  },
+  {
+   "index": 9,
+   "id": "V10",
+   "name": "",
+   "locked": false,
+   "muted": false,
+   "clips": []
+  },
+  {
+   "index": 10,
+   "id": "V11",
+   "name": "",
+   "locked": false,
+   "muted": false,
+   "clips": []
+  },
+  {
+   "index": 11,
+   "id": "V12",
+   "name": "",
+   "locked": false,
+   "muted": false,
+   "clips": [
+    {
+     "nodeId": "x955",
+     "name": "clip-34",
+     "start": 0,
+     "end": 3.6333333333333333,
+     "inPoint": 3599.8333333333335,
+     "outPoint": 3603.4666666666667,
+     "enabled": true,
+     "isMGT": true,
+     "mediaPath": "X:/midia/clip-34"
+    },
+    {
+     "nodeId": "x956",
+     "name": "clip-35",
+     "start": 3.6333333333333333,
+     "end": 6.933333333333334,
+     "inPoint": 3600,
+     "outPoint": 3603.3,
+     "enabled": true,
+     "isMGT": true,
+     "mediaPath": "X:/midia/clip-35"
+    },
+    {
+     "nodeId": "x957",
+     "name": "clip-36",
+     "start": 6.933333333333334,
+     "end": 8.2,
+     "inPoint": 3600,
+     "outPoint": 3601.266666666667,
+     "enabled": true,
+     "isMGT": true,
+     "mediaPath": "X:/midia/clip-36"
+    },
+    {
+     "nodeId": "x958",
+     "name": "clip-37",
+     "start": 8.2,
+     "end": 10.266666666666667,
+     "inPoint": 3600,
+     "outPoint": 3602.0666666666666,
+     "enabled": true,
+     "isMGT": true,
+     "mediaPath": "X:/midia/clip-37"
+    },
+    {
+     "nodeId": "x959",
+     "name": "clip-38",
+     "start": 10.266666666666667,
+     "end": 12.866666666666667,
+     "inPoint": 3600,
+     "outPoint": 3602.6,
+     "enabled": true,
+     "isMGT": true,
+     "mediaPath": "X:/midia/clip-38"
+    },
+    {
+     "nodeId": "x960",
+     "name": "clip-39",
+     "start": 12.866666666666667,
+     "end": 14.766666666666667,
+     "inPoint": 3600,
+     "outPoint": 3601.9,
+     "enabled": true,
+     "isMGT": true,
+     "mediaPath": "X:/midia/clip-39"
+    },
+    {
+     "nodeId": "x961",
+     "name": "clip-40",
+     "start": 14.766666666666667,
+     "end": 16.733333333333334,
+     "inPoint": 3600,
+     "outPoint": 3601.9666666666667,
+     "enabled": true,
+     "isMGT": true,
+     "mediaPath": "X:/midia/clip-40"
+    },
+    {
+     "nodeId": "x962",
+     "name": "clip-41",
+     "start": 16.733333333333334,
+     "end": 18.033333333333335,
+     "inPoint": 3600.1,
+     "outPoint": 3601.4,
+     "enabled": true,
+     "isMGT": true,
+     "mediaPath": "X:/midia/clip-41"
+    },
+    {
+     "nodeId": "x963",
+     "name": "clip-42",
+     "start": 18.033333333333335,
+     "end": 20.466666666666665,
+     "inPoint": 3600,
+     "outPoint": 3602.4333333333334,
+     "enabled": true,
+     "isMGT": true,
+     "mediaPath": "X:/midia/clip-42"
+    },
+    {
+     "nodeId": "x964",
+     "name": "clip-43",
+     "start": 20.466666666666665,
+     "end": 21.9,
+     "inPoint": 3600,
+     "outPoint": 3601.4333333333334,
+     "enabled": true,
+     "isMGT": true,
+     "mediaPath": "X:/midia/clip-43"
+    },
+    {
+     "nodeId": "x965",
+     "name": "clip-44",
+     "start": 21.9,
+     "end": 23.333333333333332,
+     "inPoint": 3600,
+     "outPoint": 3601.4333333333334,
+     "enabled": true,
+     "isMGT": true,
+     "mediaPath": "X:/midia/clip-44"
+    },
+    {
+     "nodeId": "x966",
+     "name": "clip-45",
+     "start": 23.333333333333332,
+     "end": 26.466666666666665,
+     "inPoint": 3600,
+     "outPoint": 3603.133333333333,
+     "enabled": true,
+     "isMGT": true,
+     "mediaPath": "X:/midia/clip-45"
+    },
+    {
+     "nodeId": "x967",
+     "name": "clip-46",
+     "start": 26.466666666666665,
+     "end": 29.433333333333334,
+     "inPoint": 3600,
+     "outPoint": 3602.9666666666667,
+     "enabled": true,
+     "isMGT": true,
+     "mediaPath": "X:/midia/clip-46"
+    },
+    {
+     "nodeId": "x968",
+     "name": "clip-47",
+     "start": 29.433333333333334,
+     "end": 33.03333333333333,
+     "inPoint": 3600,
+     "outPoint": 3603.6,
+     "enabled": true,
+     "isMGT": true,
+     "mediaPath": "X:/midia/clip-47"
+    },
+    {
+     "nodeId": "x969",
+     "name": "clip-48",
+     "start": 33.03333333333333,
+     "end": 34.63333333333333,
+     "inPoint": 3600,
+     "outPoint": 3601.6,
+     "enabled": true,
+     "isMGT": true,
+     "mediaPath": "X:/midia/clip-48"
+    },
+    {
+     "nodeId": "x970",
+     "name": "clip-49",
+     "start": 34.63333333333333,
+     "end": 36.333333333333336,
+     "inPoint": 3600,
+     "outPoint": 3601.7,
+     "enabled": true,
+     "isMGT": true,
+     "mediaPath": "X:/midia/clip-49"
+    },
+    {
+     "nodeId": "x971",
+     "name": "clip-50",
+     "start": 36.333333333333336,
+     "end": 37.9,
+     "inPoint": 3600,
+     "outPoint": 3601.5666666666666,
+     "enabled": true,
+     "isMGT": true,
+     "mediaPath": "X:/midia/clip-50"
+    },
+    {
+     "nodeId": "x972",
+     "name": "clip-51",
+     "start": 37.9,
+     "end": 40,
+     "inPoint": 3600,
+     "outPoint": 3602.1,
+     "enabled": true,
+     "isMGT": true,
+     "mediaPath": "X:/midia/clip-51"
+    },
+    {
+     "nodeId": "x973",
+     "name": "clip-52",
+     "start": 40,
+     "end": 42.2,
+     "inPoint": 3600,
+     "outPoint": 3602.2,
+     "enabled": true,
+     "isMGT": true,
+     "mediaPath": "X:/midia/clip-52"
+    },
+    {
+     "nodeId": "x974",
+     "name": "clip-53",
+     "start": 42.2,
+     "end": 43.43333333333333,
+     "inPoint": 3600,
+     "outPoint": 3601.233333333333,
+     "enabled": true,
+     "isMGT": true,
+     "mediaPath": "X:/midia/clip-53"
+    },
+    {
+     "nodeId": "x975",
+     "name": "clip-54",
+     "start": 43.43333333333333,
+     "end": 45.1,
+     "inPoint": 3600,
+     "outPoint": 3601.6666666666665,
+     "enabled": true,
+     "isMGT": true,
+     "mediaPath": "X:/midia/clip-54"
+    },
+    {
+     "nodeId": "x976",
+     "name": "clip-55",
+     "start": 45.1,
+     "end": 47.3,
+     "inPoint": 3599.8333333333335,
+     "outPoint": 3602.0333333333333,
+     "enabled": true,
+     "isMGT": true,
+     "mediaPath": "X:/midia/clip-55"
+    },
+    {
+     "nodeId": "x977",
+     "name": "clip-56",
+     "start": 47.3,
+     "end": 48.96666666666667,
+     "inPoint": 3600,
+     "outPoint": 3601.6666666666665,
+     "enabled": true,
+     "isMGT": true,
+     "mediaPath": "X:/midia/clip-56"
+    },
+    {
+     "nodeId": "x978",
+     "name": "clip-57",
+     "start": 48.96666666666667,
+     "end": 51.6,
+     "inPoint": 3600,
+     "outPoint": 3602.633333333333,
+     "enabled": true,
+     "isMGT": true,
+     "mediaPath": "X:/midia/clip-57"
+    }
+   ]
+  },
+  {
+   "index": 12,
+   "id": "V13",
+   "name": "",
+   "locked": false,
+   "muted": false,
+   "clips": [
+    {
+     "nodeId": "x979",
+     "name": "clip-58",
+     "start": 0,
+     "end": 6.333333333333333,
+     "inPoint": 3602.8333333333335,
+     "outPoint": 3609.1666666666665,
+     "enabled": true,
+     "isMGT": true,
+     "mediaPath": "X:/midia/clip-58"
+    }
+   ]
+  }
+ ],
+ "audioTracks": [
+  {
+   "index": 0,
+   "id": "A1",
+   "name": "A1_VOZ_SEM_MUSICA",
+   "locked": false,
+   "muted": false,
+   "clips": [
+    {
+     "nodeId": "x844",
+     "name": "clip-59.mov",
+     "start": 0,
+     "end": 6.333333333333333,
+     "inPoint": 6.3,
+     "outPoint": 12.633333333333333,
+     "enabled": true,
+     "isMGT": false,
+     "mediaPath": "X:/midia/clip-59.mov"
+    },
+    {
+     "nodeId": "x980",
+     "name": "clip-60.mov",
+     "start": 8.266666666666667,
+     "end": 16.733333333333334,
+     "inPoint": 14.566666666666666,
+     "outPoint": 23.033333333333335,
+     "enabled": true,
+     "isMGT": false,
+     "mediaPath": "X:/midia/clip-60.mov"
+    },
+    {
+     "nodeId": "x981",
+     "name": "clip-61.mov",
+     "start": 18.133333333333333,
+     "end": 20.466666666666665,
+     "inPoint": 25.233333333333334,
+     "outPoint": 27.566666666666666,
+     "enabled": true,
+     "isMGT": false,
+     "mediaPath": "X:/midia/clip-61.mov"
+    },
+    {
+     "nodeId": "x982",
+     "name": "clip-62.mov",
+     "start": 23.133333333333333,
+     "end": 32.766666666666666,
+     "inPoint": 30.766666666666666,
+     "outPoint": 40.4,
+     "enabled": true,
+     "isMGT": false,
+     "mediaPath": "X:/midia/clip-62.mov"
+    },
+    {
+     "nodeId": "x983",
+     "name": "clip-63.mov",
+     "start": 37.36666666666667,
+     "end": 42.2,
+     "inPoint": 45,
+     "outPoint": 49.833333333333336,
+     "enabled": true,
+     "isMGT": false,
+     "mediaPath": "X:/midia/clip-63.mov"
+    },
+    {
+     "nodeId": "x984",
+     "name": "clip-64.mov",
+     "start": 45.2,
+     "end": 51.733333333333334,
+     "inPoint": 57.266666666666666,
+     "outPoint": 63.8,
+     "enabled": true,
+     "isMGT": false,
+     "mediaPath": "X:/midia/clip-64.mov"
+    }
+   ]
+  },
+  {
+   "index": 1,
+   "id": "A2",
+   "name": "",
+   "locked": false,
+   "muted": false,
+   "clips": [
+    {
+     "nodeId": "x847",
+     "name": "clip-65.mp4",
+     "start": 6.9,
+     "end": 8.2,
+     "inPoint": 10.533333333333333,
+     "outPoint": 11.833333333333334,
+     "enabled": true,
+     "isMGT": false,
+     "mediaPath": "X:/midia/clip-65.mp4"
+    },
+    {
+     "nodeId": "x987",
+     "name": "clip-66.mp4",
+     "start": 16.733333333333334,
+     "end": 18.2,
+     "inPoint": 21.166666666666668,
+     "outPoint": 22.633333333333333,
+     "enabled": true,
+     "isMGT": false,
+     "mediaPath": "X:/midia/clip-66.mp4"
+    },
+    {
+     "nodeId": "x848",
+     "name": "clip-67.mp4",
+     "start": 20.466666666666665,
+     "end": 23.4,
+     "inPoint": 25.433333333333334,
+     "outPoint": 28.366666666666667,
+     "enabled": true,
+     "isMGT": false,
+     "mediaPath": "X:/midia/clip-67.mp4"
+    },
+    {
+     "nodeId": "x988",
+     "name": "clip-68.mp4",
+     "start": 33.3,
+     "end": 37.36666666666667,
+     "inPoint": 38.266666666666666,
+     "outPoint": 42.333333333333336,
+     "enabled": true,
+     "isMGT": false,
+     "mediaPath": "X:/midia/clip-68.mp4"
+    },
+    {
+     "nodeId": "x989",
+     "name": "clip-69.mp4",
+     "start": 42.43333333333333,
+     "end": 45.2,
+     "inPoint": 47.4,
+     "outPoint": 50.166666666666664,
+     "enabled": true,
+     "isMGT": false,
+     "mediaPath": "X:/midia/clip-69.mp4"
+    }
+   ]
+  },
+  {
+   "index": 2,
+   "id": "A3",
+   "name": "A3_MP_REFERENCIA_MUTADA",
+   "locked": false,
+   "muted": false,
+   "clips": []
+  }
+ ],
+ "markers": [
+  {
+   "guid": "3d611a2a-8356-402f-9d49-3e3a624bc4f7",
+   "start": 0,
+   "end": 0,
+   "name": "TELAS V4/V5 - ALTERNATIVAS PARA REVISAR",
+   "comments": "2 gravação(ões) de tela adicionada(s), enquadradas inteiras. Trilhas e clipes desativados. Recortes seguem V1 atual. Offsets nominais; sincronismo não validado. Cor adiada conforme pedido."
+  },
+  {
+   "guid": "a1dd609d-fda6-4873-986c-80a252020bbb",
+   "start": 0,
+   "end": 0,
+   "name": "M013 | CORTE CONFERIR",
+   "comments": "Fonte 6.467–39.867s; fala transcrita e corte editorial. Conferir reprodução com áudio."
+  },
+  {
+   "guid": "f6e666b8-d888-4ee8-9e8c-2c12eb6520fd",
+   "start": 0,
+   "end": 0,
+   "name": "REVISAO: DIALOGO_ADAPTADO",
+   "comments": "8 fontes não baixadas. Legendas derivadas de ASR revisado em nomes e trechos críticos; conferir integralmente em reprodução. Sem música/SFX. "
+  },
+  {
+   "guid": "e7428793-65a3-43da-8979-4b3c98537387",
+   "start": 3.6333333333333333,
+   "end": 3.6333333333333333,
+   "name": "M013 | CORTE CONFERIR",
+   "comments": "Fonte 53.100–63.533s; fala transcrita e corte editorial. Conferir reprodução com áudio."
+  },
+  {
+   "guid": "26560da6-6366-4a06-9715-b46bf212fc99",
+   "start": 32.06666666666667,
+   "end": 32.06666666666667,
+   "name": "M013 | CORTE CONFERIR",
+   "comments": "Fonte 44.967–49.333s; fala transcrita e corte editorial. Conferir reprodução com áudio."
+  },
+  {
+   "guid": "53e860b9-553b-4671-9074-1d37d8d15494",
+   "start": 46.413,
+   "end": 46.81299999999606,
+   "name": "CONFERIR FALA - LIGACAO DO CTA",
+   "comments": "ASRs leem estar conosco sem conjuncao. Preservada a fala; conferir por escuta se ha e antes de estar. Revisao textual, nao auditiva."
+  },
+  {
+   "guid": "0aa73931-e1d3-435b-a6cd-96e61fd302ac",
+   "start": 47.4,
+   "end": 51.6,
+   "name": "",
+   "comments": "Lembrete com dia e data em cima no estilo notificação liquid glassa apple.\n\nembaixo SABIA MAIS Com setas do lado esquerdo e direito no estilo liquid glass."
+  },
+  {
+   "guid": "848ba1a1-bbfa-4ea3-a291-05933fc5078b",
+   "start": 51.6,
+   "end": 54.03333333333333,
+   "name": "",
+   "comments": "CTA APROVADO POR NÓS"
+  }
+ ]
+}

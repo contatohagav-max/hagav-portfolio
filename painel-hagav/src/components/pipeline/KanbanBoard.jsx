@@ -38,7 +38,7 @@ const PIPELINE_STAGE_TOOLTIPS = {
     title: 'Qualificado',
     whatIs: 'Lead validado e pronto para gerar proposta.',
     purpose: 'Separar oportunidades reais das não qualificadas.',
-    observe: 'Acao ideal nesta etapa e gerar orcamento rapidamente.',
+    observe: 'Ação ideal nesta etapa: gerar orçamento rapidamente.',
   },
   proposta_enviada: {
     title: 'Proposta',
@@ -56,7 +56,7 @@ const PIPELINE_STAGE_TOOLTIPS = {
     title: 'Perdido',
     whatIs: 'Lead que não virou venda.',
     purpose: 'Registrar perdas e aprender com os motivos.',
-    observe: 'Analise recorrencias para ajustar abordagem.',
+    observe: 'Analise recorrências para ajustar a abordagem.',
   },
 };
 
@@ -65,9 +65,11 @@ function resolvePipelineColumnStatus(status) {
   if (normalized === 'chamado' || normalized === 'em_contato') return 'contatado';
   if (normalized === 'proposta enviada' || normalized === 'proposta' || normalized === 'em_negociacao' || normalized === 'negociacao') return 'proposta_enviada';
   if (normalized === 'descartado') return 'perdido';
-  if (normalized === 'orcamento' || normalized === 'ajustando' || normalized === 'aprovado') {
+  if (normalized === 'orcamento' || normalized === 'ajustando') {
     return 'proposta_enviada';
   }
+  // Aprovado = cliente aprovou e falta o contrato. Producao e conta a receber ja foram criadas.
+  if (normalized === 'aprovado') return 'fechado';
   return normalized;
 }
 
@@ -198,7 +200,7 @@ export default function KanbanBoard({
     try {
       await updateLead(activeLead.id, { status: persistedStatus });
       const label = KANBAN_COLUMNS.find((item) => item.id === targetColId)?.label || targetColId;
-      onStatusPersist?.({ type: 'success', message: `Lead #${activeLeadId} movido para ${label}.` });
+      onStatusPersist?.({ type: 'success', message: `${activeLead.nome || 'Lead'} movido para ${label}.` });
     } catch (err) {
       console.error('[Kanban] Error updating lead status:', err);
       // Rollback

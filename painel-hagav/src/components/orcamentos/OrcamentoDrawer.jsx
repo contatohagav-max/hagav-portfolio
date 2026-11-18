@@ -2238,7 +2238,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
 
   async function handleDownloadPropostaPdf() {
     if (!propostaLink) {
-      setError('Nenhuma proposta PDF disponivel para download.');
+      setError('Nenhuma proposta PDF disponível para download.');
       return;
     }
     if (!propostaPdfLiberada) {
@@ -2304,7 +2304,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
         ) : null}
         <div className="drawer-head">
           <div>
-            <p className="text-xs text-hagav-gray uppercase tracking-wider mb-1">Orçamento #{orc.id}</p>
+            <p className="text-xs text-hagav-gray uppercase tracking-wider mb-1">Orçamento #{String(orc.codigo || orc.id || '').slice(0, 8)}</p>
             <h2 className="text-lg font-bold text-hagav-white">{orc.nome || 'Sem nome'}</h2>
             <p className="text-sm text-hagav-gray">{servicoResumo || '—'}</p>
           </div>
@@ -2333,7 +2333,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
             <InfoRow label="Preço final editável" value={fmtBRL(financialMetrics.preco_final || 0)} />
-            <InfoRow label="Margem automatica (motor)" value={`${Number(autoPricing.margemEstimada ?? orc.margem_automatica ?? orc.margem_estimada ?? 0).toFixed(1)}%`} />
+            <InfoRow label="Margem automática (motor)" value={`${Number(autoPricing.margemEstimada ?? orc.margem_automatica ?? orc.margem_estimada ?? 0).toFixed(1)}%`} />
             <InfoRow label="Margem comercial (preco final)" value={`${Number(financialMetrics.margem_percentual || 0).toFixed(1)}%`} />
             <InfoRow label="Lucro estimado" value={fmtBRL(financialMetrics.lucro_estimado || 0)} />
             <InfoRow label="Custo real" value={fmtBRL(autoPricing.custoReal || autoPricing.custoEstimado || 0)} />
@@ -2389,7 +2389,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
 
           {(autoPricing.motivoCalculo || orc.resumo_orcamento) && (
             <div className="bg-hagav-surface border border-hagav-gold/20 rounded-lg p-4">
-              <p className="text-[10px] text-hagav-gold uppercase tracking-wider mb-1.5">Resumo de precificacao</p>
+              <p className="text-[10px] text-hagav-gold uppercase tracking-wider mb-1.5">Resumo de precificação</p>
               <p className="text-sm text-hagav-light whitespace-pre-wrap leading-relaxed">{autoPricing.motivoCalculo || orc.resumo_orcamento}</p>
             </div>
           )}
@@ -2398,7 +2398,7 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
             <div className="flex items-center justify-between gap-2 mb-2">
               <div>
                 <p className="text-xs text-hagav-gray uppercase tracking-wider">Dados para operação</p>
-                <p className="text-[11px] text-hagav-gray">Edite quantidade, prazo, referencia e tempo real por item.</p>
+                <p className="text-[11px] text-hagav-gray">Edite quantidade, prazo, referência e tempo real por item.</p>
               </div>
               <button type="button" onClick={addPricingItem} className="btn-ghost btn-sm">
                 <Plus size={13} />

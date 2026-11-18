@@ -11,7 +11,7 @@ export default function AcessoNegadoPage() {
           </div>
           <div>
             <h1 className="page-title">Acesso negado</h1>
-            <p className="page-subtitle">Seu perfil nao tem permissao para abrir esta area do painel.</p>
+            <p className="page-subtitle">Seu perfil não tem permissão para abrir esta área do painel.</p>
           </div>
         </div>
 

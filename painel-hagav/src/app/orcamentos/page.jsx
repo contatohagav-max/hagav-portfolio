@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Archive, Search, RefreshCw, FileText, AlertTriangle, ClipboardList, Plus, UserPlus, UsersRound } from 'lucide-react';
+import { Archive, Search, RefreshCw, FileText, ClipboardList, Plus, UserPlus, UsersRound } from 'lucide-react';
 import OrcamentosTable from '@/components/orcamentos/OrcamentosTable';
 import OrcamentoDrawer from '@/components/orcamentos/OrcamentoDrawer';
 import EmptyState from '@/components/ui/EmptyState';
@@ -21,7 +21,7 @@ const ORC_ACTIVE_STATUSES = ['orcamento', 'proposta_enviada', 'ajustando'];
 const ORC_FILTER_STATUSES = ['orcamento', 'proposta_enviada', 'ajustando', 'aprovado', 'perdido'];
 const UPDATE_TOOLTIP = {
   title: 'Atualizar',
-  whatIs: 'Recarrega os orcamentos com os filtros aplicados.',
+  whatIs: 'Recarrega os orçamentos com os filtros aplicados.',
   purpose: 'Sincronizar negociacoes e valores em tempo real.',
   observe: 'Use antes de revisar fechamentos e pendencias.',
 };
@@ -313,9 +313,7 @@ export default function OrcamentosPage() {
     }
   }
 
-  const totalBase = orcamentos.reduce((sum, item) => sum + Number(item.preco_base || 0), 0);
   const totalFinal = orcamentos.reduce((sum, item) => sum + Number(item.preco_final || 0), 0);
-  const totalPotencial = orcamentos.reduce((sum, item) => sum + Number(item.valor_estimado || item.preco_final || item.preco_base || 0), 0);
   const urgentes = orcamentos.filter((item) => item.urgencia === 'alta').length;
   const semRevisao = orcamentos.filter((item) => item.requer_revisao).length;
   const incompletos = orcamentos.filter((item) => item.incompleto).length;
@@ -326,7 +324,7 @@ export default function OrcamentosPage() {
         <div>
           <h1 className="page-title">Orçamentos</h1>
           <p className="page-subtitle">
-            {loading ? 'Carregando...' : `${orcamentos.length} orcamento${orcamentos.length !== 1 ? 's' : ''}`}
+            {loading ? 'Carregando...' : `${orcamentos.length} orçamento${orcamentos.length !== 1 ? 's' : ''}`}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -344,14 +342,12 @@ export default function OrcamentosPage() {
       </div>
 
       {!loading && orcamentos.length > 0 && (
-        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-2.5">
+        <div className="grid grid-cols-2 xl:grid-cols-4 gap-2.5">
           {[
-            { label: 'Preço base', value: fmtBRL(totalBase) },
-            { label: 'Preço final', value: fmtBRL(totalFinal), accent: true },
-            { label: 'Potencial total', value: fmtBRL(totalPotencial) },
+            { label: 'Valor em proposta', value: fmtBRL(totalFinal), accent: true },
             { label: 'Urgentes', value: urgentes },
             { label: 'Sem revisão', value: semRevisao },
-            { label: 'Incompletos', value: incompletos },
+            { label: 'Campos incompletos', value: incompletos },
           ].map((card) => (
             <div key={card.label} className={`hcard p-3.5 md:p-4 text-center ${card.accent ? 'border-hagav-gold/30' : ''}`}>
               <p className="text-[10px] text-hagav-gray uppercase tracking-wider mb-1">{card.label}</p>
@@ -439,8 +435,8 @@ export default function OrcamentosPage() {
       ) : orcamentos.length === 0 ? (
         <EmptyState
           icon={FileText}
-          title="Nenhum orcamento encontrado"
-          description="Ajuste os filtros ou aguarde novos formularios chegarem."
+          title="Nenhum orçamento encontrado"
+          description="Ajuste os filtros ou aguarde novos formulários chegarem."
         />
       ) : (
         <OrcamentosTable
@@ -450,25 +446,6 @@ export default function OrcamentosPage() {
         />
       )}
 
-      {!loading && orcamentos.length > 0 && (
-        <div className="hcard p-4">
-          <div className="flex items-center gap-2 mb-2 text-hagav-light text-sm font-semibold">
-            <AlertTriangle size={14} className="text-yellow-300" />
-            Alertas rapidos
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-xs">
-            <div className="bg-hagav-surface border border-red-500/20 rounded-lg px-3 py-2 text-red-300">
-              Orçamentos urgentes: {urgentes}
-            </div>
-            <div className="bg-hagav-surface border border-yellow-500/20 rounded-lg px-3 py-2 text-yellow-300">
-              Sem revisão: {semRevisao}
-            </div>
-            <div className="bg-hagav-surface border border-hagav-border rounded-lg px-3 py-2 text-hagav-light">
-              Campos incompletos: {incompletos}
-            </div>
-          </div>
-        </div>
-      )}
 
       {selected && (
         <OrcamentoDrawer

@@ -58,6 +58,12 @@ function toFileUrl(path) {
   return `file:///${value.replace(/\\/g, '/')}`;
 }
 
+function isJobLate(job) {
+  if (!job?.prazo_em || ['entregue', 'arquivado'].includes(job.status)) return false;
+  const due = new Date(job.prazo_em);
+  return Number.isFinite(due.getTime()) && due.getTime() < Date.now();
+}
+
 function pathCount(job) {
   return [
     job?.pasta_local,
@@ -146,7 +152,7 @@ function DetailPanel({ job, onEdit }) {
           {PRODUCTION_STAGE_LABELS[job.status] || job.status}
         </span>
         <span className={classNames('badge', PRIORITY_COLORS[job.prioridade] || PRIORITY_COLORS.media)}>
-          Prioridade {job.prioridade || 'media'}
+          Prioridade {({ alta: 'alta', media: 'média', baixa: 'baixa' })[job.prioridade] || 'média'}
         </span>
         <span className={classNames('badge', MATERIAL_COLORS[job.materiais_status] || MATERIAL_COLORS.pendente)}>
           {MATERIAL_STATUS_LABELS[job.materiais_status] || 'Pendente'}
@@ -156,7 +162,7 @@ function DetailPanel({ job, onEdit }) {
       <div className="grid grid-cols-2 gap-2 text-xs">
         <div className="rounded-lg bg-hagav-muted/10 border border-hagav-border/70 px-3 py-2">
           <p className="text-hagav-gray flex items-center gap-1.5"><UserRound size={11} /> Responsável</p>
-          <p className="text-hagav-light mt-1">{job.responsavel || 'Sem responsavel'}</p>
+          <p className="text-hagav-light mt-1">{job.responsavel || 'Sem responsável'}</p>
         </div>
         <div className="rounded-lg bg-hagav-muted/10 border border-hagav-border/70 px-3 py-2">
           <p className="text-hagav-gray flex items-center gap-1.5"><CalendarClock size={11} /> Prazo</p>
@@ -180,7 +186,7 @@ function DetailPanel({ job, onEdit }) {
               Abrir tarefa no ClickUp <ExternalLink size={11} />
             </a>
           ) : (
-            <p className="text-xs text-hagav-muted mt-1">Tarefa do ClickUp ainda nao vinculada.</p>
+            <p className="text-xs text-hagav-muted mt-1">Tarefa do ClickUp ainda não vinculada.</p>
           )}
           {job.clickup_task_id && <p className="text-[11px] text-hagav-gray mt-1">ID: {job.clickup_task_id}</p>}
         </div>
@@ -224,17 +230,14 @@ export default function ProductionList({
     <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_380px] gap-4">
       <div className="hcard overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1120px] text-sm">
+          <table className="w-full min-w-[680px] text-sm">
             <thead>
               <tr className="border-b border-hagav-border text-left text-[10px] uppercase tracking-wider text-hagav-gray">
-                <th className="px-4 py-3 w-[260px]">Projeto</th>
-                <th className="px-4 py-3 w-[190px]">Etapa</th>
-                <th className="px-4 py-3">Prioridade</th>
-                <th className="px-4 py-3">Materiais</th>
-                <th className="px-4 py-3 w-[230px]">Próxima ação</th>
+                <th className="px-4 py-3">Projeto</th>
+                <th className="px-4 py-3 w-[200px]">Etapa</th>
                 <th className="px-4 py-3">Prazo</th>
                 <th className="px-4 py-3">Responsável</th>
-                <th className="px-4 py-3">Mapa</th>
+                <th className="px-4 py-3">Próxima ação</th>
               </tr>
             </thead>
             <tbody>
@@ -258,38 +261,19 @@ export default function ProductionList({
                         value={job.status || 'aguardando_materiais'}
                         onClick={(event) => event.stopPropagation()}
                         onChange={(event) => onStatusChange?.(job, event.target.value)}
-                        className="hselect h-8 text-xs w-full"
+                        className="hselect h-8 text-xs w-full min-w-[170px]"
                       >
                         {PRODUCTION_STAGES.map((stage) => (
                           <option key={stage.id} value={stage.id}>{stage.label}</option>
                         ))}
                       </select>
                     </td>
-                    <td className="px-4 py-3">
-                      <span className={classNames('badge', PRIORITY_COLORS[job.prioridade] || PRIORITY_COLORS.media)}>
-                        {job.prioridade || 'media'}
-                      </span>
+                    <td className={classNames('px-4 py-3 whitespace-nowrap', isJobLate(job) ? 'text-red-300' : 'text-hagav-light')}>
+                      {job.prazo_em ? fmtDate(job.prazo_em) : '-'}
+                      {isJobLate(job) && <span className="block text-[11px]">atrasado</span>}
                     </td>
-                    <td className="px-4 py-3">
-                      <span className={classNames('badge', MATERIAL_COLORS[job.materiais_status] || MATERIAL_COLORS.pendente)}>
-                        {MATERIAL_STATUS_LABELS[job.materiais_status] || 'Pendente'}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-hagav-light">{truncate(job.proxima_acao || 'Sem próxima ação', 52)}</td>
-                    <td className="px-4 py-3 text-hagav-light">{job.prazo_em ? fmtDate(job.prazo_em) : '-'}</td>
                     <td className="px-4 py-3 text-hagav-light">{job.responsavel || '-'}</td>
-                    <td className="px-4 py-3">
-                      <div className="flex flex-wrap gap-1.5">
-                        {job.clickup_url ? (
-                          <span className="badge bg-violet-500/15 text-violet-300 border-violet-500/30">ClickUp</span>
-                        ) : (
-                          <span className="badge bg-zinc-500/15 text-zinc-400 border-zinc-500/30">Sem ClickUp</span>
-                        )}
-                        <span className="badge bg-hagav-gold/10 text-hagav-gold border-hagav-gold/20">
-                          {pathCount(job)} pastas
-                        </span>
-                      </div>
-                    </td>
+                    <td className="px-4 py-3 text-hagav-light">{truncate(job.proxima_acao || 'Sem próxima ação', 52)}</td>
                   </tr>
                 );
               })}

@@ -368,7 +368,7 @@ export default function NewLeadDrawer({ onClose, onCreated }) {
                 value={referencia}
                 onChange={(e) => setReferencia(e.target.value)}
                 rows={2}
-                placeholder="Link de referencia visual ou descricao"
+                placeholder="Link de referência visual ou descrição"
                 className="hinput w-full resize-none"
               />
             </Field>
@@ -441,7 +441,7 @@ export default function NewLeadDrawer({ onClose, onCreated }) {
                   type="text"
                   value={responsavel}
                   onChange={(e) => setResponsavel(e.target.value)}
-                  placeholder="Nome do responsavel"
+                  placeholder="Nome do responsável"
                   className="hinput w-full"
                 />
               </Field>
@@ -459,7 +459,7 @@ export default function NewLeadDrawer({ onClose, onCreated }) {
                 value={observacoesInternas}
                 onChange={(e) => setObservacoesInternas(e.target.value)}
                 rows={4}
-                placeholder="Contexto, historico ou observacoes sobre este lead..."
+                placeholder="Contexto, histórico ou observações sobre este lead..."
                 className="hinput w-full resize-none"
               />
             </Field>

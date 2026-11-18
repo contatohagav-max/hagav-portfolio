@@ -8,7 +8,7 @@ function TooltipText({ title, whatIs, purpose, observe }) {
     <>
       <p className="text-[11px] font-semibold text-zinc-900">{title}</p>
       <p className="text-[11px] text-zinc-700 mt-1 leading-relaxed">
-        <span className="font-semibold text-zinc-900">O que e:</span> {whatIs}
+        <span className="font-semibold text-zinc-900">O que é:</span> {whatIs}
       </p>
       <p className="text-[11px] text-zinc-700 mt-1 leading-relaxed">
         <span className="font-semibold text-zinc-900">Para que serve:</span> {purpose}
@@ -32,10 +32,9 @@ export default function EduTooltip({
   enabled = true,
   enableTap = true,
 }) {
-  if (!enabled || !title || !whatIs || !purpose || !observe) return children;
-
   const [tapOpen, setTapOpen] = useState(false);
   const wrapperRef = useRef(null);
+  const active = Boolean(enabled && title && whatIs && purpose && observe);
 
   useEffect(() => {
     if (!tapOpen) return undefined;
@@ -55,6 +54,11 @@ export default function EduTooltip({
     };
   }, [tapOpen]);
 
+  if (!active) return children;
+
+  // Largura padrao so quando o chamador nao define uma (w-auto, w-fit...): evita esticar botoes em cabecalhos.
+  const widthClass = /(^|\s)w-/.test(String(className || '')) ? '' : 'w-full';
+
   function handlePointerDown(event) {
     if (!enableTap) return;
     if (event.pointerType !== 'touch' && event.pointerType !== 'pen') return;
@@ -73,7 +77,7 @@ export default function EduTooltip({
     <div
       ref={wrapperRef}
       onPointerDown={handlePointerDown}
-      className={classNames('relative group/edu w-full touch-manipulation', className)}
+      className={classNames('relative group/edu touch-manipulation', widthClass, className)}
     >
       {children}
       <div

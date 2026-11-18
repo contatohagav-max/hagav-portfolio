@@ -519,7 +519,7 @@ export async function createLead(fields = {}) {
 
   const nome = String(fields.nome || '').trim();
   const whatsapp = String(fields.whatsapp || '').replace(/\D/g, '');
-  if (!nome) throw new Error('Nome e obrigatorio');
+  if (!nome) throw new Error('Nome é obrigatório');
   if (!whatsapp || whatsapp.length < 8) throw new Error('WhatsApp inválido');
 
   const empresa = normalizeLeadText(fields.empresa, 120);

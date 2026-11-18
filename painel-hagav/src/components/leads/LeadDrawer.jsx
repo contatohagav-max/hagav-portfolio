@@ -159,7 +159,7 @@ export default function LeadDrawer({ lead, onClose, onUpdated }) {
         ) : null}
         <div className="drawer-head">
           <div>
-            <p className="text-xs text-hagav-gray uppercase tracking-wider mb-1">Lead #{lead.id}</p>
+            <p className="text-xs text-hagav-gray uppercase tracking-wider mb-1">Lead #{String(lead.codigo || lead.id || '').slice(0, 8)}</p>
             <h2 className="text-lg font-bold text-hagav-white">{lead.nome || 'Sem nome'}</h2>
             <p className="text-xs text-hagav-gray mt-1">{lead.fluxo || '—'} · {lead.origem || '—'}</p>
           </div>
@@ -171,11 +171,11 @@ export default function LeadDrawer({ lead, onClose, onUpdated }) {
         <div className="drawer-body">
           <div className="grid grid-cols-2 gap-2">
             <InfoCard label="WhatsApp" value={liveLead.whatsapp} />
-            <InfoCard label="Pagina" value={liveLead.pagina} />
+            <InfoCard label="Página" value={liveLead.pagina} />
             <InfoCard label="Serviço" value={liveLead.servico} />
             <InfoCard label="Valor estimado" value={fmtBRL(liveLead.valor_estimado)} />
             <InfoCard label="Criado em" value={fmtDateTime(liveLead.created_at)} />
-            <InfoCard label="Ultimo contato" value={liveLead.ultimo_contato_em ? fmtDateTime(liveLead.ultimo_contato_em) : 'Sem contato'} />
+            <InfoCard label="Último contato" value={liveLead.ultimo_contato_em ? fmtDateTime(liveLead.ultimo_contato_em) : 'Sem contato'} />
           </div>
 
           <div className="flex flex-wrap gap-2">
@@ -228,13 +228,13 @@ export default function LeadDrawer({ lead, onClose, onUpdated }) {
                 value={proximaAcao}
                 onChange={(e) => setProximaAcao(e.target.value)}
                 className="hinput w-full"
-                placeholder="Ex.: enviar proposta ate 18h"
+                placeholder="Ex.: enviar proposta até 18h"
               />
             </div>
 
             <div>
               <div className="flex items-center justify-between mb-1.5">
-                <label className="text-xs text-hagav-gray uppercase tracking-wider block">Ultimo contato</label>
+                <label className="text-xs text-hagav-gray uppercase tracking-wider block">Último contato</label>
                 <button type="button" onClick={markContactNow} className="text-xs text-hagav-gold hover:text-hagav-gold-light">
                   Marcar agora
                 </button>

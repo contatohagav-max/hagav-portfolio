@@ -343,21 +343,15 @@ const lists = safeInsights.lists;
 
   return (
     <div className="dashboard-shell animate-fade-in">
-      <div className="dashboard-hero">
-        <div className="dashboard-hero-copy">
-          <div className="dashboard-chip-row">
-            <span className="dashboard-chip">Painel comercial</span>
-            <span className="dashboard-chip dashboard-chip-muted">
-              {lastRefreshLabel ? `Atualizado às ${lastRefreshLabel}` : 'Carregando dados'}
-            </span>
-          </div>
-          <h1 className="page-title">Dashboard comercial</h1>
-          <p className="dashboard-hero-description">
-            Visão geral do funil, da receita e das prioridades operacionais para o time agir com mais clareza.
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h1 className="page-title">Dashboard</h1>
+          <p className="page-subtitle">
+            {lastRefreshLabel ? `Atualizado às ${lastRefreshLabel}` : 'Carregando dados...'}
           </p>
         </div>
         <EduTooltip {...UPDATE_TOOLTIP} className="w-auto" panelClassName="left-auto right-0 translate-x-0">
-          <button onClick={load} disabled={loading} className="btn-ghost btn-sm dashboard-refresh-btn">
+          <button onClick={load} disabled={loading} className="btn-ghost btn-sm">
             <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
             Atualizar
           </button>
@@ -374,11 +368,10 @@ const lists = safeInsights.lists;
         <SectionHeader
           eyebrow="Camada estratégica"
           title="KPIs principais"
-          description="Os números mais relevantes para leitura rápida de volume, receita e eficiência comercial."
         />
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {kpisPrincipais.map((card) => (
-            <EduTooltip key={card.id} {...KPI_TOOLTIPS[card.id]}>
+            <EduTooltip key={card.id} className="w-full h-full" {...KPI_TOOLTIPS[card.id]}>
               <MetricCard {...card} />
             </EduTooltip>
           ))}
@@ -389,11 +382,10 @@ const lists = safeInsights.lists;
         <SectionHeader
           eyebrow="Ritmo do time"
           title="KPIs operacionais"
-          description="Indicadores de urgência, resposta e follow-up para orientar a operação do dia."
         />
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {kpisOperacionais.map((card) => (
-            <EduTooltip key={card.id} {...KPI_TOOLTIPS[card.id]}>
+            <EduTooltip key={card.id} className="w-full h-full" {...KPI_TOOLTIPS[card.id]}>
               <MetricCard {...card} />
             </EduTooltip>
           ))}
@@ -469,7 +461,6 @@ const lists = safeInsights.lists;
         <SectionHeader
           eyebrow="Leitura visual"
           title="Blocos gráficos"
-          description="Origem, urgência, demanda e receita organizadas de forma mais fácil para leitura rápida."
         />
 
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
@@ -504,7 +495,7 @@ const lists = safeInsights.lists;
             title="Leads por urgência"
             icon={Siren}
             tooltip={CHART_TOOLTIPS.leads_urgencia}
-            description="Distribuicao dos leads por prioridade de atendimento"
+            description="Distribuição dos leads por prioridade de atendimento"
             empty={charts.leadsPorUrgencia.length === 0}
             loading={loading}
           >

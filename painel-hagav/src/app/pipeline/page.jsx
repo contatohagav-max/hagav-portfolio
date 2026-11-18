@@ -43,7 +43,7 @@ export default function PipelinePage() {
 
   const urgentes = leads
     .filter((lead) => ['alta', 'media'].includes(String(lead.urgencia || '').toLowerCase()))
-    .filter((lead) => lead.status !== 'fechado' && lead.status !== 'perdido')
+    .filter((lead) => !['fechado', 'aprovado', 'perdido', 'descartado'].includes(String(lead.status || '').toLowerCase()))
     .length;
   const now = new Date();
   const atrasados = leads.filter((lead) => isLeadFollowupLate(lead, now)).length;

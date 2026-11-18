@@ -40,7 +40,7 @@
   };
   $('check').onclick = function () {
     call('check', function (r) {
-      status(r.ok ? 'Plano válido: ' + r.pendentes + ' de ' + r.total + ' operação(ões) a aplicar.' : 'Plano recusado — nada será escrito.', r.ok ? 'ok' : 'bad');
+      status(r.ok ? 'Plano válido: ' + r.pendentes + ' de ' + r.total + ' operação(ões) a aplicar.' : (typeof r.total === 'number' ? 'Plano recusado — nada será escrito.' : 'Erro do painel (nada foi escrito): ' + (r.errors || [])[0]), r.ok ? 'ok' : 'bad');
       log(problems(r).concat((r.warnings || []).map(function (w) { return 'aviso: ' + w; })));
     });
   };
@@ -61,5 +61,5 @@
       log(r.ok ? [JSON.stringify(r, null, 1)] : problems(r));
     });
   };
-  if (cep) call('jobdir', function (r) { if (r.ok) status('Pronto. Abra a sequência e clique em “Ler timeline”.'); else status('Abra um projeto e uma sequência.', 'bad'); });
+  if (cep) call('jobdir', function (r) { if (r.ok) status('Pronto. Abra a sequência e clique em “Ler timeline”.'); else { status('Abra um projeto e uma sequência.', 'bad'); log(problems(r)); } });
 }());

@@ -427,3 +427,6 @@ var HAGAV = (function () {
   };
 }());
 if (typeof module !== 'undefined' && module.exports) module.exports = HAGAV;
+/* ExtendScript: $.evalFile chamado de dentro de uma funcao deixa o "var HAGAV" local a ela.
+   Publica no escopo global para o host.jsx enxergar o nucleo. */
+if (typeof $ !== 'undefined' && $ && $.global) $.global.HAGAV = HAGAV;

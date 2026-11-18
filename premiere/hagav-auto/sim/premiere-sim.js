@@ -169,8 +169,11 @@ function createSim(snapshot, opts) {
     }
   };
 
-  var sandbox = { app: app, Time: Time, File: File, Folder: Folder, $: { os: 'Windows (sim)', evalFile: function (f) { vm.runInContext(fs.readFileSync(f.fsName, 'utf8'), ctx, { filename: f.fsName }); } } };
+  /* Como no ExtendScript real: $.evalFile chamado de dentro de uma funcao roda o arquivo em escopo local,
+     entao "var X" do arquivo NAO vira global. So o que for publicado em $.global fica visivel. */
+  var sandbox = { app: app, Time: Time, File: File, Folder: Folder, $: { os: 'Windows (sim)', evalFile: function (f) { vm.runInContext('(function () {\n' + fs.readFileSync(f.fsName, 'utf8') + '\n}());', ctx, { filename: f.fsName, lineOffset: -1 }); } } };
   var ctx = vm.createContext(sandbox);
+  sandbox.$.global = sandbox;
   /* ExtendScript e ES3: tira do contexto tudo que nao existe la, para o teste quebrar se o codigo usar. */
   vm.runInContext([
     "var A=['forEach','map','filter','indexOf','lastIndexOf','some','every','reduce','reduceRight','find','findIndex','includes','fill','keys','entries','values','flat','flatMap','at'];",

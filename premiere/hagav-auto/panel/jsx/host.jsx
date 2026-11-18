@@ -2,6 +2,7 @@
    Uma chamada do painel = um comando inteiro (snapshot | check | apply | diagnostico).
    Todo o plano roda numa unica chamada: cruzar a ponte painel<->ExtendScript a cada operacao e o que deixa lento.
    Nunca sobrescreve, nunca cria faixa, sempre rele o resultado e grava recibo por operacao. */
+var HAGAV_GLOBAL = this; /* objeto global do ExtendScript ($.global) */
 var HAGAVAuto = (function () {
   var TPS = 254016000000;
   var NAMES = {
@@ -11,10 +12,14 @@ var HAGAVAuto = (function () {
   };
 
   function loadCore(extRoot) {
-    if (typeof HAGAV !== 'undefined') return;
-    var f = new File(extRoot + '/core/hagav-core.js');
+    var G = HAGAV_GLOBAL, f;
+    if (G.HAGAV && G.HAGAV.preflight) return;
+    f = new File(extRoot + '/core/hagav-core.js');
     if (!f.exists) throw new Error('Nucleo nao encontrado: ' + f.fsName);
+    /* $.evalFile chamado daqui roda o arquivo no escopo DESTA funcao: o "var HAGAV" do nucleo ficaria local.
+       O nucleo se publica em $.global; se mesmo assim nao aparecer, falha com mensagem clara. */
     $.evalFile(f);
+    if (!(G.HAGAV && G.HAGAV.preflight)) throw new Error('Nucleo carregado mas HAGAV nao ficou global: ' + f.fsName);
   }
 
   /* ---------- basicos ---------- */

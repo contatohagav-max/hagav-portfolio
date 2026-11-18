@@ -1,15 +1,18 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Clapperboard, FileText, Kanban, Landmark, LayoutDashboard, Settings, Target, Users, X } from 'lucide-react';
+import { Clapperboard, FileText, Kanban, Landmark, LayoutDashboard, Radar, Settings, Target, Users, X } from 'lucide-react';
 import EduTooltip from '@/components/ui/EduTooltip';
 import { useAuth } from '@/context/AuthContext';
 import { classNames } from '@/lib/utils';
 import { roleLabel } from '@/lib/auth';
+import { fetchQuerConversarCount } from '@/lib/prospeccao-repository';
 
 const NAV = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard, permission: 'readDashboard' },
+  { href: '/prospeccao', label: 'Prospecção', icon: Radar, permission: 'readProspeccao' },
   { href: '/leads', label: 'Leads', icon: Users, permission: 'readLeads' },
   { href: '/orcamentos', label: 'Orçamentos', icon: FileText, permission: 'readOrcamentos' },
   { href: '/clientes', label: 'Clientes', icon: Users, permission: 'readClientes' },
@@ -26,6 +29,12 @@ const NAV_TOOLTIPS = {
     whatIs: 'Visão executiva dos indicadores comerciais.',
     purpose: 'Acompanhar performance diária e prioridades do funil.',
     observe: 'Foque em conversão, urgências e follow-up atrasado.',
+  },
+  '/prospeccao': {
+    title: 'Prospecção',
+    whatIs: 'Topo de funil alimentado pela automação.',
+    purpose: 'Ver quem foi encontrado, abordado e quem respondeu.',
+    observe: 'Quem quer conversar fica em destaque esperando a equipe.',
   },
   '/leads': {
     title: 'Leads',
@@ -74,6 +83,17 @@ const NAV_TOOLTIPS = {
 export default function Sidebar({ open, onClose }) {
   const pathname = usePathname();
   const { actor, can } = useAuth();
+  const canSeeProspeccao = can('readProspeccao');
+  const [querConversar, setQuerConversar] = useState(0);
+
+  useEffect(() => {
+    if (!canSeeProspeccao) return undefined;
+    let active = true;
+    const refresh = () => fetchQuerConversarCount().then((n) => { if (active) setQuerConversar(n); }).catch(() => null);
+    refresh();
+    const timer = setInterval(refresh, 120000);
+    return () => { active = false; clearInterval(timer); };
+  }, [canSeeProspeccao, pathname]);
 
   return (
     <aside className={classNames(
@@ -109,6 +129,11 @@ export default function Sidebar({ open, onClose }) {
                 <span className={classNames('nav-item', active && 'active')}>
                   <Icon size={16} strokeWidth={active ? 2.5 : 1.8} />
                   {label}
+                  {href === '/prospeccao' && querConversar > 0 && (
+                    <span className="ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-hagav-gold text-hagav-black">
+                      {querConversar}
+                    </span>
+                  )}
                 </span>
               </Link>
             </EduTooltip>

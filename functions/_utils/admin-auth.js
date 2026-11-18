@@ -18,6 +18,8 @@ const ROLE_PERMISSIONS = {
     manageSettings: false,
     exportData: false,
     generateDocuments: false,
+    readProspeccao: false,
+    manageProspeccao: false,
   },
   operacao: {
     readDashboard: true,
@@ -36,6 +38,8 @@ const ROLE_PERMISSIONS = {
     manageSettings: false,
     exportData: false,
     generateDocuments: true,
+    readProspeccao: false,
+    manageProspeccao: false,
   },
   comercial: {
     readDashboard: true,
@@ -54,6 +58,8 @@ const ROLE_PERMISSIONS = {
     manageSettings: false,
     exportData: false,
     generateDocuments: true,
+    readProspeccao: true,
+    manageProspeccao: true,
   },
   admin: {
     readDashboard: true,
@@ -72,6 +78,8 @@ const ROLE_PERMISSIONS = {
     manageSettings: true,
     exportData: true,
     generateDocuments: true,
+    readProspeccao: true,
+    manageProspeccao: true,
   },
 };
 

@@ -7,7 +7,6 @@ import {
   Building2,
   CalendarClock,
   CircleDollarSign,
-  Pencil,
   Plus,
   RefreshCw,
   Repeat,
@@ -240,6 +239,14 @@ function isSameMonth(date, referenceDate) {
   return Boolean(date)
     && date.getMonth() === referenceDate.getMonth()
     && date.getFullYear() === referenceDate.getFullYear();
+}
+
+// Conta vencida antes do mes de referencia que continua em aberto (nao pode sumir na virada do mes).
+function isCarriedOverdue(entry, referenceDate, today = new Date()) {
+  if (isCancelled(entry) || isPaid(entry)) return false;
+  const dueDate = getDueDate(entry);
+  if (!dueDate) return false;
+  return dueDate < startOfMonth(referenceDate) && isBeforeToday(dueDate, today);
 }
 
 function isBeforeToday(date, referenceDate) {
@@ -736,6 +743,7 @@ export default function FinanceiroPage() {
     let received = 0;
     let pending = 0;
     let overdue = 0;
+    let carriedOverdue = 0;
     let costsHagav = 0;
     let personalCosts = 0;
 
@@ -755,6 +763,10 @@ export default function FinanceiroPage() {
         }
         if (!isPaid(entry) && isSameMonth(dueDate, referenceDate) && isBeforeToday(dueDate, today)) {
           overdue += openAmount;
+        }
+        if (isCarriedOverdue(entry, referenceDate, today)) {
+          overdue += openAmount;
+          carriedOverdue += openAmount;
         }
       }
 
@@ -776,6 +788,7 @@ export default function FinanceiroPage() {
       received,
       pending,
       overdue,
+      carriedOverdue,
       costsHagav,
       personalCosts,
       margin,
@@ -965,45 +978,48 @@ export default function FinanceiroPage() {
 
   const metricCards = [
     { label: 'Recebido no mês', value: metrics.received, helper: 'Pagas e parciais', icon: ArrowDownCircle, tone: 'text-emerald-300' },
-    { label: 'A receber no mês', value: metrics.pending, helper: 'Pendentes e parciais', icon: CalendarClock, tone: 'text-blue-300' },
-    ...(metrics.overdue > 0
-      ? [{ label: 'Em atraso', value: metrics.overdue, helper: 'Recebimentos vencidos', icon: CircleDollarSign, tone: 'text-red-300' }]
-      : []),
+    { label: 'A receber no mês', value: metrics.pending, helper: 'Pendentes e parciais com vencimento no mês', icon: CalendarClock, tone: 'text-blue-300' },
+    {
+      label: 'Em atraso',
+      value: metrics.overdue,
+      helper: metrics.carriedOverdue > 0
+        ? `Inclui ${fmtBRL(metrics.carriedOverdue)} de meses anteriores`
+        : 'Recebimentos vencidos e não pagos',
+      icon: CircleDollarSign,
+      tone: metrics.overdue > 0 ? 'text-red-300' : 'text-emerald-300',
+    },
     {
       label: 'Custos do mês',
       value: metrics.costsHagav + metrics.personalCosts,
-      helper: `HAGAV: ${fmtBRL(metrics.costsHagav)} · Pessoal: ${fmtBRL(metrics.personalCosts)} · Lucro HAGAV: ${fmtBRL(metrics.margin)}`,
+      helper: `Empresa: ${fmtBRL(metrics.costsHagav)} · Pessoal: ${fmtBRL(metrics.personalCosts)}`,
       icon: ArrowUpCircle,
       tone: 'text-amber-300',
     },
-    { label: 'Sobra real', value: metrics.realSurplus, helper: `Projetado: ${fmtBRL(metrics.projectedResult)}`, icon: Building2, tone: metrics.realSurplus >= 0 ? 'text-emerald-300' : 'text-red-300' },
+    {
+      label: 'Sobra do mês',
+      value: metrics.realSurplus,
+      helper: `Recebido menos custos (pagos e a pagar) · Lucro empresa: ${fmtBRL(metrics.margin)}`,
+      icon: Building2,
+      tone: metrics.realSurplus >= 0 ? 'text-emerald-300' : 'text-red-300',
+    },
     {
       label: metrics.targetGap <= 0 ? 'Meta batida' : 'Falta para meta',
       value: metrics.targetGap,
       valueLabel: metrics.targetGap <= 0 ? `+${fmtBRL(metrics.targetSurplus)}` : '',
       helper: metrics.targetGap <= 0
         ? `Acima da meta de ${fmtBRL(monthlyGoal)}`
-        : `Meta de faturamento: ${fmtBRL(monthlyGoal)}`,
+        : `Meta ${fmtBRL(monthlyGoal)} · ~${metrics.neededClients} ${metrics.neededClients === 1 ? 'cliente' : 'clientes'} de ${fmtBRL(averageTicket)}`,
       icon: CalendarClock,
       tone: metrics.targetGap <= 0 ? 'text-emerald-300' : 'text-amber-300',
-    },
-    {
-      label: 'Clientes necessários',
-      valueLabel: metrics.neededClients === 0
-        ? '0'
-        : `${metrics.neededClients} ${metrics.neededClients === 1 ? 'cliente' : 'clientes'}`,
-      helper: metrics.targetGap <= 0
-        ? 'Meta de faturamento já batida'
-        : `Baseado no que falta para faturar e ticket médio de ${fmtBRL(averageTicket)}`,
-      icon: UserRound,
-      tone: 'text-blue-200',
     },
   ];
 
   const visibleEntries = useMemo(() => (
     entries.filter((entry) => {
       const dueDate = getDueDate(entry);
-      if (!isSameMonth(dueDate, selectedMonth)) return false;
+      const viewingCurrentMonth = isSameMonth(new Date(), selectedMonth);
+      const carried = viewingCurrentMonth && isCarriedOverdue(entry, selectedMonth);
+      if (!isSameMonth(dueDate, selectedMonth) && !carried) return false;
       if (naturezaFilter && getEntryMeta(entry).natureza !== naturezaFilter) return false;
       return true;
     }).sort(compareFinancialEntries)
@@ -1097,18 +1113,16 @@ export default function FinanceiroPage() {
       ) : (
         <div className="hcard overflow-hidden">
           <div className="max-h-[62vh] overflow-auto">
-            <table className="w-full text-sm min-w-[1120px]">
+            <table className="w-full text-sm min-w-[900px]">
               <thead>
                 <tr className="sticky top-0 z-10 border-b border-hagav-border bg-hagav-surface text-left text-[10px] uppercase tracking-wider text-hagav-gray">
                   <th className="px-4 py-3">Tipo</th>
-                  <th className="px-4 py-3">Natureza</th>
                   <th className="px-4 py-3">Nome do lançamento</th>
                   <th className="px-4 py-3">Categoria</th>
                   <th className="px-4 py-3">Vencimento/Data</th>
                   <th className="px-4 py-3">Valor</th>
                   <th className="px-4 py-3">Pago</th>
                   <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3 text-right">Ações</th>
                 </tr>
               </thead>
               <tbody>
@@ -1128,12 +1142,10 @@ export default function FinanceiroPage() {
                     className="border-b border-hagav-border/70 hover:bg-hagav-muted/20 cursor-pointer"
                   >
                     <td className="px-4 py-3">
-                      <span className={entry.tipo === 'receber' ? 'text-emerald-300' : 'text-red-300'}>
+                      <span className={classNames('block text-sm', entry.tipo === 'receber' ? 'text-emerald-300' : 'text-red-300')}>
                         {entry.tipo === 'receber' ? 'Entrada' : 'Saída'}
                       </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex flex-wrap items-center gap-1.5">
+                      <div className="flex flex-wrap items-center gap-1.5 mt-1">
                         <span className="badge bg-hagav-muted/40 text-hagav-light border-hagav-border">
                           <NaturezaIcon size={11} />
                           {meta.natureza}
@@ -1158,21 +1170,6 @@ export default function FinanceiroPage() {
                       <span className={classNames('badge', STATUS_COLORS[effective] || STATUS_COLORS.pendente)}>
                         {FINANCIAL_STATUS_LABELS[effective] || effective}
                       </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex justify-end">
-                        <button
-                          type="button"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            setSelected(entry);
-                          }}
-                          className="btn-ghost btn-sm"
-                        >
-                          <Pencil size={12} />
-                          Editar
-                        </button>
-                      </div>
                     </td>
                   </tr>
                 );

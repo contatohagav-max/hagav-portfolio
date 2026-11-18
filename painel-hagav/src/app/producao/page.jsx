@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, Boxes, Clock3, Link2, RefreshCw, Search } from 'lucide-react';
+import { AlertTriangle, Boxes, CalendarClock, Clock3, RefreshCw, Search } from 'lucide-react';
 import ProductionList from '@/components/producao/ProductionList';
 import Modal from '@/components/ui/Modal';
 import { fetchProductionJobs, updateProductionJob } from '@/lib/supabase';
@@ -232,8 +232,12 @@ export default function ProducaoPage() {
     const active = jobs.filter((job) => !['entregue', 'arquivado'].includes(job.status)).length;
     const blocked = jobs.filter((job) => job.status === 'bloqueado').length;
     const withoutAction = jobs.filter((job) => !String(job.proxima_acao || '').trim()).length;
-    const withoutClickUp = jobs.filter((job) => !String(job.clickup_url || '').trim()).length;
-    return { active, blocked, withoutAction, withoutClickUp };
+    const late = jobs.filter((job) => {
+      if (!job.prazo_em || ['entregue', 'arquivado'].includes(job.status)) return false;
+      const due = new Date(job.prazo_em).getTime();
+      return Number.isFinite(due) && due < Date.now();
+    }).length;
+    return { active, blocked, withoutAction, late };
   }, [jobs]);
 
   const owners = useMemo(() => {
@@ -313,7 +317,7 @@ export default function ProducaoPage() {
       <div className="flex flex-wrap items-start justify-between gap-3 shrink-0">
         <div>
           <h1 className="page-title">Produção</h1>
-          <p className="page-subtitle">Central visual da operação. ClickUp manda; o admin organiza o mapa.</p>
+          <p className="page-subtitle">Demandas aprovadas: etapa, prazo, responsável e próxima ação.</p>
         </div>
         <button type="button" onClick={load} disabled={loading} className="btn-ghost btn-sm">
           <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
@@ -326,7 +330,7 @@ export default function ProducaoPage() {
           { label: 'Demandas ativas', value: metrics.active, icon: Boxes },
           { label: 'Bloqueadas', value: metrics.blocked, icon: AlertTriangle },
           { label: 'Sem próxima ação', value: metrics.withoutAction, icon: Clock3 },
-          { label: 'Sem ClickUp', value: metrics.withoutClickUp, icon: Link2 },
+          { label: 'Prazo vencido', value: metrics.late, icon: CalendarClock },
         ].map(({ label, value, icon: Icon }) => (
           <div key={label} className="hcard p-4">
             <p className="text-xs uppercase tracking-wider text-hagav-gray flex items-center gap-2">
@@ -340,7 +344,7 @@ export default function ProducaoPage() {
       <div className="hcard p-3 shrink-0 space-y-3">
         <div className="relative">
           <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-hagav-gray" />
-          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar cliente, servico, responsavel, ClickUp ou pasta..." className="hinput w-full pl-8" />
+          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar cliente, serviço, responsável, ClickUp ou pasta..." className="hinput w-full pl-8" />
         </div>
         <div className="grid grid-cols-2 xl:grid-cols-4 gap-2">
           <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="hselect">
@@ -362,7 +366,7 @@ export default function ProducaoPage() {
             ))}
           </select>
           <select value={ownerFilter} onChange={(e) => setOwnerFilter(e.target.value)} className="hselect">
-            <option value="">Todos responsaveis</option>
+            <option value="">Todos os responsáveis</option>
             {owners.map((owner) => (
               <option key={owner} value={owner}>{owner}</option>
             ))}

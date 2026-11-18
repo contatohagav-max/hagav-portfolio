@@ -44,37 +44,6 @@
     @apply space-y-6;
   }
 
-  .dashboard-hero {
-    @apply flex flex-col gap-4 rounded-[1.75rem] border border-hagav-border bg-hagav-card/70 px-5 py-5 shadow-card;
-    background-image:
-      linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0)),
-      radial-gradient(520px 160px at 12% 0%, rgba(245,166,35,0.08), transparent 72%);
-  }
-
-  .dashboard-hero-copy {
-    @apply min-w-0;
-  }
-
-  .dashboard-chip-row {
-    @apply flex flex-wrap items-center gap-2 mb-3;
-  }
-
-  .dashboard-chip {
-    @apply inline-flex items-center rounded-full border border-hagav-gold/25 bg-hagav-gold/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.22em] text-hagav-gold;
-  }
-
-  .dashboard-chip-muted {
-    @apply border-hagav-border bg-hagav-surface/60 text-hagav-gray;
-  }
-
-  .dashboard-hero-description {
-    @apply mt-2 max-w-3xl text-sm leading-6 text-hagav-light;
-  }
-
-  .dashboard-refresh-btn {
-    @apply self-start;
-  }
-
   .dashboard-section {
     @apply space-y-4;
   }
@@ -219,6 +188,17 @@
   }
 
   .htable { @apply w-full border-collapse; }
+
+  /* Ultima coluna (acoes) sempre visivel quando a tabela rola para o lado */
+  .table-sticky-actions th:last-child,
+  .table-sticky-actions td:last-child {
+    position: sticky;
+    right: 0;
+    z-index: 2;
+    box-shadow: -10px 0 14px -10px rgba(0, 0, 0, 0.75);
+  }
+  .table-sticky-actions th:last-child { @apply bg-hagav-surface; }
+  .table-sticky-actions td:last-child { @apply bg-hagav-card; }
   .htable th {
     @apply text-left text-[11px] font-semibold text-hagav-gray uppercase tracking-wider
            px-4 py-3.5 bg-hagav-surface border-b border-hagav-border;
@@ -445,12 +425,8 @@
     .dashboard-shell {
       @apply space-y-5;
     }
-    .dashboard-hero,
     .dashboard-panel {
       @apply rounded-2xl px-4 py-4;
-    }
-    .dashboard-hero-description {
-      @apply text-[13px] leading-6;
     }
     .dashboard-section-title {
       @apply text-base;

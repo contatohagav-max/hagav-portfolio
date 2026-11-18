@@ -7,7 +7,6 @@ import {
   Download,
   Eye,
   ExternalLink,
-  FileText,
   MessageCircle,
   Power,
   RefreshCw,
@@ -860,7 +859,7 @@ export default function ClientesPage() {
 
     const valor = parseCurrencyBR(valorFinal);
     if (!Number.isFinite(valor) || valor <= 0) {
-      setFeedback('Informe um valor final valido.');
+      setFeedback('Informe um valor final válido.');
       return;
     }
 
@@ -1140,7 +1139,7 @@ export default function ClientesPage() {
           className={classNames('btn-ghost btn-sm', renovacaoProximaOnly && 'border-hagav-gold/40 text-hagav-gold')}
         >
           <CalendarClock size={12} />
-          So renovacao proxima
+          Só renovação próxima
         </button>
 
         <button
@@ -1168,23 +1167,21 @@ export default function ClientesPage() {
         <EmptyState
           icon={Users}
           title="Nenhum cliente fechado ainda"
-          description="Assim que um orcamento for fechado com contrato, ele aparece aqui."
+          description="Assim que um orçamento for fechado com contrato, ele aparece aqui."
         />
       ) : (
         <div className="overflow-x-auto rounded-xl border border-hagav-border">
-          <table className="htable min-w-[1300px]">
+          <table className="htable table-sticky-actions min-w-[980px]">
             <thead>
               <tr>
                 <th>Cliente</th>
                 <th>Serviço/Plano</th>
                 <th>Valor</th>
-                <th>Início</th>
-                <th>Vencimento</th>
-                <th>Recorrente</th>
-                <th>Status contrato</th>
+                <th>Vigência</th>
+                <th>Contrato</th>
                 <th>Responsável</th>
                 <th>Renovação</th>
-                <th>Acoes</th>
+                <th>Ações</th>
               </tr>
             </thead>
             <tbody>
@@ -1207,15 +1204,20 @@ export default function ClientesPage() {
                   <td className="text-xs text-hagav-light max-w-[220px]" title={row.plano_servico || row.servico || ''}>
                     {truncate(row.plano_servico || row.servico || '—', 54)}
                   </td>
-                  <td className="text-sm font-semibold text-hagav-gold">{fmtBRL(row.valor_contrato || 0)}</td>
-                  <td className="text-xs text-hagav-light">{fmtDate(row.inicio_contrato)}</td>
                   <td>
-                    <p className="text-xs text-hagav-light">{fmtDate(row.vencimento_contrato)}</p>
+                    <p className="text-sm font-semibold text-hagav-gold">{fmtBRL(row.valor_contrato || 0)}</p>
+                    {row.recorrente_contrato && <p className="text-[11px] text-blue-300">Mensal</p>}
+                  </td>
+                  <td>
+                    <p className="text-xs text-hagav-light whitespace-nowrap">
+                      {row.inicio_contrato || row.vencimento_contrato
+                        ? `${fmtDate(row.inicio_contrato)} → ${fmtDate(row.vencimento_contrato)}`
+                        : '—'}
+                    </p>
                     {Number.isFinite(row.dias_para_vencimento) && (
-                      <p className="text-[11px] text-hagav-gray">{row.dias_para_vencimento} dia(s)</p>
+                      <p className="text-[11px] text-hagav-gray">{row.dias_para_vencimento} dia(s) restantes</p>
                     )}
                   </td>
-                  <td className="text-xs text-hagav-light">{row.recorrente_contrato ? 'Sim' : 'Não'}</td>
                   <td><BadgeContrato status={resolveDisplayStatusContrato(row)} /></td>
                   <td className="text-xs text-hagav-light">{row.responsavel_contrato || row.responsavel || '—'}</td>
                   <td>
@@ -1230,11 +1232,8 @@ export default function ClientesPage() {
                   </td>
                   <td>
                     <div className="flex items-center gap-1.5">
-                      <button type="button" className="btn-ghost btn-sm" onClick={(event) => { event.stopPropagation(); setSelected(cloneSelectedRow(row)); }}>
-                        <FileText size={12} /> Ver
-                      </button>
-                      <button type="button" className="btn-ghost btn-sm" onClick={(event) => { event.stopPropagation(); handleGenerateContractPdf(row); }}>
-                        <Download size={12} /> Contrato PDF
+                      <button type="button" className="btn-ghost btn-sm" title="Gerar contrato em PDF" onClick={(event) => { event.stopPropagation(); handleGenerateContractPdf(row); }}>
+                        <Download size={12} /> PDF
                       </button>
                       {archived ? (
                         <button

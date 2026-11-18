@@ -201,7 +201,7 @@ export default function LeadsPage() {
           </div>
           <div className="hcard p-4">
             <div className="flex items-center gap-2 text-hagav-gray text-xs uppercase tracking-wider">
-              <Target size={13} className="text-yellow-300" /> Alta urgencia
+              <Target size={13} className="text-yellow-300" /> Alta urgência
             </div>
             <p className="text-2xl font-bold text-hagav-white mt-2">{urgentes}</p>
           </div>
@@ -226,7 +226,7 @@ export default function LeadsPage() {
           <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-hagav-gray pointer-events-none" />
           <input
             type="text"
-            placeholder="Buscar nome, WhatsApp ou observacoes..."
+            placeholder="Buscar nome, WhatsApp ou observações..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="hinput w-full pl-8 text-sm"
@@ -284,7 +284,7 @@ export default function LeadsPage() {
           className={`btn-ghost btn-sm ${followupAtrasado ? 'border-hagav-gold/40 text-hagav-gold' : ''}`}
         >
           <Clock3 size={12} />
-          So atrasados
+          Só atrasados
         </button>
       </div>
 

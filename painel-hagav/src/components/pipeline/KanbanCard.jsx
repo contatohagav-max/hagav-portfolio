@@ -50,9 +50,17 @@ export default function KanbanCard({ lead, onSelect }) {
           <p className="text-sm font-medium text-hagav-white truncate">{lead.nome || 'Sem nome'}</p>
           <p className="text-xs text-hagav-gray truncate mt-0.5">{lead.servico || lead.fluxo || '—'}</p>
 
-          <div className="flex items-center gap-1.5 mt-2">
-            <UrgenciaBadge urgencia={lead.urgencia} />
-            <TemperaturaBadge temperatura={lead.temperatura} />
+          <div className="flex flex-wrap items-center gap-1.5 mt-2">
+            {String(lead.status || '').toLowerCase() === 'aprovado' ? (
+              <span className="inline-flex items-center px-2 py-0.5 rounded-md border text-[11px] font-medium bg-emerald-500/10 text-emerald-300 border-emerald-500/30">
+                Aguardando contrato
+              </span>
+            ) : (
+              <>
+                <UrgenciaBadge urgencia={lead.urgencia} />
+                <TemperaturaBadge temperatura={lead.temperatura} />
+              </>
+            )}
           </div>
 
           <p className="text-[11px] text-hagav-gray mt-2">{fmtBRL(lead.valor_estimado)}</p>

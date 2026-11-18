@@ -57,7 +57,7 @@ function ProductionCard({ job, onSelect }) {
                   ? 'bg-slate-500/15 text-slate-300 border-slate-500/30'
                   : 'bg-amber-500/15 text-amber-300 border-amber-500/30'
             )}>
-              {job.prioridade || 'media'}
+              {({ alta: 'alta', media: 'média', baixa: 'baixa' })[job.prioridade] || 'média'}
             </span>
             <span className="badge bg-blue-500/10 text-blue-300 border-blue-500/20">
               {MATERIAL_STATUS_LABELS[job.materiais_status] || 'Pendente'}
@@ -69,7 +69,7 @@ function ProductionCard({ job, onSelect }) {
           <span className="flex items-center justify-between gap-2 mt-2 text-[10px] text-hagav-gray">
             <span className="inline-flex items-center gap-1 truncate">
               <UserRound size={10} />
-              {job.responsavel || 'Sem responsavel'}
+              {job.responsavel || 'Sem responsável'}
             </span>
             <span className="inline-flex items-center gap-1 shrink-0">
               <CalendarClock size={10} />

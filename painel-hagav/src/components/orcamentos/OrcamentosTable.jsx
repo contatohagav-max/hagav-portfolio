@@ -1,4 +1,4 @@
-import { OrcStatusBadge, PrioridadeBadge, UrgenciaBadge } from '@/components/ui/StatusBadge';
+import { OrcStatusBadge, UrgenciaBadge } from '@/components/ui/StatusBadge';
 import { fmtRelative, fmtBRL, truncate } from '@/lib/utils';
 
 function isUiArchived(row) {
@@ -33,16 +33,13 @@ export default function OrcamentosTable({ orcamentos, onSelect, onToggleArchive 
 
   return (
     <div className="overflow-x-auto rounded-2xl border border-hagav-border bg-hagav-surface/30 shadow-card">
-      <table className="htable min-w-[1380px]">
+      <table className="htable table-sticky-actions min-w-[1060px]">
         <thead>
           <tr>
             <th>Cliente</th>
-            <th>Fluxo</th>
-            <th>Serviço / Operação</th>
-            <th>Potencial</th>
-            <th>Preço final</th>
-            <th>Margem (Auto/Com.)</th>
-            <th>Revisão</th>
+            <th>Serviço</th>
+            <th>Valor</th>
+            <th>Margem</th>
             <th>Status</th>
             <th>Urgência</th>
             <th>Próxima ação</th>
@@ -74,34 +71,39 @@ export default function OrcamentosTable({ orcamentos, onSelect, onToggleArchive 
                       )}
                     </div>
                     <p className="text-[11px] text-hagav-gray font-mono">{orc.whatsapp || ''}</p>
-                    <p className="text-[11px] text-hagav-gray truncate max-w-[220px]">{truncate(orc.origem, 28)}</p>
+                    <div className="flex items-center gap-1.5 mt-1">
+                      {orc.fluxo && <span className="badge bg-hagav-muted/40 border-hagav-border text-hagav-light">{orc.fluxo}</span>}
+                      {orc.origem && <span className="text-[11px] text-hagav-gray truncate max-w-[140px]">{truncate(orc.origem, 22)}</span>}
+                    </div>
                   </div>
-                </td>
-                <td className="text-xs">
-                  <span className="badge bg-hagav-muted/40 border-hagav-border text-hagav-light">{orc.fluxo || '—'}</span>
                 </td>
                 <td className="text-hagav-light text-xs max-w-[220px]" title={servicoResumo}>
                   {truncate(servicoResumo, 68)}
                 </td>
-                <td className="text-sm font-medium text-hagav-gold">{fmtBRL(orc.valor_estimado || orc.potencial_total || orc.preco_final || 0)}</td>
-                <td className={`font-semibold ${Number(orc.preco_final) > 0 ? 'text-hagav-gold' : 'text-hagav-gray'}`}>
-                  {Number(orc.preco_final) > 0 ? fmtBRL(orc.preco_final) : '—'}
-                </td>
-                <td className="text-xs text-hagav-light">
-                  {`${Number(orc.margem_automatica ?? orc.margem_estimada ?? 0).toFixed(1)}% / ${Number(orc.margem_comercial ?? orc.margem_percentual ?? 0).toFixed(1)}%`}
-                </td>
-                <td className="text-xs">
-                  <span className={`badge ${orc.revisao_manual ? 'bg-yellow-500/15 text-yellow-300 border-yellow-500/30' : 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'}`}>
-                    {orc.revisao_manual ? 'Manual' : 'Auto'}
-                  </span>
-                </td>
-                <td><OrcStatusBadge status={orc.status_orcamento} /></td>
                 <td>
-                  <div className="flex flex-col gap-1">
-                    <UrgenciaBadge urgencia={orc.urgencia} />
-                    <PrioridadeBadge prioridade={orc.prioridade} />
+                  {Number(orc.preco_final) > 0 ? (
+                    <p className="font-semibold text-hagav-gold">{fmtBRL(orc.preco_final)}</p>
+                  ) : (
+                    <p className="text-sm text-hagav-light">{fmtBRL(orc.valor_estimado || orc.potencial_total || 0)}</p>
+                  )}
+                  <p className="text-[11px] text-hagav-gray">
+                    {Number(orc.preco_final) > 0
+                      ? `sugerido ${fmtBRL(orc.valor_estimado || orc.potencial_total || 0)}`
+                      : 'estimado'}
+                  </p>
+                </td>
+                <td className="text-xs text-hagav-light" title="Margem sobre o preço final">
+                  {`${Number(orc.margem_comercial ?? orc.margem_percentual ?? orc.margem_estimada ?? 0).toFixed(1)}%`}
+                </td>
+                <td>
+                  <div className="flex flex-col items-start gap-1">
+                    <OrcStatusBadge status={orc.status_orcamento} />
+                    {orc.revisao_manual && (
+                      <span className="badge bg-yellow-500/15 text-yellow-300 border-yellow-500/30">Revisão manual</span>
+                    )}
                   </div>
                 </td>
+                <td><UrgenciaBadge urgencia={orc.urgencia} /></td>
                 <td className="text-xs text-hagav-light max-w-[200px]" title={orc.proxima_acao || ''}>
                   {truncate(orc.proxima_acao || 'Sem ação definida', 52)}
                 </td>

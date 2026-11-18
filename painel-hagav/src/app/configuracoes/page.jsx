@@ -279,8 +279,8 @@ export default function ConfiguracoesPage() {
 
       <Section
         icon={Settings2}
-        title="Descontos, complexidade e urgencia"
-        description="Multiplicadores e faixas usadas pelo motor de calculo interno."
+        title="Descontos, complexidade e urgência"
+        description="Multiplicadores e faixas usadas pelo motor de cálculo interno."
       >
         <div className="space-y-4">
           <div>

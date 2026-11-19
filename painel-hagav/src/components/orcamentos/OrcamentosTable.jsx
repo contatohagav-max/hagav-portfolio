@@ -33,7 +33,7 @@ export default function OrcamentosTable({ orcamentos, onSelect, onToggleArchive 
 
   return (
     <div className="overflow-x-auto rounded-2xl border border-hagav-border bg-hagav-surface/30 shadow-card">
-      <table className="htable table-sticky-actions min-w-[1060px]">
+      <table className="htable table-sticky-actions min-w-[980px]">
         <thead>
           <tr>
             <th>Cliente</th>

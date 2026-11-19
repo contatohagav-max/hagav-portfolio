@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { X, Save, Loader2, UserPlus } from 'lucide-react';
 import useAdaptivePanelWidth from '@/components/ui/useAdaptivePanelWidth';
+import useEscapeToClose from '@/components/ui/useEscapeToClose';
 import { PRAZO_OPTIONS, normalizePrazoLabel } from '@/lib/commercial';
 import { createLead } from '@/lib/supabase';
 
@@ -78,6 +79,7 @@ function normalizeWhatsapp(raw) {
 }
 
 export default function NewLeadDrawer({ onClose, onCreated }) {
+  useEscapeToClose(onClose);
   const adaptivePanel = useAdaptivePanelWidth({
     storageKey: 'hagav-drawer-lead-new',
     widths: { base: 780, large: 920, ultrawide: 1060 },

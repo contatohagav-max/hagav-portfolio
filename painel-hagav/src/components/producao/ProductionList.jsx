@@ -132,7 +132,7 @@ function DetailPanel({ job, onEdit }) {
   const clickupUrl = String(job.clickup_url || '').trim();
 
   return (
-    <aside className="hcard p-4 space-y-4 xl:sticky xl:top-4 self-start">
+    <aside id="painel-demanda" className="hcard p-4 space-y-4 xl:sticky xl:top-4 self-start">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-[10px] uppercase tracking-wider text-hagav-gray">Painel da demanda</p>
@@ -234,7 +234,7 @@ export default function ProductionList({
             <thead>
               <tr className="border-b border-hagav-border text-left text-[10px] uppercase tracking-wider text-hagav-gray">
                 <th className="px-4 py-3">Projeto</th>
-                <th className="px-4 py-3 w-[200px]">Etapa</th>
+                <th className="px-4 py-3 w-[210px]">Etapa</th>
                 <th className="px-4 py-3">Prazo</th>
                 <th className="px-4 py-3">Responsável</th>
                 <th className="px-4 py-3">Próxima ação</th>
@@ -246,7 +246,13 @@ export default function ProductionList({
                 return (
                   <tr
                     key={job.id}
-                    onClick={() => onSelect?.(job)}
+                    onClick={() => {
+                      onSelect?.(job);
+                      // Em telas menores o painel da demanda fica abaixo da lista: leva o usuario ate ele.
+                      if (typeof window !== 'undefined' && window.innerWidth < 1280) {
+                        setTimeout(() => document.getElementById('painel-demanda')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+                      }
+                    }}
                     className={classNames(
                       'border-b border-hagav-border/70 hover:bg-hagav-muted/20 cursor-pointer transition-colors',
                       selected && 'bg-hagav-gold/10'
@@ -261,7 +267,7 @@ export default function ProductionList({
                         value={job.status || 'aguardando_materiais'}
                         onClick={(event) => event.stopPropagation()}
                         onChange={(event) => onStatusChange?.(job, event.target.value)}
-                        className="hselect h-8 text-xs w-full min-w-[170px]"
+                        className="hselect h-8 text-xs w-full min-w-[190px]"
                       >
                         {PRODUCTION_STAGES.map((stage) => (
                           <option key={stage.id} value={stage.id}>{stage.label}</option>

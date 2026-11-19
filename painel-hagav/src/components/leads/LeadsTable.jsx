@@ -25,7 +25,7 @@ export default function LeadsTable({ leads, onSelect }) {
 
   return (
     <div className="overflow-x-auto rounded-xl border border-hagav-border">
-      <table className="htable min-w-[1020px]">
+      <table className="htable table-sticky-actions min-w-[940px]">
         <thead>
           <tr>
             <th>Lead</th>

@@ -145,6 +145,10 @@ function mapDealToContratoRecord(raw) {
       statusContrato = 'ativo';
     }
   }
+  // Contrato salvo como "ativo" tambem vence quando a data de vencimento passa.
+  if (statusContrato === 'ativo' && vencimentoDate && vencimentoDate.getTime() < now.getTime()) {
+    statusContrato = 'vencido';
+  }
 
   const diasParaVencimento = vencimentoDate
     ? Math.ceil((vencimentoDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))

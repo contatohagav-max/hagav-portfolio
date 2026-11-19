@@ -6,6 +6,7 @@ import { OrcStatusBadge, PrioridadeBadge, UrgenciaBadge, TemperaturaBadge } from
 import EduTooltip from '@/components/ui/EduTooltip';
 import CollapsibleActionBlock from '@/components/ui/CollapsibleActionBlock';
 import useAdaptivePanelWidth from '@/components/ui/useAdaptivePanelWidth';
+import useEscapeToClose from '@/components/ui/useEscapeToClose';
 import ProposalPreview from '@/components/orcamentos/ProposalPreview';
 import { fetchCommercialSettings, fetchNextProposalNumberForClient, generateDealPdf, updateOrcamento } from '@/lib/supabase';
 import {
@@ -1008,6 +1009,7 @@ function downloadPdfFromBase64(base64, fileName = 'proposta-hagav.pdf') {
 }
 
 export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
+  useEscapeToClose(onClose);
   const initialStoredSuggested = Number(orc?.valor_sugerido ?? orc?.preco_base ?? 0);
   const initialFinalPrice = Number(orc?.preco_final ?? initialStoredSuggested ?? 0);
   const [statusOrc, setStatusOrc] = useState(orc?.status_orcamento ?? 'orcamento');

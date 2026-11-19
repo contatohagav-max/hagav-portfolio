@@ -294,3 +294,104 @@ export async function markNotificationsRead({ ids, prospectId, all = false } = {
   const { error } = await query;
   if (error) throw error;
 }
+
+// ---------------- Aprovacao dos rascunhos ----------------
+
+const DIA_MS = 24 * 60 * 60 * 1000;
+// Intervalo padrao dos follow-ups quando o rascunho nao traz um horario proprio (em dias, a partir da 1a mensagem).
+const FOLLOW_UP_DIAS = { 2: 3, 3: 8, 4: 14 };
+
+// Prospects com mensagens em rascunho, cada um com suas mensagens em ordem de etapa.
+export async function fetchDrafts() {
+  const client = getSupabase();
+  if (!client) return [];
+  const { data: rascunhos, error } = await client
+    .from('prospect_messages')
+    .select('*')
+    .eq('direcao', 'saida')
+    .eq('status', 'rascunho')
+    .order('etapa', { ascending: true })
+    .limit(2000);
+  if (error) throw error;
+  const ids = [...new Set((rascunhos || []).map((m) => m.prospect_id))];
+  if (!ids.length) return [];
+  const { data: prospects, error: erroProspects } = await client.from('prospects').select('*').in('id', ids);
+  if (erroProspects) throw erroProspects;
+  return (prospects || [])
+    .filter((p) => !['descartado', 'descadastrado', 'convertido', 'sem_interesse'].includes(p.status))
+    .map((p) => ({ prospect: p, mensagens: rascunhos.filter((m) => m.prospect_id === p.id) }));
+}
+
+// Novo horario de cada etapa: a 1a sai na proxima rodada; as seguintes mantem a distancia original.
+export function reagendarRascunhos(mensagens, agora = new Date()) {
+  const ordenadas = [...mensagens].sort((a, b) => Number(a.etapa || 1) - Number(b.etapa || 1));
+  const base = ordenadas[0]?.agendado_para ? new Date(ordenadas[0].agendado_para).getTime() : null;
+  return ordenadas.map((m, i) => {
+    let distancia = 0;
+    if (i > 0) {
+      const original = m.agendado_para && base ? new Date(m.agendado_para).getTime() - base : 0;
+      distancia = original >= DIA_MS ? original : (FOLLOW_UP_DIAS[Number(m.etapa)] || 3 * i) * DIA_MS;
+    }
+    return { id: m.id, etapa: m.etapa, agendado_para: new Date(agora.getTime() + distancia).toISOString() };
+  });
+}
+
+// Aprova a sequencia de email: rascunho -> agendado (com os textos editados, se houver).
+export async function approveDrafts(prospect, mensagens, edicoes = {}) {
+  const client = requireClient();
+  if (!prospect?.email) throw new Error('Esse prospect não tem email para receber a sequência.');
+  const agenda = reagendarRascunhos(mensagens);
+  for (const item of agenda) {
+    const original = mensagens.find((m) => m.id === item.id) || {};
+    const edicao = edicoes[item.id] || {};
+    const patch = { status: 'agendado', agendado_para: item.agendado_para, erro: null };
+    if (typeof edicao.corpo === 'string' && edicao.corpo.trim() && edicao.corpo !== original.corpo) patch.corpo = edicao.corpo.trim();
+    if (typeof edicao.assunto === 'string' && edicao.assunto !== original.assunto) patch.assunto = edicao.assunto.trim() || null;
+    const { error } = await client.from('prospect_messages').update(patch).eq('id', item.id).eq('status', 'rascunho');
+    if (error) throw error;
+  }
+  return agenda;
+}
+
+// Mensagem enviada a mao (DM no Instagram): marca como enviada e poe o prospect em sequencia.
+export async function markDraftSentManually(prospect, mensagem, edicao = {}) {
+  const client = requireClient();
+  const agora = new Date().toISOString();
+  const patch = { status: 'enviado', enviado_em: agora, erro: null };
+  if (typeof edicao.corpo === 'string' && edicao.corpo.trim() && edicao.corpo !== mensagem.corpo) patch.corpo = edicao.corpo.trim();
+  const { error } = await client.from('prospect_messages').update(patch).eq('id', mensagem.id);
+  if (error) throw error;
+  return updateProspect(prospect.id, {
+    status: 'em_sequencia',
+    ultimo_contato_em: agora,
+    tentativas: Math.max(Number(prospect.tentativas || 0), Number(mensagem.etapa || 1)),
+  });
+}
+
+export async function saveDraftText(mensagem, { assunto, corpo } = {}) {
+  const client = requireClient();
+  const patch = {};
+  if (typeof corpo === 'string' && corpo.trim()) patch.corpo = corpo.trim();
+  if (typeof assunto === 'string') patch.assunto = assunto.trim() || null;
+  if (!Object.keys(patch).length) return;
+  const { error } = await client.from('prospect_messages').update(patch).eq('id', mensagem.id).eq('status', 'rascunho');
+  if (error) throw error;
+}
+
+export const MOTIVOS_REPROVACAO = [
+  'Não é o perfil',
+  'Já tem editor ou agência',
+  'Grande demais',
+  'Pequeno demais',
+  'Momento errado',
+  'Mensagem ruim',
+];
+
+// Reprova: descarta o prospect (cancela os rascunhos) e guarda o motivo, que ensina a busca do dia seguinte.
+export async function rejectProspect(prospect, motivo) {
+  const nota = `Reprovado na aprovação${motivo ? `: ${motivo}` : ''} (${new Date().toLocaleDateString('pt-BR')}).`;
+  return updateProspect(prospect.id, {
+    status: 'descartado',
+    notas: [prospect.notas, nota].filter(Boolean).join('\n'),
+  });
+}

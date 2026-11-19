@@ -1,6 +1,6 @@
-# SPA fallback para o painel interno — Cloudflare Pages
+# Painel interno: cada pagina do /admin ja e exportada com seu proprio index.html.
+# (A regra "/admin/* /admin/index.html 200" foi removida: o Cloudflare a ignorava por entrar em loop.)
 /admin    /admin/index.html  200
-/admin/*  /admin/index.html  200
 
 /reels     /reels-teste.html  200
 /reels/    /reels-teste.html  200

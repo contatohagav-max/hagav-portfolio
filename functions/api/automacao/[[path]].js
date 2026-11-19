@@ -1011,8 +1011,12 @@ export async function onRequest(context) {
   const { request, env, params } = context;
 
   const expected = firstEnvValue(env, ['AUTOMATION_TOKEN', 'HAGAV_AUTOMATION_TOKEN']);
-  if (!expected || expected.length < 32) {
+  if (!expected) {
     return json({ ok: false, error: 'automacao_nao_configurada' }, 503);
+  }
+  if (expected.length < 32) {
+    // Nao revela o valor nem o tamanho exato: so avisa que a chave configurada e curta demais.
+    return json({ ok: false, error: 'automacao_token_curto', minimo: 32 }, 503);
   }
 
   const provided = readProvidedToken(request);

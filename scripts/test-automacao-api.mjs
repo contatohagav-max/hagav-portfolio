@@ -304,4 +304,21 @@ const carlaRow = db.prospects.find((p) => p.id === carla.id);
 r = await call('PATCH', `prospects/${carlaRow.id}`, { status: 'descadastrado' });
 assert.ok(db.outreach_suppression.some((s) => s.valor === 'carla@x.com'));
 
+// 20. Financeiro: listar e dar baixa (conciliacao com o banco)
+db.financial_entries.push({ id: randomUUID(), tipo: 'receber', valor: 4000, valor_pago: 0, status: 'pendente', vencimento: '2026-10-10', descricao: 'Projeto aprovado - Escola Voila', origin_key: 'deal:abc:receber', observacoes: 'obs original' });
+r = await call('GET', 'financeiro/lancamentos?de=2026-10-01&ate=2026-10-31&tipo=receber&abertos=1');
+assert.equal(r.status, 200, JSON.stringify(r.data));
+assert.equal(r.data.lancamentos.length, 1);
+const aberto = r.data.lancamentos[0];
+r = await call('PATCH', `financeiro/lancamentos/${aberto.id}`, { status: 'pago', pago_em: '2026-10-13T12:00:00Z', forma_pagamento: 'Pix', observacao_adicional: 'Baixa automatica: Pix C6 13/10', fonte: 'c6_email' });
+assert.equal(r.status, 200, JSON.stringify(r.data));
+const baixado = db.financial_entries.find((e) => e.id === aberto.id);
+assert.equal(baixado.status, 'pago');
+assert.equal(baixado.valor_pago, 4000);
+assert.match(baixado.observacoes, /obs original\nBaixa automatica/);
+r = await call('PATCH', `financeiro/lancamentos/${aberto.id}`, { status: 'inventado' });
+assert.equal(r.status, 400);
+r = await call('GET', 'financeiro/lancamentos?abertos=1&tipo=receber&de=2026-10-01&ate=2026-10-31');
+assert.equal(r.data.lancamentos.length, 0);
+
 console.log(`OK - ${requests.length} chamadas ao banco simulado, todos os cenarios passaram`);

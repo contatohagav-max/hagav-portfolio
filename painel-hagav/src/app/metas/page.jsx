@@ -162,13 +162,15 @@ function ProgressBar({ value, tone = 'bg-hagav-gold' }) {
 }
 
 function InfoCard({ icon: Icon, label, value, helper, tone = 'text-hagav-gold' }) {
+  // Frases longas (como a proxima acao) ficam em tamanho de texto, nao de numero
+  const longo = typeof value === 'string' && value.length > 28;
   return (
     <div className="hcard p-4 min-h-[124px]">
       <p className="text-[10px] uppercase tracking-wider text-hagav-gray flex items-center gap-1.5">
         <Icon size={13} className={tone} />
         {label}
       </p>
-      <p className={classNames('mt-3 text-xl font-bold', tone)}>{value}</p>
+      <p className={classNames('mt-3 font-bold', longo ? 'text-sm leading-snug' : 'text-xl', tone)}>{value}</p>
       {helper ? <p className="mt-1 text-xs text-hagav-gray">{helper}</p> : null}
     </div>
   );

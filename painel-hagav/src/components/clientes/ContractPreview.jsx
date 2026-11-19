@@ -70,6 +70,7 @@ export default function ContractPreview({ preview }) {
                 <PreviewField label="WhatsApp" value={preview.client?.whatsapp} />
                 <PreviewField label="CPF/CNPJ" value={preview.client?.document} />
                 <PreviewField label="E-mail" value={preview.client?.email} />
+                <PreviewField label="Endereço" value={preview.client?.address} />
               </div>
             </div>
             <div className="rounded-2xl border border-[#e7dfcf] bg-white p-3">

@@ -32,7 +32,7 @@ import RadarView from '@/components/prospeccao/RadarView';
 import { ChanceBadge, FatoresChance, QuadranteTag } from '@/components/prospeccao/ChanceBadge';
 import { calcularChance, ordenarPorChance } from '@/lib/prospeccao-chance';
 import { useAuth } from '@/context/AuthContext';
-import { classNames, fmtDateTime, fmtRelative } from '@/lib/utils';
+import { classNames, fmtDateTime, fmtPercent, fmtRelative } from '@/lib/utils';
 import {
   CLASSIFICACAO_LABELS,
   MOMENTO_LABELS,
@@ -666,7 +666,7 @@ export default function ProspeccaoPage() {
         <Kpi
           icon={Inbox}
           label="Taxa de resposta"
-          value={metrics ? `${metrics.taxaResposta30.toFixed(1)}%` : '—'}
+          value={metrics ? fmtPercent(metrics.taxaResposta30) : '—'}
           hint={metrics ? `${metrics.responderam30} de ${metrics.abordados30} nos últimos 30 dias` : ''}
         />
       </div>

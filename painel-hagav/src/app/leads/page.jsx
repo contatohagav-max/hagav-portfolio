@@ -163,7 +163,7 @@ export default function LeadsPage() {
             className="btn-gold btn-sm"
           >
             <UserPlus size={13} />
-            + Novo lead
+            Novo lead
           </button>
           <EduTooltip {...UPDATE_TOOLTIP} className="w-auto" panelClassName="left-auto right-0 translate-x-0">
             <button onClick={load} disabled={loading} className="btn-ghost btn-sm">

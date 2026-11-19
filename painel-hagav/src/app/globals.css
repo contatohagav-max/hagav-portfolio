@@ -464,7 +464,8 @@
   }
 
   .kanban-col {
-    @apply flex flex-col min-w-[252px] w-[252px] bg-hagav-surface rounded-2xl
+    /* As 6 colunas dividem a largura disponivel; abaixo de 176px a area rola para o lado */
+    @apply flex flex-col min-w-[176px] flex-1 basis-0 bg-hagav-surface rounded-2xl
            border border-hagav-border overflow-hidden;
     transition: border-color 0.2s ease, transform 0.2s ease;
   }

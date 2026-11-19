@@ -19,6 +19,12 @@ import { useDroppable } from '@dnd-kit/core';
 import KanbanCard from './KanbanCard';
 import EduTooltip from '@/components/ui/EduTooltip';
 import { KANBAN_COLUMNS, classNames } from '@/lib/utils';
+
+function totalCompacto(leads) {
+  const total = leads.reduce((acc, l) => acc + (Number(l.valor_estimado) || 0), 0);
+  if (!total) return '';
+  return total >= 1000 ? `R$ ${(total / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} mil` : `R$ ${Math.round(total)}`;
+}
 import { updateLead } from '@/lib/supabase';
 
 const PIPELINE_STAGE_TOOLTIPS = {
@@ -101,7 +107,7 @@ function DroppableColumn({ column, leads, onSelectLead }) {
   const tooltip = PIPELINE_STAGE_TOOLTIPS[column.id];
 
   return (
-    <div className={classNames('kanban-col shrink-0', isOver && 'ring-1 ring-hagav-gold/40')}>
+    <div className={classNames('kanban-col', isOver && 'ring-1 ring-hagav-gold/40')}>
       <EduTooltip
         enabled={Boolean(tooltip)}
         side="bottom"
@@ -109,7 +115,10 @@ function DroppableColumn({ column, leads, onSelectLead }) {
         {...tooltip}
       >
         <div className={classNames('kanban-col-header border-t-2', column.color)}>
-          <span className="text-xs font-semibold text-hagav-light">{column.label}</span>
+          <span className="min-w-0">
+            <span className="block text-xs font-semibold text-hagav-light">{column.label}</span>
+            {totalCompacto(leads) && <span className="block text-[11px] text-hagav-gray">{totalCompacto(leads)}</span>}
+          </span>
           <span className="text-xs text-hagav-gray bg-hagav-muted/40 px-1.5 py-0.5 rounded-full">
             {leads.length}
           </span>

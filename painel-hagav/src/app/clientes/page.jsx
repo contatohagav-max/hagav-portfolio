@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Archive,
   CalendarClock,
@@ -16,6 +16,8 @@ import {
   Undo2,
 } from 'lucide-react';
 import ContractPreview from '@/components/clientes/ContractPreview';
+import { buscarCep, enderecoDaConsulta, formatarCep, montarEnderecoCompleto, somenteDigitosCep } from '@/lib/cep';
+import { formatarDocumento, situacaoDocumento } from '@/lib/documento';
 import CollapsibleActionBlock from '@/components/ui/CollapsibleActionBlock';
 import Modal from '@/components/ui/Modal';
 import EmptyState from '@/components/ui/EmptyState';
@@ -32,6 +34,7 @@ import {
   fmtDate,
   fmtDateTime,
   fmtRelative,
+  fmtTelefone,
   truncate,
   whatsappLink,
 } from '@/lib/utils';
@@ -323,6 +326,48 @@ function resolveDisplayStatusContrato(row) {
   return 'ativo';
 }
 
+function CampoCep({ cep, onCep, onEndereco, disabled }) {
+  const [estado, setEstado] = useState({ buscando: false, erro: '' });
+  const ultimoBuscado = useRef('');
+
+  useEffect(() => {
+    const digitos = somenteDigitosCep(cep);
+    if (digitos.length !== 8 || digitos === ultimoBuscado.current) return undefined;
+    ultimoBuscado.current = digitos;
+    const controle = new AbortController();
+    setEstado({ buscando: true, erro: '' });
+    buscarCep(digitos, { signal: controle.signal })
+      .then((dados) => {
+        onEndereco(enderecoDaConsulta(dados));
+        setEstado({ buscando: false, erro: '' });
+      })
+      .catch((err) => {
+        if (err?.name === 'AbortError') return;
+        setEstado({ buscando: false, erro: err?.message || 'Não consegui consultar o CEP.' });
+      });
+    return () => controle.abort();
+  }, [cep, onEndereco]);
+
+  return (
+    <div>
+      <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">CEP</label>
+      <input
+        type="text"
+        inputMode="numeric"
+        autoComplete="postal-code"
+        placeholder="00000-000"
+        value={formatarCep(cep)}
+        onChange={(e) => onCep(somenteDigitosCep(e.target.value))}
+        className="hinput w-full"
+        disabled={disabled}
+      />
+      <p className={`text-[11px] mt-1 ${estado.erro ? 'text-red-300' : 'text-hagav-gray'}`} aria-live="polite">
+        {estado.buscando ? 'Buscando endereço...' : (estado.erro || 'Digite o CEP: rua, bairro e cidade vêm sozinhos.')}
+      </p>
+    </div>
+  );
+}
+
 function appendContratoHistorico(contratoAtual, evento) {
   const historicoAtual = Array.isArray(contratoAtual?.historico)
     ? contratoAtual.historico.filter((item) => item && typeof item === 'object')
@@ -335,6 +380,7 @@ function buildContractPreviewModel({
   nomeContratante,
   cpfCnpj,
   emailCliente,
+  enderecoCompleto,
   resumoServico,
   valorFinal,
   dataInicio,
@@ -368,9 +414,10 @@ function buildContractPreviewModel({
     status: STATUS_CONTRATO_LABELS[previewStatus] || STATUS_CONTRATO_LABELS.aguardando_contrato,
     client: {
       name: String(nomeContratante || row?.nome || '').trim(),
-      whatsapp: String(row?.whatsapp || '').trim(),
+      whatsapp: fmtTelefone(row?.whatsapp),
       document: String(cpfCnpj || contrato?.cpf_cnpj_cliente || contrato?.cpf_cnpj || '').trim(),
       email: String(emailCliente || contrato?.email_cliente || row?.email || '').trim(),
+      address: String(enderecoCompleto || contrato?.endereco_cliente || '').trim(),
     },
     serviceSummary: String(
       resumoServico
@@ -448,6 +495,9 @@ export default function ClientesPage() {
   const [nomeContratante, setNomeContratante] = useState('');
   const [cpfCnpj, setCpfCnpj] = useState('');
   const [emailCliente, setEmailCliente] = useState('');
+  const [cepCliente, setCepCliente] = useState('');
+  const [enderecoCliente, setEnderecoCliente] = useState('');
+  const [numeroCliente, setNumeroCliente] = useState('');
   const [resumoServico, setResumoServico] = useState('');
   const [obsContrato, setObsContrato] = useState('');
   const [recorrente, setRecorrente] = useState(true);
@@ -510,6 +560,9 @@ export default function ClientesPage() {
     setNomeContratante(String(contrato?.nome_cliente || selected?.nome || ''));
     setCpfCnpj(String(contrato?.cpf_cnpj_cliente || contrato?.cpf_cnpj || ''));
     setEmailCliente(String(contrato?.email_cliente || selected?.email || ''));
+    setCepCliente(somenteDigitosCep(contrato?.cep_cliente));
+    setEnderecoCliente(String(contrato?.endereco_base || (contrato?.cep_cliente ? '' : contrato?.endereco_cliente) || ''));
+    setNumeroCliente(String(contrato?.endereco_numero || ''));
     setResumoServico(resumoServicoDefault);
     setObsContrato(String(contrato?.observacoes || ''));
     setRecorrente(typeof contrato?.recorrente === 'boolean' ? contrato.recorrente : Boolean(selected?.recorrente_contrato));
@@ -557,11 +610,17 @@ export default function ClientesPage() {
     };
   }, [rows]);
 
+  const enderecoCompleto = useMemo(
+    () => montarEnderecoCompleto({ endereco: enderecoCliente, numero: numeroCliente, cep: cepCliente }),
+    [enderecoCliente, numeroCliente, cepCliente],
+  );
+
   const contractPreview = useMemo(() => buildContractPreviewModel({
     row: selected,
     nomeContratante,
     cpfCnpj,
     emailCliente,
+    enderecoCompleto,
     resumoServico,
     valorFinal,
     dataInicio,
@@ -578,6 +637,7 @@ export default function ClientesPage() {
     nomeContratante,
     cpfCnpj,
     emailCliente,
+    enderecoCompleto,
     resumoServico,
     valorFinal,
     dataInicio,
@@ -625,6 +685,8 @@ export default function ClientesPage() {
         : (String(contratoBase?.nome_cliente || currentRow?.nome || '').trim()),
       cpf_cnpj: isSelectedRow ? String(cpfCnpj || '').trim() : String(contratoBase?.cpf_cnpj_cliente || contratoBase?.cpf_cnpj || '').trim(),
       email_cliente: isSelectedRow ? String(emailCliente || '').trim() : String(contratoBase?.email_cliente || currentRow?.email || '').trim(),
+      endereco_cliente: isSelectedRow ? enderecoCompleto : String(contratoBase?.endereco_cliente || '').trim(),
+      cep_cliente: isSelectedRow ? somenteDigitosCep(cepCliente) : somenteDigitosCep(contratoBase?.cep_cliente),
       forma_pagamento: isSelectedRow
         ? (String(formaPagamento || '').trim() || 'A combinar')
         : (String(contratoBase?.forma_pagamento || currentRow?.forma_pagamento_contrato || 'A combinar').trim()),
@@ -918,6 +980,10 @@ export default function ClientesPage() {
       nome_cliente: nomeContratanteSafe,
       cpf_cnpj_cliente: cpfCnpjSafe,
       email_cliente: emailClienteSafe,
+      cep_cliente: somenteDigitosCep(cepCliente),
+      endereco_base: String(enderecoCliente || '').trim(),
+      endereco_numero: String(numeroCliente || '').trim(),
+      endereco_cliente: enderecoCompleto,
       resumo_servico: resumoServicoSafe,
       data_fim: vencimentoSafe,
       data_termino: vencimentoSafe,
@@ -1198,7 +1264,7 @@ export default function ClientesPage() {
                           <span className="badge bg-zinc-500/20 text-zinc-300 border-zinc-500/30">Arquivado</span>
                         )}
                       </div>
-                      <p className="text-[11px] text-hagav-gray font-mono">{row.whatsapp || '—'}</p>
+                      <p className="text-[11px] text-hagav-gray">{fmtTelefone(row.whatsapp) || '—'}</p>
                     </div>
                   </td>
                   <td><BadgeContrato status={resolveDisplayStatusContrato(row)} /></td>
@@ -1319,15 +1385,29 @@ export default function ClientesPage() {
                 </div>
                 <div>
                   <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">WhatsApp</label>
-                  <input type="text" value={selected.whatsapp || ''} disabled className="hinput w-full opacity-80" />
+                  <input type="text" value={fmtTelefone(selected.whatsapp)} disabled className="hinput w-full opacity-80" />
                 </div>
                 <div>
                   <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">CPF/CNPJ</label>
-                  <input type="text" value={cpfCnpj} onChange={(e) => setCpfCnpj(e.target.value)} className="hinput w-full" />
+                  <input type="text" inputMode="numeric" value={cpfCnpj} onChange={(e) => setCpfCnpj(formatarDocumento(e.target.value))} className="hinput w-full" placeholder="000.000.000-00 ou 00.000.000/0000-00" />
+                  {(() => {
+                    const situacao = situacaoDocumento(cpfCnpj);
+                    return <p className={`text-[11px] mt-1 ${situacao.ok === false ? 'text-amber-300' : 'text-hagav-gray'}`}>{situacao.texto}</p>;
+                  })()}
                 </div>
                 <div>
                   <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">E-mail</label>
                   <input type="email" value={emailCliente} onChange={(e) => setEmailCliente(e.target.value)} className="hinput w-full" />
+                </div>
+                <CampoCep cep={cepCliente} onCep={setCepCliente} onEndereco={setEnderecoCliente} />
+                <div>
+                  <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Número e complemento</label>
+                  <input type="text" value={numeroCliente} onChange={(e) => setNumeroCliente(e.target.value)} className="hinput w-full" placeholder="Ex.: 123, sala 4" />
+                </div>
+                <div className="md:col-span-2">
+                  <label className="text-xs text-hagav-gray uppercase tracking-wider block mb-1.5">Endereço</label>
+                  <input type="text" value={enderecoCliente} onChange={(e) => setEnderecoCliente(e.target.value)} className="hinput w-full" placeholder="Rua, bairro, cidade/UF" />
+                  {enderecoCompleto && <p className="text-[11px] text-hagav-gray mt-1">No contrato: {enderecoCompleto}</p>}
                 </div>
 
                 <div className="md:col-span-2 mt-1">

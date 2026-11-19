@@ -544,7 +544,7 @@ export default function ClientesPage() {
     const encerrados = rows.filter((item) => item.status_contrato === 'encerrado').length;
     const renovacaoProxima = rows.filter((item) => item.renovacao_proxima).length;
     const receitaAtiva = rows
-      .filter((item) => item.status_contrato !== 'encerrado')
+      .filter((item) => !['encerrado', 'vencido'].includes(item.status_contrato))
       .reduce((sum, item) => sum + Number(item.valor_contrato || 0), 0);
 
     return {
@@ -1175,10 +1175,10 @@ export default function ClientesPage() {
             <thead>
               <tr>
                 <th>Cliente</th>
-                <th>Serviço/Plano</th>
+                <th>Contrato</th>
                 <th>Valor</th>
                 <th>Vigência</th>
-                <th>Contrato</th>
+                <th>Serviço/Plano</th>
                 <th>Responsável</th>
                 <th>Renovação</th>
                 <th>Ações</th>
@@ -1201,9 +1201,7 @@ export default function ClientesPage() {
                       <p className="text-[11px] text-hagav-gray font-mono">{row.whatsapp || '—'}</p>
                     </div>
                   </td>
-                  <td className="text-xs text-hagav-light max-w-[220px]" title={row.plano_servico || row.servico || ''}>
-                    {truncate(row.plano_servico || row.servico || '—', 54)}
-                  </td>
+                  <td><BadgeContrato status={resolveDisplayStatusContrato(row)} /></td>
                   <td>
                     <p className="text-sm font-semibold text-hagav-gold">{fmtBRL(row.valor_contrato || 0)}</p>
                     {row.recorrente_contrato && <p className="text-[11px] text-blue-300">Mensal</p>}
@@ -1215,10 +1213,16 @@ export default function ClientesPage() {
                         : '—'}
                     </p>
                     {Number.isFinite(row.dias_para_vencimento) && (
-                      <p className="text-[11px] text-hagav-gray">{row.dias_para_vencimento} dia(s) restantes</p>
+                      row.dias_para_vencimento < 0 ? (
+                        <p className="text-[11px] text-red-300">vencido há {Math.abs(row.dias_para_vencimento)} dia(s)</p>
+                      ) : (
+                        <p className="text-[11px] text-hagav-gray">{row.dias_para_vencimento} dia(s) restantes</p>
+                      )
                     )}
                   </td>
-                  <td><BadgeContrato status={resolveDisplayStatusContrato(row)} /></td>
+                  <td className="text-xs text-hagav-light max-w-[220px]" title={row.plano_servico || row.servico || ''}>
+                    {truncate(row.plano_servico || row.servico || '—', 54)}
+                  </td>
                   <td className="text-xs text-hagav-light">{row.responsavel_contrato || row.responsavel || '—'}</td>
                   <td>
                     {row.renovacao_alerta_em ? (
@@ -1232,8 +1236,8 @@ export default function ClientesPage() {
                   </td>
                   <td>
                     <div className="flex items-center gap-1.5">
-                      <button type="button" className="btn-ghost btn-sm" title="Gerar contrato em PDF" onClick={(event) => { event.stopPropagation(); handleGenerateContractPdf(row); }}>
-                        <Download size={12} /> PDF
+                      <button type="button" className="btn-ghost btn-sm px-2.5" title="Gerar contrato em PDF" aria-label="Gerar contrato em PDF" onClick={(event) => { event.stopPropagation(); handleGenerateContractPdf(row); }}>
+                        <Download size={13} />
                       </button>
                       {archived ? (
                         <button

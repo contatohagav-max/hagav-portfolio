@@ -103,6 +103,22 @@ function stripFinancialMetadata(observacoes) {
     .trim();
 }
 
+// Todas as linhas chave=valor do bloco de metadados, na ordem original.
+function readRawMetadataPairs(observacoes) {
+  const match = String(observacoes || '').match(FINANCEIRO_META_REGEX);
+  if (!match?.[0]) return [];
+  return match[0]
+    .replace(FINANCEIRO_META_START, '')
+    .replace(FINANCEIRO_META_END, '')
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.includes('='))
+    .map((line) => {
+      const [key, ...rest] = line.split('=');
+      return [key.trim(), rest.join('=').trim()];
+    });
+}
+
 function buildFinancialMetadataBlock(meta) {
   const lines = [
     FINANCEIRO_META_START,
@@ -113,6 +129,13 @@ function buildFinancialMetadataBlock(meta) {
   if (meta?.recorrencia_mes) lines.push(`recorrencia_mes=${String(meta.recorrencia_mes).trim()}`);
   if (meta?.recorrencia_origem) lines.push('recorrencia_origem=true');
   if (meta?.gerado_por_recorrencia) lines.push('gerado_por_recorrencia=true');
+  // Preserva as demais marcacoes que vieram de outros fluxos (ex.: contrato de cliente ativo).
+  const written = new Set(lines.map((line) => line.split('=')[0]));
+  (meta?.rawPairs || []).forEach(([key, value]) => {
+    if (!key || written.has(key)) return;
+    written.add(key);
+    lines.push(`${key}=${value}`);
+  });
   lines.push(FINANCEIRO_META_END);
   return lines.join('\n');
 }
@@ -290,6 +313,9 @@ function getFinancialTypeRank(entry) {
 }
 
 function compareFinancialEntries(a, b) {
+  // Atrasados (a receber ou a pagar) sempre no topo
+  const lateDiff = Number(effectiveFinancialStatus(b) === 'atrasado') - Number(effectiveFinancialStatus(a) === 'atrasado');
+  if (lateDiff !== 0) return lateDiff;
   const typeDiff = getFinancialTypeRank(a) - getFinancialTypeRank(b);
   if (typeDiff !== 0) return typeDiff;
 
@@ -346,6 +372,20 @@ function getOpenAmount(entry) {
 
 function getCostAmount(entry) {
   return isPaid(entry) ? getPaidAmount(entry) : getOpenAmount(entry);
+}
+
+// Ja existe lancamento equivalente (mesmo tipo, descricao e valor) no mes? Evita duplicar recorrencias.
+function hasEquivalentEntry(entries, payload, monthKey, ignoreId) {
+  const descricao = normalizeFinancialMetricKey(payload?.descricao);
+  const valor = Number(payload?.valor || 0).toFixed(2);
+  return (entries || []).some((entry) => {
+    if (!entry || entry.id === ignoreId || isCancelled(entry)) return false;
+    const due = getDueDate(entry);
+    if (!due || formatMonthKey(due) !== monthKey) return false;
+    return entry.tipo === payload?.tipo
+      && normalizeFinancialMetricKey(entry.descricao) === descricao
+      && getEntryValue(entry).toFixed(2) === valor;
+  });
 }
 
 function getMetricDuplicateKey(entry) {
@@ -477,6 +517,13 @@ function FinancialEditor({ entry, createMode, onClose, onSaved, onDeleted }) {
       setError('Valor pago não pode ser maior ou igual ao valor total. Use status Pago.');
       return;
     }
+    if (form.vencimento) {
+      const ano = Number(String(form.vencimento).slice(0, 4));
+      if (!Number.isFinite(ano) || ano < 2000 || ano > 2100) {
+        setError('Data de vencimento inválida. Confira o ano.');
+        return;
+      }
+    }
     const formaPagamento = form.forma_pagamento === 'Outro'
       ? String(form.forma_pagamento_outro || 'Outro').trim()
       : String(form.forma_pagamento || '').trim();
@@ -497,7 +544,10 @@ function FinancialEditor({ entry, createMode, onClose, onSaved, onDeleted }) {
           ? (!createMode && entry?.status === 'pago' && entry?.pago_em ? entry.pago_em : new Date().toISOString())
           : null,
         forma_pagamento: formaPagamento,
+        // Ao editar, preserva as marcacoes de recorrencia (origem, mes, gerado). Sem isso, um lancamento
+        // gerado virava "origem" de uma nova cadeia e duplicava os meses seguintes.
         observacoes: updateFinancialObservacoes(form.observacoes, {
+          ...(createMode ? {} : { ...getEntryMeta(entry), rawPairs: readRawMetadataPairs(entry?.observacoes) }),
           natureza: form.natureza,
           recorrente_mensal: form.recorrente_mensal,
         }),
@@ -749,6 +799,7 @@ export default function FinanceiroPage() {
     let pending = 0;
     let overdue = 0;
     let carriedOverdue = 0;
+    let overduePayables = 0;
     let costsHagav = 0;
     let personalCosts = 0;
 
@@ -775,6 +826,11 @@ export default function FinanceiroPage() {
         }
       }
 
+      if (isPagar(entry) && !isPaid(entry) && dueDate && isBeforeToday(dueDate, today)
+        && (isSameMonth(dueDate, referenceDate) || isCarriedOverdue(entry, referenceDate, today))) {
+        overduePayables += openAmount;
+      }
+
       if (isPagar(entry) && isSameMonth(dueDate, referenceDate)) {
         if (isEmpresa(entry)) costsHagav += getCostAmount(entry);
         if (isPessoal(entry)) personalCosts += getCostAmount(entry);
@@ -794,6 +850,7 @@ export default function FinanceiroPage() {
       pending,
       overdue,
       carriedOverdue,
+      overduePayables,
       costsHagav,
       personalCosts,
       margin,
@@ -894,6 +951,9 @@ export default function FinanceiroPage() {
       };
 
       const existing = generatedByMonth.get(recurrenceMonth);
+      if (!existing && hasEquivalentEntry(entries, recurrencePayload, recurrenceMonth, originId)) {
+        continue; // ja existe lancamento igual nesse mes (ex.: de outra cadeia): nao duplica
+      }
       if (!existing) {
         const created = await createFinancialEntry(recurrencePayload);
         changedEntries.push(created);
@@ -988,9 +1048,12 @@ export default function FinanceiroPage() {
     {
       label: 'Em atraso',
       value: metrics.overdue,
-      helper: metrics.carriedOverdue > 0
-        ? `Inclui ${fmtBRL(metrics.carriedOverdue)} de meses anteriores`
-        : 'Recebimentos vencidos e não pagos',
+      helper: [
+        metrics.carriedOverdue > 0
+          ? `A receber: inclui ${fmtBRL(metrics.carriedOverdue)} de meses anteriores`
+          : 'Recebimentos vencidos e não pagos',
+        metrics.overduePayables > 0 ? `A pagar em atraso: ${fmtBRL(metrics.overduePayables)}` : '',
+      ].filter(Boolean).join(' · '),
       icon: CircleDollarSign,
       tone: metrics.overdue > 0 ? 'text-red-300' : 'text-emerald-300',
     },

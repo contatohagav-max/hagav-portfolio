@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/StatusBadge';
 import EduTooltip from '@/components/ui/EduTooltip';
 import useAdaptivePanelWidth from '@/components/ui/useAdaptivePanelWidth';
+import useEscapeToClose from '@/components/ui/useEscapeToClose';
 import { updateLead } from '@/lib/supabase';
 import { enrichLeadRecord } from '@/lib/commercial';
 import { fmtDateTime, whatsappLink, LEAD_STATUS_LABELS, fmtBRL } from '@/lib/utils';
@@ -48,6 +49,7 @@ function InfoCard({ label, value }) {
 }
 
 export default function LeadDrawer({ lead, onClose, onUpdated }) {
+  useEscapeToClose(onClose);
   const adaptivePanel = useAdaptivePanelWidth({
     storageKey: 'hagav-drawer-lead-detail',
     widths: { base: 760, large: 900, ultrawide: 1020 },

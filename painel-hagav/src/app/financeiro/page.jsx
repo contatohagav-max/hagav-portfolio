@@ -492,7 +492,10 @@ function FinancialEditor({ entry, createMode, onClose, onSaved, onDeleted }) {
         valor_pago: valorPago,
         status: form.status,
         vencimento: form.vencimento || null,
-        pago_em: form.status === 'pago' ? new Date().toISOString() : null,
+        // Mantem a data real do pagamento ao editar algo que ja estava pago (ex.: Pix importado do banco).
+        pago_em: form.status === 'pago'
+          ? (!createMode && entry?.status === 'pago' && entry?.pago_em ? entry.pago_em : new Date().toISOString())
+          : null,
         forma_pagamento: formaPagamento,
         observacoes: updateFinancialObservacoes(form.observacoes, {
           natureza: form.natureza,
@@ -501,7 +504,8 @@ function FinancialEditor({ entry, createMode, onClose, onSaved, onDeleted }) {
       };
       const saved = createMode
         ? await createFinancialEntry(payload)
-        : await updateFinancialEntry(entry.id, payload);
+        // Salvar pelo formulario conta como conferido: tira a marca "Revisar" da importacao.
+        : await updateFinancialEntry(entry.id, { ...payload, ...(entry?.revisar ? { revisar: false } : {}) });
       await onSaved?.(saved);
       onClose?.();
     } catch (err) {
@@ -695,6 +699,7 @@ export default function FinanceiroPage() {
   const [tipo, setTipo] = useState('');
   const [status, setStatus] = useState('');
   const [naturezaFilter, setNaturezaFilter] = useState('');
+  const [revisarOnly, setRevisarOnly] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState(() => startOfMonth(new Date()));
   const [selected, setSelected] = useState(null);
   const [creating, setCreating] = useState(false);
@@ -929,6 +934,7 @@ export default function FinanceiroPage() {
     setTipo('');
     setStatus('');
     setNaturezaFilter('');
+    setRevisarOnly(false);
   }
 
   function goToPreviousMonth() {
@@ -1021,9 +1027,12 @@ export default function FinanceiroPage() {
       const carried = viewingCurrentMonth && isCarriedOverdue(entry, selectedMonth);
       if (!isSameMonth(dueDate, selectedMonth) && !carried) return false;
       if (naturezaFilter && getEntryMeta(entry).natureza !== naturezaFilter) return false;
+      if (revisarOnly && !entry.revisar) return false;
       return true;
     }).sort(compareFinancialEntries)
-  ), [entries, naturezaFilter, selectedMonth]);
+  ), [entries, naturezaFilter, revisarOnly, selectedMonth]);
+
+  const revisarCount = useMemo(() => entries.filter((entry) => entry.revisar).length, [entries]);
 
   const selectedMonthLabel = formatMonthLabel(selectedMonth);
 
@@ -1076,7 +1085,7 @@ export default function FinanceiroPage() {
         ))}
       </div>
 
-      <div className="hcard p-3 grid grid-cols-1 md:grid-cols-[1fr_180px_180px_160px_150px] gap-2">
+      <div className="hcard p-3 grid grid-cols-1 md:grid-cols-[1fr_170px_170px_150px_auto_auto] gap-2">
         <div className="relative">
           <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-hagav-gray" />
           <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar nome, cliente ou categoria..." className="hinput w-full pl-8" />
@@ -1098,6 +1107,16 @@ export default function FinanceiroPage() {
             <option key={item} value={item}>{item}</option>
           ))}
         </select>
+        {revisarCount > 0 && (
+          <button
+            type="button"
+            onClick={() => setRevisarOnly((value) => !value)}
+            className={classNames('btn-ghost btn-sm justify-center', revisarOnly && 'border-amber-500/50 text-amber-300')}
+            title="Lançamentos importados do banco que precisam de conferência"
+          >
+            Revisar ({revisarCount})
+          </button>
+        )}
         <button type="button" onClick={clearFilters} className="btn-ghost btn-sm justify-center">
           Limpar filtros
         </button>
@@ -1159,7 +1178,15 @@ export default function FinanceiroPage() {
                       </div>
                     </td>
                     <td className="px-4 py-3">
-                      <p className="text-hagav-white font-medium">{entry.descricao}</p>
+                      <p className="text-hagav-white font-medium">
+                        {entry.descricao}
+                        {entry.revisar && (
+                          <span className="badge ml-2 align-middle bg-amber-500/15 text-amber-300 border-amber-500/30">Revisar</span>
+                        )}
+                        {String(entry.fonte || '').startsWith('c6') && (
+                          <span className="badge ml-1.5 align-middle bg-hagav-muted/40 text-hagav-gray border-hagav-border">C6</span>
+                        )}
+                      </p>
                       {observation && <p className="text-[11px] text-hagav-gray mt-1 line-clamp-1">{observation}</p>}
                     </td>
                     <td className="px-4 py-3 text-hagav-light">{entry.categoria || '-'}</td>

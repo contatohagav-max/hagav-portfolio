@@ -938,6 +938,56 @@ async function handleFinancialImport(config, body) {
   };
 }
 
+async function handleFinancialList(config, url) {
+  const params = url.searchParams;
+  const filters = ['select=id,tipo,categoria,descricao,cliente_fornecedor,valor,valor_pago,status,vencimento,pago_em,forma_pagamento,origin_key,fonte,revisar,observacoes,deal_id,created_at'];
+  const de = toDateOnly(params.get('de'));
+  const ate = toDateOnly(params.get('ate'));
+  if (de) filters.push(`vencimento=gte.${de}`);
+  if (ate) filters.push(`vencimento=lte.${ate}`);
+  const tipo = pickEnum(params.get('tipo'), ['receber', 'pagar']);
+  if (tipo) filters.push(`tipo=eq.${tipo}`);
+  if (params.get('abertos') === '1') filters.push('status=in.(pendente,parcial,atrasado)');
+  const limit = toInt(params.get('limit'), { min: 1, max: 2000 }) ?? 1000;
+  filters.push('order=vencimento.asc.nullslast', `limit=${limit}`);
+  const rows = await sb(config, `financial_entries?${filters.join('&')}`) || [];
+  return { ok: true, lancamentos: rows };
+}
+
+async function handleFinancialPatch(config, id, body) {
+  const rows = await sb(config, `financial_entries?select=*&id=eq.${encodeURIComponent(id)}&limit=1`);
+  const current = rows?.[0];
+  if (!current) throw new HttpError(404, 'lancamento_nao_encontrado');
+
+  const patch = {};
+  if ('status' in body) {
+    const status = pickEnum(body.status, FIN_STATUS);
+    if (!status) throw new HttpError(400, 'status_invalido');
+    patch.status = status;
+  }
+  if ('valor_pago' in body) patch.valor_pago = toMoney(body.valor_pago) ?? 0;
+  if ('pago_em' in body) patch.pago_em = toIso(body.pago_em);
+  if ('forma_pagamento' in body) patch.forma_pagamento = nullableText(body.forma_pagamento, 60);
+  if ('categoria' in body) patch.categoria = cleanText(body.categoria, 80) || current.categoria;
+  if ('revisar' in body) patch.revisar = Boolean(body.revisar);
+  if ('fonte' in body) patch.fonte = cleanText(body.fonte, 40) || current.fonte;
+  if ('dados_banco' in body && body.dados_banco && typeof body.dados_banco === 'object') patch.dados_banco = safeJsonObject(body.dados_banco, 4000);
+  const nota = cleanText(body.observacao_adicional, 600, { multiline: true });
+  if (nota) patch.observacoes = [current.observacoes, nota].filter(Boolean).join('\n');
+  if (patch.status === 'pago') {
+    if (!('valor_pago' in body)) patch.valor_pago = Number(current.valor || 0);
+    if (!patch.pago_em) patch.pago_em = current.pago_em || new Date().toISOString();
+  }
+  if (!Object.keys(patch).length) throw new HttpError(400, 'nada_para_atualizar');
+
+  const updated = await sb(config, `financial_entries?id=eq.${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    body: patch,
+    prefer: 'return=representation',
+  });
+  return { ok: true, lancamento: updated?.[0] };
+}
+
 // ---------------------------------------------------------------------------
 // Status
 // ---------------------------------------------------------------------------
@@ -1002,7 +1052,12 @@ async function route(context, config, segments) {
 
   if (resource === 'bloqueios' && !sub && method === 'POST') return handleSuppressionAdd(config, body);
 
-  if (resource === 'financeiro' && sub === 'lancamentos' && method === 'POST') return handleFinancialImport(config, body);
+  if (resource === 'financeiro' && sub === 'lancamentos') {
+    const id = segments[2];
+    if (!id && method === 'POST') return handleFinancialImport(config, body);
+    if (!id && method === 'GET') return handleFinancialList(config, url);
+    if (id && method === 'PATCH') return handleFinancialPatch(config, requireId(id), body);
+  }
 
   throw new HttpError(404, 'rota_nao_encontrada');
 }

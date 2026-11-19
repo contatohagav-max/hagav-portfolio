@@ -1088,7 +1088,10 @@ export default function FinanceiroPage() {
       const dueDate = getDueDate(entry);
       const viewingCurrentMonth = isSameMonth(new Date(), selectedMonth);
       const carried = viewingCurrentMonth && isCarriedOverdue(entry, selectedMonth);
-      if (!isSameMonth(dueDate, selectedMonth) && !carried) return false;
+      // Sem data valida: aparece no mes atual para nao ficar invisivel.
+      const semData = viewingCurrentMonth && (!dueDate || dueDate.getFullYear() > 2100 || dueDate.getFullYear() < 2000);
+      // O filtro "Revisar" mostra tudo que precisa de conferencia, de qualquer mes.
+      if (!revisarOnly && !isSameMonth(dueDate, selectedMonth) && !carried && !semData) return false;
       if (naturezaFilter && getEntryMeta(entry).natureza !== naturezaFilter) return false;
       if (revisarOnly && !entry.revisar) return false;
       return true;
@@ -1253,7 +1256,11 @@ export default function FinanceiroPage() {
                       {observation && <p className="text-[11px] text-hagav-gray mt-1 line-clamp-1">{observation}</p>}
                     </td>
                     <td className="px-4 py-3 text-hagav-light">{entry.categoria || '-'}</td>
-                    <td className="px-4 py-3 text-hagav-light">{entry.vencimento ? fmtDate(entry.vencimento) : '-'}</td>
+                    <td className="px-4 py-3 text-hagav-light">
+                      {entry.vencimento && Number(String(entry.vencimento).slice(0, 4)) <= 2100
+                        ? fmtDate(entry.vencimento)
+                        : <span className="text-amber-300">Sem data</span>}
+                    </td>
                     <td className={classNames('px-4 py-3 font-semibold', entry.tipo === 'receber' ? 'text-emerald-300' : 'text-red-300')}>{fmtBRL(entry.valor)}</td>
                     <td className="px-4 py-3 text-hagav-light">{displayPaid}</td>
                     <td className="px-4 py-3">

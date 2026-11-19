@@ -1,5 +1,5 @@
 import { OrcStatusBadge, UrgenciaBadge } from '@/components/ui/StatusBadge';
-import { fmtRelative, fmtBRL, truncate } from '@/lib/utils';
+import { fmtRelative, fmtBRL, fmtPercent, fmtTelefone, rotuloOrigem, truncate } from '@/lib/utils';
 
 function isUiArchived(row) {
   let detalhes = {};
@@ -70,10 +70,10 @@ export default function OrcamentosTable({ orcamentos, onSelect, onToggleArchive 
                         <span className="badge bg-zinc-500/20 text-zinc-300 border-zinc-500/30">Arquivado</span>
                       )}
                     </div>
-                    <p className="text-[11px] text-hagav-gray font-mono">{orc.whatsapp || ''}</p>
+                    <p className="text-[11px] text-hagav-gray">{fmtTelefone(orc.whatsapp)}</p>
                     <div className="flex items-center gap-1.5 mt-1">
                       {orc.fluxo && <span className="badge bg-hagav-muted/40 border-hagav-border text-hagav-light">{orc.fluxo}</span>}
-                      {orc.origem && <span className="text-[11px] text-hagav-gray truncate max-w-[140px]">{truncate(orc.origem, 22)}</span>}
+                      {orc.origem && <span className="text-[11px] text-hagav-gray truncate max-w-[140px]">{truncate(rotuloOrigem(orc.origem), 22)}</span>}
                     </div>
                   </div>
                 </td>
@@ -93,7 +93,7 @@ export default function OrcamentosTable({ orcamentos, onSelect, onToggleArchive 
                   </p>
                 </td>
                 <td className="text-xs text-hagav-light" title="Margem sobre o preço final">
-                  {`${Number(orc.margem_comercial ?? orc.margem_percentual ?? orc.margem_estimada ?? 0).toFixed(1)}%`}
+                  {fmtPercent(orc.margem_comercial ?? orc.margem_percentual ?? orc.margem_estimada ?? 0)}
                 </td>
                 <td>
                   <div className="flex flex-col items-start gap-1">

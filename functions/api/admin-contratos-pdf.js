@@ -845,6 +845,8 @@ function sanitizeContractInput(rawInput = {}) {
     nome_cliente: normalizeTemplateText(input?.nome_cliente ?? input?.cliente_nome, 180, { allowEmpty: true }),
     cpf_cnpj_cliente: normalizeTemplateText(input?.cpf_cnpj ?? input?.cpf_cnpj_cliente, 60, { allowEmpty: true }),
     email_cliente: normalizeTemplateText(input?.email_cliente, 140, { allowEmpty: true }),
+    endereco_cliente: normalizeTemplateText(input?.endereco_cliente, 300, { allowEmpty: true }),
+    cep_cliente: normalizeTemplateText(String(input?.cep_cliente ?? "").replace(/\D/g, "").slice(0, 8), 8, { allowEmpty: true }),
     forma_pagamento: normalizeTemplateText(input?.forma_pagamento, 120, { allowEmpty: true }),
     pix: normalizeTemplateText(input?.pix ?? input?.chave_pix, 220, { allowEmpty: true }),
     resumo_servico: normalizeTemplateText(input?.resumo_servico, 1000, { allowEmpty: true }),

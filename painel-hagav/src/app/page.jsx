@@ -25,21 +25,15 @@ import {
   YAxis,
   Tooltip,
   ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
-  Legend,
-  ComposedChart,
-  Line,
-  CartesianGrid,
+  LabelList,
 } from 'recharts';
 import MetricCard from '@/components/dashboard/MetricCard';
 import RecentLeads from '@/components/dashboard/RecentLeads';
+import HojePanel from '@/components/dashboard/HojePanel';
 import EduTooltip from '@/components/ui/EduTooltip';
 import { fetchDashboardMetrics } from '@/lib/supabase';
-import { fmtBRL, fmtPercent, fmtHours } from '@/lib/utils';
+import { URGENCIA_LABELS, fmtBRL, fmtPercent, fmtHours, rotuloOrigem } from '@/lib/utils';
 
-const COLORS_PIE = ['#C9A84C', '#F97316', '#22C55E', '#3B82F6', '#8B5CF6'];
 
 const EMPTY_INSIGHTS = {
   metrics: {
@@ -204,6 +198,37 @@ function SectionHeader({ eyebrow, title, description, action }) {
   );
 }
 
+const TOOLTIP_STYLE = { background: '#161616', border: '1px solid #2A2A2A', borderRadius: 10, fontSize: 12 };
+const EIXO_CATEGORIA = { fill: '#c9c7c2', fontSize: 12 };
+const CURSOR = { fill: 'rgba(255,255,255,0.04)' };
+const COR_BARRA = '#F5A623';
+const CORES_URGENCIA = { alta: '#d03b3b', media: '#fab219', baixa: '#77756f' };
+
+// Barras horizontais: a altura acompanha a quantidade de categorias, para os nomes caberem inteiros.
+// Rotulo ao lado da barra numa linha so (o padrao do recharts quebra o texto em espacos estreitos).
+function RotuloBarra({ x, y, width, height, value }) {
+  if (value === undefined || value === null || value === '') return null;
+  return (
+    <text x={Number(x) + Number(width) + 8} y={Number(y) + Number(height) / 2 + 4} fill="#c9c7c2" fontSize={11}>
+      {value}
+    </text>
+  );
+}
+
+function alturaBarras(qtd) {
+  return Math.max(150, qtd * 40 + 16);
+}
+
+function encurtar(texto, max = 26) {
+  const t = String(texto || '');
+  return t.length > max ? `${t.slice(0, max - 1)}…` : t;
+}
+
+function compactoBRL(valor) {
+  const n = Number(valor || 0);
+  return n >= 1000 ? `R$ ${(n / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} mil` : fmtBRL(n);
+}
+
 function ChartCard({ title, icon: Icon, description, tooltip, children, empty, loading }) {
   return (
     <div className="dashboard-panel dashboard-chart-card">
@@ -341,6 +366,25 @@ const lists = safeInsights.lists;
     },
   ];
 
+  const origemData = (charts.origemConversao || []).map((o) => ({
+    ...o,
+    rotulo: rotuloOrigem(o.origem),
+    texto: `${o.leads} · ${fmtPercent(o.conversao, 0)} fecham`,
+  }));
+  const totalUrgencia = (charts.leadsPorUrgencia || []).reduce((a, u) => a + u.total, 0);
+  const urgenciaData = totalUrgencia > 0
+    ? charts.leadsPorUrgencia.map((u) => ({
+      ...u,
+      nome: URGENCIA_LABELS[u.urgencia] || u.urgencia,
+      cor: CORES_URGENCIA[u.urgencia] || '#77756f',
+      pct: (u.total / totalUrgencia) * 100,
+    }))
+    : [];
+  const servicosData = (charts.servicosMaisPedidos || []).map((x) => ({ ...x, rotulo: encurtar(x.servico) }));
+  const receitaData = (charts.receitaPorServico || [])
+    .filter((x) => x.valor > 0)
+    .map((x) => ({ ...x, rotulo: encurtar(x.servico), texto: compactoBRL(x.valor) }));
+
   return (
     <div className="dashboard-shell animate-fade-in">
       <div className="flex items-center justify-between gap-3">
@@ -363,6 +407,8 @@ const lists = safeInsights.lists;
           {loadError}
         </p>
       )}
+
+      <HojePanel atualizarEm={lastRefreshLabel} />
 
       <section className="dashboard-section">
         <SectionHeader
@@ -468,26 +514,19 @@ const lists = safeInsights.lists;
             title="Origem x conversão"
             icon={TrendingUp}
             tooltip={CHART_TOOLTIPS.origem_conversao}
-            description="Volume por origem e taxa média de fechamento"
-            empty={charts.origemConversao.length === 0}
+            description="Quantos leads vieram de cada origem e quantos fecharam"
+            empty={origemData.length === 0}
             loading={loading}
           >
-            <ResponsiveContainer width="100%" height={220}>
-              <ComposedChart data={charts.origemConversao} margin={{ top: 6, right: 8, left: -18, bottom: 0 }}>
-                <CartesianGrid stroke="#202020" strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="origem" tick={{ fill: '#909090', fontSize: 11 }} axisLine={false} tickLine={false} />
-                <YAxis yAxisId="left" tick={{ fill: '#909090', fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
-                <YAxis yAxisId="right" orientation="right" tick={{ fill: '#909090', fontSize: 11 }} axisLine={false} tickLine={false} />
-                <Tooltip
-                  contentStyle={{ background: '#161616', border: '1px solid #2A2A2A', borderRadius: 10, fontSize: 12 }}
-                  formatter={(value, name) => {
-                    if (name === 'conversao') return [`${Number(value).toFixed(1)}%`, 'Conversão'];
-                    return [value, 'Leads'];
-                  }}
-                />
-                <Bar yAxisId="left" dataKey="leads" fill="#C9A84C" radius={[5, 5, 0, 0]} maxBarSize={34} />
-                <Line yAxisId="right" type="monotone" dataKey="conversao" stroke="#3B82F6" strokeWidth={2} dot={{ r: 3 }} />
-              </ComposedChart>
+            <ResponsiveContainer width="100%" height={alturaBarras(origemData.length)}>
+              <BarChart data={origemData} layout="vertical" margin={{ top: 4, right: 132, left: 4, bottom: 4 }}>
+                <XAxis type="number" hide allowDecimals={false} />
+                <YAxis type="category" dataKey="rotulo" width={140} tick={EIXO_CATEGORIA} axisLine={false} tickLine={false} />
+                <Tooltip cursor={CURSOR} contentStyle={TOOLTIP_STYLE} formatter={(v, _n, item) => [`${v} leads · ${item.payload.fechados} fecharam`, item.payload.rotulo]} labelFormatter={() => ''} />
+                <Bar dataKey="leads" fill={COR_BARRA} radius={[0, 4, 4, 0]} maxBarSize={22}>
+                  <LabelList dataKey="texto" content={RotuloBarra} />
+                </Bar>
+              </BarChart>
             </ResponsiveContainer>
           </ChartCard>
 
@@ -496,31 +535,25 @@ const lists = safeInsights.lists;
             icon={Siren}
             tooltip={CHART_TOOLTIPS.leads_urgencia}
             description="Distribuição dos leads por prioridade de atendimento"
-            empty={charts.leadsPorUrgencia.length === 0}
+            empty={urgenciaData.length === 0}
             loading={loading}
           >
-            <ResponsiveContainer width="100%" height={220}>
-              <PieChart>
-                <Pie
-                  data={charts.leadsPorUrgencia}
-                  dataKey="total"
-                  nameKey="urgencia"
-                  cx="50%"
-                  cy="50%"
-                  outerRadius={76}
-                  innerRadius={40}
-                  paddingAngle={4}
-                >
-                  {charts.leadsPorUrgencia.map((_, idx) => (
-                    <Cell key={idx} fill={COLORS_PIE[idx % COLORS_PIE.length]} />
-                  ))}
-                </Pie>
-                <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11, color: '#999' }} />
-                <Tooltip
-                  contentStyle={{ background: '#161616', border: '1px solid #2A2A2A', borderRadius: 10, fontSize: 12 }}
-                />
-              </PieChart>
-            </ResponsiveContainer>
+            <div className="space-y-3 py-2">
+              {urgenciaData.map((u) => (
+                <div key={u.urgencia}>
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="flex items-center gap-2 text-hagav-light">
+                      <span className="inline-block w-2.5 h-2.5 rounded-full" style={{ background: u.cor }} />
+                      {u.nome}
+                    </span>
+                    <span className="text-hagav-white font-medium">{u.total} {u.total === 1 ? 'lead' : 'leads'} · {fmtPercent(u.pct, 0)}</span>
+                  </div>
+                  <div className="mt-1.5 h-2.5 w-full rounded-full bg-hagav-surface overflow-hidden">
+                    <div className="h-full rounded-full" style={{ width: `${u.pct}%`, background: u.cor }} />
+                  </div>
+                </div>
+              ))}
+            </div>
           </ChartCard>
         </div>
 
@@ -530,16 +563,17 @@ const lists = safeInsights.lists;
             icon={Filter}
             tooltip={CHART_TOOLTIPS.servicos_pedidos}
             description="Serviços com maior volume de demanda no período"
-            empty={charts.servicosMaisPedidos.length === 0}
+            empty={servicosData.length === 0}
             loading={loading}
           >
-            <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={charts.servicosMaisPedidos} margin={{ top: 8, right: 8, left: -24, bottom: 0 }}>
-                <CartesianGrid stroke="#202020" strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="servico" tick={{ fill: '#909090', fontSize: 10 }} axisLine={false} tickLine={false} />
-                <YAxis allowDecimals={false} tick={{ fill: '#909090', fontSize: 11 }} axisLine={false} tickLine={false} />
-                <Tooltip contentStyle={{ background: '#161616', border: '1px solid #2A2A2A', borderRadius: 10, fontSize: 12 }} />
-                <Bar dataKey="total" fill="#F59E0B" radius={[5, 5, 0, 0]} maxBarSize={34} />
+            <ResponsiveContainer width="100%" height={alturaBarras(servicosData.length)}>
+              <BarChart data={servicosData} layout="vertical" margin={{ top: 4, right: 48, left: 4, bottom: 4 }}>
+                <XAxis type="number" hide allowDecimals={false} />
+                <YAxis type="category" dataKey="rotulo" width={176} tick={EIXO_CATEGORIA} axisLine={false} tickLine={false} />
+                <Tooltip cursor={CURSOR} contentStyle={TOOLTIP_STYLE} formatter={(v, _n, item) => [`${v} pedido(s)`, item.payload.servico]} labelFormatter={() => ''} />
+                <Bar dataKey="total" fill={COR_BARRA} radius={[0, 4, 4, 0]} maxBarSize={22}>
+                  <LabelList dataKey="total" content={RotuloBarra} />
+                </Bar>
               </BarChart>
             </ResponsiveContainer>
           </ChartCard>
@@ -549,19 +583,17 @@ const lists = safeInsights.lists;
             icon={CircleDollarSign}
             tooltip={CHART_TOOLTIPS.receita_servico}
             description="Participação de receita estimada por serviço"
-            empty={charts.receitaPorServico.length === 0}
+            empty={receitaData.length === 0}
             loading={loading}
           >
-            <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={charts.receitaPorServico} margin={{ top: 8, right: 8, left: -24, bottom: 0 }}>
-                <CartesianGrid stroke="#202020" strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="servico" tick={{ fill: '#909090', fontSize: 10 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fill: '#909090', fontSize: 11 }} axisLine={false} tickLine={false} />
-                <Tooltip
-                  contentStyle={{ background: '#161616', border: '1px solid #2A2A2A', borderRadius: 10, fontSize: 12 }}
-                  formatter={(value) => [fmtBRL(value), 'Receita']}
-                />
-                <Bar dataKey="valor" fill="#22C55E" radius={[5, 5, 0, 0]} maxBarSize={34} />
+            <ResponsiveContainer width="100%" height={alturaBarras(receitaData.length)}>
+              <BarChart data={receitaData} layout="vertical" margin={{ top: 4, right: 92, left: 4, bottom: 4 }}>
+                <XAxis type="number" hide />
+                <YAxis type="category" dataKey="rotulo" width={176} tick={EIXO_CATEGORIA} axisLine={false} tickLine={false} />
+                <Tooltip cursor={CURSOR} contentStyle={TOOLTIP_STYLE} formatter={(v, _n, item) => [fmtBRL(v), item.payload.servico]} labelFormatter={() => ''} />
+                <Bar dataKey="valor" fill={COR_BARRA} radius={[0, 4, 4, 0]} maxBarSize={22}>
+                  <LabelList dataKey="texto" content={RotuloBarra} />
+                </Bar>
               </BarChart>
             </ResponsiveContainer>
           </ChartCard>

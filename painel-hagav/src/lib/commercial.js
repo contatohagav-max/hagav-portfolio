@@ -1757,7 +1757,7 @@ export function buildDashboardInsights(rawLeads = [], rawOrcamentos = []) {
     charts: {
       origemConversao: origemGrouped,
       servicosMaisPedidos: serviceDemand,
-      receitaPorServiço: revenueByService,
+      receitaPorServico: revenueByService,
       funilPipeline: pipeline,
       leadsPorUrgencia: urgenciaData,
     },

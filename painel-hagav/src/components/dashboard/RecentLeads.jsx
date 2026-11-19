@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
 import { LeadStatusBadge, OrcStatusBadge, PrioridadeBadge } from '@/components/ui/StatusBadge';
-import { fmtRelative, fmtBRL } from '@/lib/utils';
+import { fmtRelative, fmtBRL, rotuloOrigem } from '@/lib/utils';
 
 function getEntryTypeLabel(entry) {
   if (entry?.entryType === 'orcamento' || entry?.status_orcamento) return 'Orçamento';
@@ -66,7 +66,7 @@ export default function RecentLeads({ entries = [], leads = [] }) {
                       <div className="grid grid-cols-2 gap-2.5 text-[11px]">
                         <div className="rounded-xl border border-hagav-border/60 bg-hagav-surface/50 px-3 py-2">
                           <p className="text-hagav-gray uppercase tracking-[0.18em] text-[10px] mb-1">Origem</p>
-                          <p className="text-hagav-light truncate">{entry?.origem || '—'}</p>
+                          <p className="text-hagav-light truncate">{rotuloOrigem(entry?.origem)}</p>
                         </div>
                         <div className="rounded-xl border border-hagav-border/60 bg-hagav-surface/50 px-3 py-2">
                           <p className="text-hagav-gray uppercase tracking-[0.18em] text-[10px] mb-1">Valor</p>
@@ -87,7 +87,7 @@ export default function RecentLeads({ entries = [], leads = [] }) {
                       <div className="min-w-0">
                         <p className="text-sm font-medium text-hagav-light truncate">{entry?.nome || 'Sem nome'}</p>
                       </div>
-                      <p className="text-xs text-hagav-gray truncate">{entry?.origem || '—'}</p>
+                      <p className="text-xs text-hagav-gray truncate">{rotuloOrigem(entry?.origem)}</p>
                       <p className="text-xs text-hagav-gray truncate">{typeLabel} · {tipo}</p>
                       <p className="text-xs text-hagav-light font-medium">{valor}</p>
                       <div className="flex items-center">

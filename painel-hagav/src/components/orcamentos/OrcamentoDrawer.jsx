@@ -25,7 +25,7 @@ import {
   parseDurationToHours,
 } from '@/lib/commercial';
 import { buildAutoOptionDraft, buildCommercialScopeText, buildComparativeCalculatedDraft, buildProposalPreviewModel, buildRecurringCalculatedDraft } from '@/lib/proposal';
-import { fmtDateTime, fmtBRL, whatsappLink, ORC_STATUS_LABELS } from '@/lib/utils';
+import { fmtDateTime, fmtBRL, fmtNumero, fmtPercent, whatsappLink, ORC_STATUS_LABELS } from '@/lib/utils';
 
 const ORC_STATUSES = ['orcamento', 'proposta_enviada', 'ajustando', 'aprovado', 'perdido'];
 const WHATSAPP_TOOLTIP = {
@@ -2335,11 +2335,11 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
             <InfoRow label="Preço final editável" value={fmtBRL(financialMetrics.preco_final || 0)} />
-            <InfoRow label="Margem automática (motor)" value={`${Number(autoPricing.margemEstimada ?? orc.margem_automatica ?? orc.margem_estimada ?? 0).toFixed(1)}%`} />
-            <InfoRow label="Margem comercial (preco final)" value={`${Number(financialMetrics.margem_percentual || 0).toFixed(1)}%`} />
+            <InfoRow label="Margem automática (motor)" value={fmtPercent(autoPricing.margemEstimada ?? orc.margem_automatica ?? orc.margem_estimada ?? 0)} />
+            <InfoRow label="Margem comercial (preco final)" value={fmtPercent(financialMetrics.margem_percentual || 0)} />
             <InfoRow label="Lucro estimado" value={fmtBRL(financialMetrics.lucro_estimado || 0)} />
             <InfoRow label="Custo real" value={fmtBRL(autoPricing.custoReal || autoPricing.custoEstimado || 0)} />
-            <InfoRow label="Horas totais" value={`${Number(autoPricing.totalHoras || 0).toFixed(2)}h`} />
+            <InfoRow label="Horas totais" value={`${fmtNumero(autoPricing.totalHoras || 0, 2)} h`} />
             <InfoRow label="Pacote sugerido" value={autoPricing.pacoteSugerido || orc.pacote_sugerido || '—'} />
             <InfoRow label="Faixa sugerida" value={autoPricing.faixaSugerida || orc.faixa_sugerida || '—'} />
             <InfoRow label="Proposta PDF" value={propostaLink ? 'Gerada' : 'Pendente'} />
@@ -2505,10 +2505,10 @@ export default function OrcamentoDrawer({ orc, onClose, onUpdated }) {
                         />
                       </div>
                       <div className="grid grid-cols-2 gap-2">
-                        <InfoRow label="Horas/un" value={effectiveHours > 0 ? `${effectiveHours.toFixed(2)}h` : '—'} />
+                        <InfoRow label="Horas/un" value={effectiveHours > 0 ? `${fmtNumero(effectiveHours, 2)} h` : '—'} />
                         <InfoRow label="Custo real" value={parsedTime.valid ? fmtBRL(itemResult?.custo_real_item || 0) : '—'} />
                         <InfoRow label="Sugerido" value={parsedTime.valid ? fmtBRL(itemResult?.valor_sugerido_item || 0) : '—'} />
-                        <InfoRow label="Margem" value={parsedTime.valid && Number.isFinite(Number(itemResult?.margem_item)) ? `${Number(itemResult.margem_item).toFixed(1)}%` : '—'} />
+                        <InfoRow label="Margem" value={parsedTime.valid && Number.isFinite(Number(itemResult?.margem_item)) ? fmtPercent(itemResult.margem_item) : '—'} />
                       </div>
                     </div>
 

@@ -22,9 +22,9 @@ function Section({ icon: Icon, title, description, children }) {
   );
 }
 
-function NumberField({ label, value, onChange, step = 1, min = 0, max }) {
+function NumberField({ label, value, onChange, step = 1, min = 0, max, dica }) {
   return (
-    <label className="space-y-1">
+    <label className="space-y-1" title={dica || undefined}>
       <span className="text-xs text-hagav-gray uppercase tracking-wider">{label}</span>
       <input
         type="number"
@@ -288,8 +288,8 @@ export default function ConfiguracoesPage() {
             <div className="grid grid-cols-1 md:grid-cols-5 gap-2">
               {volumeDiscounts.map((tier, index) => (
                 <div key={`${tier.min}-${tier.max}-${index}`} className="bg-hagav-surface border border-hagav-border rounded-lg p-2 space-y-2">
-                  <NumberField label="Min" value={Number(tier.min || 0)} onChange={(v) => updateVolumeTier(index, 'min', v)} min={0} />
-                  <NumberField label="Max" value={Number(tier.max || 0)} onChange={(v) => updateVolumeTier(index, 'max', v)} min={0} />
+                  <NumberField label="De (vídeos)" value={Number(tier.min || 0)} onChange={(v) => updateVolumeTier(index, 'min', v)} min={0} />
+                  <NumberField label="Até (vídeos)" value={Number(tier.max || 0)} onChange={(v) => updateVolumeTier(index, 'max', v)} min={0} />
                   <NumberField label="Desconto %" value={Number(tier.percent || 0)} onChange={(v) => updateVolumeTier(index, 'percent', v)} min={0} max={100} />
                 </div>
               ))}
@@ -297,25 +297,25 @@ export default function ConfiguracoesPage() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
-            <NumberField label="N1" value={Number(pricing?.complexidade?.N1 || 0)} onChange={(v) => setPricingPath(['complexidade', 'N1'], v)} step={0.01} min={0.1} />
-            <NumberField label="N2" value={Number(pricing?.complexidade?.N2 || 0)} onChange={(v) => setPricingPath(['complexidade', 'N2'], v)} step={0.01} min={0.1} />
-            <NumberField label="N3" value={Number(pricing?.complexidade?.N3 || 0)} onChange={(v) => setPricingPath(['complexidade', 'N3'], v)} step={0.01} min={0.1} />
-            <NumberField label="N1 ate (min)" value={Number(pricing?.complexidade?.n1MaxMin || 0)} onChange={(v) => setPricingPath(['complexidade', 'n1MaxMin'], v)} min={0} />
-            <NumberField label="N2 ate (min)" value={Number(pricing?.complexidade?.n2MaxMin || 0)} onChange={(v) => setPricingPath(['complexidade', 'n2MaxMin'], v)} min={0} />
+            <NumberField label="N1 · simples (×)" dica="Multiplicador do preço para edição simples" value={Number(pricing?.complexidade?.N1 || 0)} onChange={(v) => setPricingPath(['complexidade', 'N1'], v)} step={0.01} min={0.1} />
+            <NumberField label="N2 · média (×)" dica="Multiplicador do preço para edição de complexidade média" value={Number(pricing?.complexidade?.N2 || 0)} onChange={(v) => setPricingPath(['complexidade', 'N2'], v)} step={0.01} min={0.1} />
+            <NumberField label="N3 · complexa (×)" dica="Multiplicador do preço para edição complexa" value={Number(pricing?.complexidade?.N3 || 0)} onChange={(v) => setPricingPath(['complexidade', 'N3'], v)} step={0.01} min={0.1} />
+            <NumberField label="N1 até (minutos)" dica="Vídeos até esta duração contam como N1" value={Number(pricing?.complexidade?.n1MaxMin || 0)} onChange={(v) => setPricingPath(['complexidade', 'n1MaxMin'], v)} min={0} />
+            <NumberField label="N2 até (minutos)" dica="Vídeos até esta duração contam como N2; acima disso, N3" value={Number(pricing?.complexidade?.n2MaxMin || 0)} onChange={(v) => setPricingPath(['complexidade', 'n2MaxMin'], v)} min={0} />
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-            <NumberField label="DU Urgente" value={Number(pricing?.urgencia?.DU?.Urgente || 1)} onChange={(v) => setPricingPath(['urgencia', 'DU', 'Urgente'], v)} step={0.01} min={0.5} />
-            <NumberField label="DU Em até 7 dias" value={Number(pricing?.urgencia?.DU?.['Em até 7 dias'] || 1)} onChange={(v) => setPricingPath(['urgencia', 'DU', 'Em até 7 dias'], v)} step={0.01} min={0.5} />
-            <NumberField label="DR Urgente" value={Number(pricing?.urgencia?.DR?.Urgente || 1)} onChange={(v) => setPricingPath(['urgencia', 'DR', 'Urgente'], v)} step={0.01} min={0.5} />
-            <NumberField label="VSL Em até 7 dias" value={Number(pricing?.urgencia?.VSL?.['Em até 7 dias'] || 1)} onChange={(v) => setPricingPath(['urgencia', 'VSL', 'Em até 7 dias'], v)} step={0.01} min={0.5} />
+            <NumberField label="DU urgente (×)" value={Number(pricing?.urgencia?.DU?.Urgente || 1)} onChange={(v) => setPricingPath(['urgencia', 'DU', 'Urgente'], v)} step={0.01} min={0.5} />
+            <NumberField label="DU em até 7 dias (×)" value={Number(pricing?.urgencia?.DU?.['Em até 7 dias'] || 1)} onChange={(v) => setPricingPath(['urgencia', 'DU', 'Em até 7 dias'], v)} step={0.01} min={0.5} />
+            <NumberField label="DR urgente (×)" value={Number(pricing?.urgencia?.DR?.Urgente || 1)} onChange={(v) => setPricingPath(['urgencia', 'DR', 'Urgente'], v)} step={0.01} min={0.5} />
+            <NumberField label="VSL em até 7 dias (×)" value={Number(pricing?.urgencia?.VSL?.['Em até 7 dias'] || 1)} onChange={(v) => setPricingPath(['urgencia', 'VSL', 'Em até 7 dias'], v)} step={0.01} min={0.5} />
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
             <NumberField label="Sem referência %" value={Number(pricing?.ajustes?.semReferencia || 0)} onChange={(v) => setPricingPath(['ajustes', 'semReferencia'], v)} min={0} max={100} />
-            <NumberField label="Multicamera %" value={Number(pricing?.ajustes?.multicamera || 0)} onChange={(v) => setPricingPath(['ajustes', 'multicamera'], v)} min={0} max={100} />
-            <NumberField label="Sugere pacote acima de" value={Number(pricing?.pacotes?.sugerirAcimaQtd || 0)} onChange={(v) => setPricingPath(['pacotes', 'sugerirAcimaQtd'], v)} min={0} />
-            <NumberField label="Revisão capacidade acima de" value={Number(pricing?.pacotes?.revisaoCapacidadeAcimaQtd || 0)} onChange={(v) => setPricingPath(['pacotes', 'revisaoCapacidadeAcimaQtd'], v)} min={0} />
+            <NumberField label="Multicâmera %" value={Number(pricing?.ajustes?.multicamera || 0)} onChange={(v) => setPricingPath(['ajustes', 'multicamera'], v)} min={0} max={100} />
+            <NumberField label="Sugere pacote acima de (vídeos)" value={Number(pricing?.pacotes?.sugerirAcimaQtd || 0)} onChange={(v) => setPricingPath(['pacotes', 'sugerirAcimaQtd'], v)} min={0} />
+            <NumberField label="Revisar capacidade acima de (vídeos)" value={Number(pricing?.pacotes?.revisaoCapacidadeAcimaQtd || 0)} onChange={(v) => setPricingPath(['pacotes', 'revisaoCapacidadeAcimaQtd'], v)} min={0} />
           </div>
         </div>
       </Section>
@@ -323,21 +323,21 @@ export default function ConfiguracoesPage() {
       <Section
         icon={ShieldCheck}
         title="Margem e pipeline"
-        description="Controles de risco comercial e status validos no funil."
+        description="Controles de risco comercial e status válidos no funil."
       >
         <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
-          <NumberField label="C/HORA" value={Number(pricing?.margem?.choHora || 0)} onChange={(v) => setPricingPath(['margem', 'choHora'], v)} step={0.01} min={0} />
-          <NumberField label="Margem minima segura" value={Number(pricing?.margem?.minimaSegura || 0)} onChange={(v) => setPricingPath(['margem', 'minimaSegura'], v)} min={0} max={100} />
-          <NumberField label="Margem saudavel min" value={Number(pricing?.margem?.saudavelMin || 0)} onChange={(v) => setPricingPath(['margem', 'saudavelMin'], v)} min={0} max={100} />
-          <NumberField label="Margem saudavel max" value={Number(pricing?.margem?.saudavelMax || 0)} onChange={(v) => setPricingPath(['margem', 'saudavelMax'], v)} min={0} max={100} />
-          <NumberField label="Margem excelente" value={Number(pricing?.margem?.excelente || 0)} onChange={(v) => setPricingPath(['margem', 'excelente'], v)} min={0} max={100} />
-          <NumberField label="Recusar abaixo de" value={Number(pricing?.margem?.recusaAbaixo || 0)} onChange={(v) => setPricingPath(['margem', 'recusaAbaixo'], v)} min={0} max={100} />
-          <NumberField label="Repasse editor min" value={Number(pricing?.margem?.repasseEditorMin || 0)} onChange={(v) => setPricingPath(['margem', 'repasseEditorMin'], v)} min={0} max={100} />
-          <NumberField label="Repasse editor max" value={Number(pricing?.margem?.repasseEditorMax || 0)} onChange={(v) => setPricingPath(['margem', 'repasseEditorMax'], v)} min={0} max={100} />
+          <NumberField label="Custo por hora (R$)" dica="Custo da hora de edição usado para calcular a margem" value={Number(pricing?.margem?.choHora || 0)} onChange={(v) => setPricingPath(['margem', 'choHora'], v)} step={0.01} min={0} />
+          <NumberField label="Margem mínima segura %" value={Number(pricing?.margem?.minimaSegura || 0)} onChange={(v) => setPricingPath(['margem', 'minimaSegura'], v)} min={0} max={100} />
+          <NumberField label="Margem saudável mín. %" value={Number(pricing?.margem?.saudavelMin || 0)} onChange={(v) => setPricingPath(['margem', 'saudavelMin'], v)} min={0} max={100} />
+          <NumberField label="Margem saudável máx. %" value={Number(pricing?.margem?.saudavelMax || 0)} onChange={(v) => setPricingPath(['margem', 'saudavelMax'], v)} min={0} max={100} />
+          <NumberField label="Margem excelente %" value={Number(pricing?.margem?.excelente || 0)} onChange={(v) => setPricingPath(['margem', 'excelente'], v)} min={0} max={100} />
+          <NumberField label="Recusar abaixo de %" value={Number(pricing?.margem?.recusaAbaixo || 0)} onChange={(v) => setPricingPath(['margem', 'recusaAbaixo'], v)} min={0} max={100} />
+          <NumberField label="Repasse ao editor mín. %" value={Number(pricing?.margem?.repasseEditorMin || 0)} onChange={(v) => setPricingPath(['margem', 'repasseEditorMin'], v)} min={0} max={100} />
+          <NumberField label="Repasse ao editor máx. %" value={Number(pricing?.margem?.repasseEditorMax || 0)} onChange={(v) => setPricingPath(['margem', 'repasseEditorMax'], v)} min={0} max={100} />
         </div>
 
         <label className="space-y-1 block">
-          <span className="text-xs text-hagav-gray uppercase tracking-wider">Status do pipeline (separados por virgula)</span>
+          <span className="text-xs text-hagav-gray uppercase tracking-wider">Status do pipeline (separados por vírgula)</span>
           <input
             type="text"
             value={pipelineStatusText}

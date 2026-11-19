@@ -5,7 +5,7 @@ import {
   TemperaturaBadge,
 } from '@/components/ui/StatusBadge';
 import EduTooltip from '@/components/ui/EduTooltip';
-import { whatsappLink, truncate } from '@/lib/utils';
+import { fmtTelefone, rotuloOrigem, whatsappLink, truncate } from '@/lib/utils';
 
 const WHATSAPP_TOOLTIP = {
   title: 'WhatsApp',
@@ -50,15 +50,15 @@ export default function LeadsTable({ leads, onSelect }) {
                   </div>
                   <div className="min-w-0">
                     <p className="font-medium text-hagav-white truncate max-w-[180px]">{lead.nome || 'Sem nome'}</p>
-                    <p className="text-[11px] font-mono text-hagav-gray">{lead.whatsapp || '—'}</p>
+                    <p className="text-[11px] text-hagav-gray">{fmtTelefone(lead.whatsapp) || '—'}</p>
                   </div>
                 </div>
               </td>
               <td className="text-xs text-hagav-light max-w-[190px]" title={lead.servico || ''}>
                 {truncate(lead.servico || lead.fluxo || '—', 50)}
               </td>
-              <td className="text-xs text-hagav-gray max-w-[180px]" title={lead.origem || ''}>
-                {truncate(lead.origem || '—', 38)}
+              <td className="text-xs text-hagav-gray max-w-[180px]" title={rotuloOrigem(lead.origem)}>
+                {truncate(rotuloOrigem(lead.origem), 38)}
               </td>
               <td>
                 <div className="flex items-center gap-2">

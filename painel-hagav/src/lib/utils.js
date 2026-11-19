@@ -34,7 +34,18 @@ export function fmtHours(value) {
   const num = Number(value);
   if (!Number.isFinite(num)) return '—';
   if (num < 1) return `${Math.round(num * 60)} min`;
-  return `${num.toFixed(1)} h`;
+  if (num >= 48) {
+    const dias = num / 24;
+    return `${dias.toLocaleString('pt-BR', { maximumFractionDigits: dias >= 10 ? 0 : 1 })} dias`;
+  }
+  return `${num.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} h`;
+}
+
+// Numero no padrao brasileiro (virgula decimal), sem casas desnecessarias.
+export function fmtNumero(value, digits = 1) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return '—';
+  return n.toLocaleString('pt-BR', { maximumFractionDigits: digits });
 }
 
 // Currency helpers
@@ -48,7 +59,43 @@ export function fmtBRL(value) {
 export function fmtPercent(value, digits = 1) {
   const n = Number(value);
   if (!Number.isFinite(n)) return '0%';
-  return `${n.toFixed(digits)}%`;
+  return `${n.toLocaleString('pt-BR', { maximumFractionDigits: digits })}%`;
+}
+
+// Origem do lead em texto legivel ("indicacao" -> "Indicação").
+export const ORIGEM_LABELS = {
+  site: 'Site',
+  instagram: 'Instagram',
+  indicacao: 'Indicação',
+  prospeccao_ativa: 'Prospecção ativa',
+  whatsapp: 'WhatsApp',
+  cliente_ativo: 'Cliente ativo',
+  google: 'Google',
+  facebook: 'Facebook',
+  meta_ads: 'Anúncios da Meta',
+  youtube: 'YouTube',
+  tiktok: 'TikTok',
+  linkedin: 'LinkedIn',
+  manual: 'Cadastro manual',
+  outro: 'Outro',
+};
+
+export function rotuloOrigem(origem) {
+  const chave = String(origem || '').trim().toLowerCase();
+  if (!chave) return '—';
+  if (ORIGEM_LABELS[chave]) return ORIGEM_LABELS[chave];
+  const texto = chave.replace(/[_-]+/g, ' ');
+  return texto.charAt(0).toUpperCase() + texto.slice(1);
+}
+
+// Telefone brasileiro legivel: 11987650001 -> (11) 98765-0001
+export function fmtTelefone(valor) {
+  const bruto = String(valor || '').replace(/\D/g, '');
+  if (!bruto) return '';
+  const d = bruto.length > 11 && bruto.startsWith('55') ? bruto.slice(2) : bruto;
+  if (d.length === 11) return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+  if (d.length === 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
+  return String(valor);
 }
 
 // Status helpers

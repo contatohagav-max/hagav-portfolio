@@ -1048,14 +1048,17 @@ export default function FinanceiroPage() {
     {
       label: 'Em atraso',
       value: metrics.overdue,
-      helper: [
-        metrics.carriedOverdue > 0
-          ? `A receber: inclui ${fmtBRL(metrics.carriedOverdue)} de meses anteriores`
-          : 'Recebimentos vencidos e não pagos',
-        metrics.overduePayables > 0 ? `A pagar em atraso: ${fmtBRL(metrics.overduePayables)}` : '',
-      ].filter(Boolean).join(' · '),
+      valueLabel: (
+        <span className="block text-base xl:text-lg leading-snug">
+          <span className={classNames('block', metrics.overdue > 0 ? 'text-red-300' : 'text-emerald-300')}>A receber {fmtBRL(metrics.overdue)}</span>
+          <span className={classNames('block', metrics.overduePayables > 0 ? 'text-red-300' : 'text-emerald-300')}>A pagar {fmtBRL(metrics.overduePayables)}</span>
+        </span>
+      ),
+      helper: metrics.carriedOverdue > 0
+        ? `Inclui ${fmtBRL(metrics.carriedOverdue)} a receber de meses anteriores`
+        : 'Vencidos e ainda não pagos',
       icon: CircleDollarSign,
-      tone: metrics.overdue > 0 ? 'text-red-300' : 'text-emerald-300',
+      tone: metrics.overdue > 0 || metrics.overduePayables > 0 ? 'text-red-300' : 'text-emerald-300',
     },
     {
       label: 'Custos do mês',
@@ -1137,15 +1140,15 @@ export default function FinanceiroPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6 gap-3">
         {metricCards.map(({ label, value, valueLabel, helper, icon: Icon, tone }) => (
           <div key={label} className="hcard p-3 min-h-[112px]">
             <p className="text-[10px] uppercase tracking-wider text-hagav-gray flex items-center gap-1.5">
               <Icon size={12} className={tone} /> {label}
             </p>
-            <p className={classNames('text-lg xl:text-xl font-bold mt-3', tone)}>
+            <div className={classNames('text-base sm:text-lg xl:text-xl font-bold mt-3', tone)}>
               {valueLabel || fmtBRL(value)}
-            </p>
+            </div>
             {helper && <p className="text-[11px] text-hagav-gray mt-1">{helper}</p>}
           </div>
         ))}
@@ -1197,7 +1200,35 @@ export default function FinanceiroPage() {
         <EmptyState icon={CircleDollarSign} title="Nenhum lançamento encontrado" description="Aprovações criarão contas a receber automaticamente. Custos podem ser adicionados manualmente." />
       ) : (
         <div className="hcard overflow-hidden">
-          <div className="max-h-[62vh] overflow-auto">
+          {/* Celular: cartoes com o essencial (nome, valor, data e status) */}
+          <ul className="md:hidden divide-y divide-hagav-border/70">
+            {visibleEntries.map((entry) => {
+              const effective = effectiveFinancialStatus(entry);
+              const meta = getEntryMeta(entry);
+              const semData = !entry.vencimento || Number(String(entry.vencimento).slice(0, 4)) > 2100;
+              return (
+                <li key={entry.id}>
+                  <button type="button" onClick={() => setSelected(entry)} className="w-full text-left px-3 py-3 active:bg-hagav-muted/20">
+                    <div className="flex items-start justify-between gap-3">
+                      <p className="text-sm font-medium text-hagav-white leading-snug min-w-0">{entry.descricao}</p>
+                      <p className={classNames('text-sm font-semibold whitespace-nowrap', entry.tipo === 'receber' ? 'text-emerald-300' : 'text-red-300')}>
+                        {entry.tipo === 'receber' ? '+' : '−'} {fmtBRL(entry.valor)}
+                      </p>
+                    </div>
+                    <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11px] text-hagav-gray">
+                      <span className={classNames('badge', STATUS_COLORS[effective] || STATUS_COLORS.pendente)}>{FINANCIAL_STATUS_LABELS[effective] || effective}</span>
+                      <span className={semData ? 'text-amber-300' : ''}>{semData ? 'Sem data' : fmtDate(entry.vencimento)}</span>
+                      {entry.categoria && <span>· {entry.categoria}</span>}
+                      {meta.natureza === 'Pessoal' && <span>· Pessoal</span>}
+                      {meta.recorrente_mensal && <span>· Mensal</span>}
+                      {entry.revisar && <span className="badge bg-amber-500/15 text-amber-300 border-amber-500/30">Revisar</span>}
+                    </div>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+          <div className="hidden md:block max-h-[62vh] overflow-auto">
             <table className="w-full text-sm min-w-[900px]">
               <thead>
                 <tr className="sticky top-0 z-10 border-b border-hagav-border bg-hagav-surface text-left text-[10px] uppercase tracking-wider text-hagav-gray">

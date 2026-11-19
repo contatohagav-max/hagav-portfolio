@@ -189,6 +189,11 @@
 
   .htable { @apply w-full border-collapse; }
 
+  /* Contabilidade: agua correndo nos canos do encanamento */
+  .flow-dash { animation: flowdash 1.6s linear infinite; }
+  @keyframes flowdash { to { stroke-dashoffset: -32; } }
+  @media (prefers-reduced-motion: reduce) { .flow-dash { animation: none; } }
+
   /* Ultima coluna (acoes) sempre visivel quando a tabela rola para o lado */
   .table-sticky-actions th:last-child,
   .table-sticky-actions td:last-child {

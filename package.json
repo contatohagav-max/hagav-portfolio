@@ -1,0 +1,8 @@
+{
+  "name": "hagav-portfolio",
+  "private": true,
+  "description": "Site HAGAV + funcoes do Cloudflare Pages (o painel tem o proprio package.json em painel-hagav/)",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^1.10.0"
+  }
+}

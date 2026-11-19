@@ -5,6 +5,11 @@
 
 set -e
 
+# ─── 0. Dependências das funções do Cloudflare (ex.: SDK da Anthropic do chat) ─
+if [ -f package-lock.json ]; then
+  npm ci --no-audit --no-fund
+fi
+
 # ─── 1. Pasta de saída limpa ──────────────────────────────────────────────────
 rm -rf dist
 mkdir -p dist

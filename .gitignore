@@ -7,3 +7,6 @@ hagav_portfolio_1[0-3].html
 CLAUDE CODE/
 BIO/
 thumbnail/
+
+# Dependencias das funcoes do Cloudflare
+node_modules/

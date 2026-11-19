@@ -10,7 +10,7 @@ Base técnica pronta nesta branch. Ainda **não envia mensagens**: falta escolhe
 
 - Migração `supabase/migrations/20261118_prospeccao_automacao.sql` (pode rodar mais de uma vez):
   - `prospects`: topo de funil, separado de `deals`. Prospect só vira lead quando a equipe assume.
-  - `prospect_messages`: mensagens enviadas e respostas recebidas, com fila (`agendado` → `enviando` → `enviado`).
+  - `prospect_messages`: mensagens enviadas e respostas recebidas, com fila (`rascunho` → aprovação no painel → `agendado` → `enviando` → `enviado`).
   - `outreach_suppression`: lista de "nunca mais contatar" (email, domínio ou @instagram).
   - `automation_runs`: registro do que cada automação fez.
   - `admin_notifications`: avisos para a equipe (ex.: "Fulano quer conversar").
@@ -60,7 +60,8 @@ Regras automáticas no endpoint:
 - `bounce` → descartado.
 - Se a equipe já assumiu (`em_conversa`/`convertido`), respostas novas não mudam o status.
 - Antes de cadastrar, o endpoint ignora: quem já é prospect, quem está bloqueado e quem já é lead/cliente no CRM (por email, WhatsApp ou @).
-- A fila de envio respeita o limite diário, manda no máximo 1 mensagem por prospect por rodada e devolve para a fila mensagens presas em "enviando" por mais de 30 minutos.
+- A fila de envio respeita o limite diário, manda no máximo 1 mensagem por prospect por rodada, só libera um follow-up 2 dias depois da etapa anterior enviada e devolve para a fila mensagens presas em "enviando" por mais de 30 minutos.
+- Mensagens cadastradas sem `status` chegam como `rascunho` e só entram na fila depois que alguém clica em **Aprovar e agendar** na aba Prospecção → Para aprovar (lá também dá para editar o texto, marcar DM enviada à mão ou reprovar com motivo).
 
 ---
 
@@ -71,7 +72,7 @@ Header: `Authorization: Bearer <AUTOMATION_TOKEN>`
 | Método | Rota | Uso |
 |---|---|---|
 | GET | `/status` | Contadores rápidos |
-| POST | `/prospects` | Cadastrar até 200 prospects (`{ prospects: [...] }`). Cada um pode trazer `mensagens: [{ etapa, assunto, corpo, agendado_para }]` |
+| POST | `/prospects` | Cadastrar até 200 prospects (`{ prospects: [...] }`). Cada um pode trazer `mensagens: [{ etapa, assunto, corpo, agendado_para }]` (chegam como rascunho para aprovação) |
 | POST | `/prospects/check` | Antes de pesquisar a fundo: `{ candidatos: [{ email, instagram, site, whatsapp }] }` → diz quem é novo |
 | GET | `/prospects?status=a,b&due=1&limit=100` | Listar (ex.: follow-ups vencidos) |
 | GET | `/prospects/:id` | Prospect + histórico de mensagens |

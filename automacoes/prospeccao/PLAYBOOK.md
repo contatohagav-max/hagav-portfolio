@@ -18,38 +18,76 @@ Roteiro que a automação (ou qualquer pessoa da equipe) segue para encontrar, q
 
 ---
 
-## 2. Score (0–100)
+## 2. Chance de fechar (o painel calcula)
 
-Somar e limitar a 100. **Só abordar com score ≥ 60.**
+O painel calcula a chance de cada prospect a partir dos sinais (`painel-hagav/src/lib/prospeccao-chance.js`). A nota tem duas metades de 0 a 50:
 
-| Sinal | Pontos |
+- **Momento de compra**: o quanto a pessoa precisa de vídeo **agora**.
+- **Perfil de cliente**: o quanto ela é um bom cliente para a HAGAV.
+
+| Momento (até 50) | Pontos | | Perfil (até 50) | Pontos |
+|---|---|---|---|---|
+| Está procurando editor (vaga, post pedindo editor) | +22 | | Seguidores entre 20 mil e 300 mil (tamanho ideal) | +15 |
+| 10+ anúncios em vídeo ativos | +16 | | 300 mil a 700 mil | +10 |
+| 5 a 9 anúncios | +13 | | 5 mil a 20 mil | +6 |
+| 2 a 4 anúncios | +9 | | 700 mil a 1,5 mi (pode ter time interno) | +5 |
+| 1 anúncio | +5 | | Acima de 1,5 mi (costuma ter time interno) | +1 |
+| Pré-lançamento | +14 | | Agência ou coprodutor (vários clientes) | +14 |
+| Captando agora (aula, imersão, lista) | +12 | | Expert/infoprodutor com produto à venda | +9 |
+| Perpétuo com anúncios | +7 | | Criador de conteúdo | +4 |
+| Carrinho aberto | +5 | | Ticket alto (≥ R$ 997, mentoria) | +8 |
+| 3+ vídeos por semana | +5 | | Ticket médio (≥ R$ 297) | +4 |
+| Edição atual fraca ou inconsistente | +5 | | Email comercial público | +8 |
+| | | | Só Instagram (DM manual) | +2 |
+| | | | Já tem editor/agência de vídeo | −15 |
+
+**Faixas:** alta ≥ 65 · média 45–64 · baixa < 45.
+
+**Quadrantes do radar:**
+- **Atacar agora:** momento ≥ 25 e perfil ≥ 25.
+- **Nutrir:** perfil bom, mas sem urgência; acompanhar o próximo lançamento.
+- **Venda rápida, cliente menor:** precisa agora, mas o contrato tende a ser pequeno.
+- **Deixar de lado:** o resto.
+
+**Meta diária:** cadastrar só quem fica com chance **≥ 55** ou no quadrante **Atacar agora**. Prospects de chance baixa não entram, mesmo com email.
+
+**Sinais padronizados.** Grave no campo `sinais` com estes nomes, para o painel conseguir ler:
+
+| Chave | Exemplo |
 |---|---|
-| Anúncios em vídeo ativos agora | +25 |
-| Momento: pré-lançamento ou captação | +20 |
-| Momento: carrinho aberto ou perpétuo rodando | +10 |
-| Posta 3+ vídeos por semana | +15 |
-| Coprodutor/agência (vários experts) | +15 |
-| Edição atual fraca ou inconsistente (oportunidade clara) | +10 |
-| Edição boa mas volume baixo para o porte | +5 |
-| Audiência entre 10 mil e 500 mil | +10 |
-| Audiência acima de 500 mil | +5 |
-| Produto de ticket alto (≥ R$ 497, mentoria, high ticket) | +10 |
-| Email comercial público | +10 |
+| `anuncios_ativos` | `7` (anúncios em vídeo ativos na Biblioteca da Meta) |
+| `vaga_editor` | `true` ou o link da vaga ou post pedindo editor |
+| `posts_semana` | `4` |
+| `edicao` | `"fraca"`, `"inconsistente"` ou `"boa"` |
+| `ticket_max` | `1997` (maior preço visto, em reais) |
+| `coprodutor` | `true` se for agência, coprodutor ou lançador |
+| `tem_time_video` | `true` se citar editor ou agência própria |
+| `produto` | `"Mentoria X, R$ 1.997"` |
 
-Guardar em `score_motivos` a conta feita (ex.: "Anúncios ativos +25, captação +20, 3 reels/sem +15 = 60").
-`momento`: `pre_lancamento`, `captacao`, `carrinho_aberto`, `perpetuo` ou `sem_sinal`.
+Também preencha `seguidores` (número), `perfil` (`expert`, `agência`, `coprodutor`, `criador`, `empresa`) e `momento`, que aceita `pre_lancamento`, `captacao`, `carrinho_aberto`, `perpetuo` ou `sem_sinal`. Em `score`, repita a chance calculada, e em `score_motivos` a conta feita.
+
+**Aprender com as reprovações.** Antes de buscar, leia os prospects `descartado` cujas notas começam com "Reprovado na aprovação: …" e evite perfis parecidos. Os motivos são "Não é o perfil", "Já tem editor ou agência", "Grande demais", "Pequeno demais", "Momento errado" e "Mensagem ruim". No radar, a tabela "A nota está acertando?" mostra a taxa de resposta por faixa. Se a faixa alta não responder mais que a baixa, ajuste os pesos.
 
 ---
 
-## 3. Onde procurar (precisa de navegador)
+## 3. Onde procurar, na ordem de chance
 
-1. **Biblioteca de Anúncios da Meta** (Brasil, todos os anúncios): termos como "aula gratuita", "imersão", "masterclass", "lista de espera", "semana", "jornada", "desafio", "inscreva-se". Quem tem vários anúncios em vídeo ativos é o melhor sinal.
-2. **Instagram:** bio com link para Hotmart, Kiwify, Eduzz, "lista de espera" ou página de captação. Ver frequência e qualidade dos Reels.
-3. **Marketplaces** (Hotmart, Kiwify, Eduzz): produtos em destaque → nome do produtor → Instagram e site.
-4. **Google:** páginas de captação e vendas (`"lista de espera" "aula" site:.com.br`, `site:pay.hotmart.com` + nicho).
-5. **Vagas de editor** (Workana, 99Freelas, LinkedIn): quem procura editor agora é cliente quente. Nas plataformas de freela a resposta é pela própria plataforma (não há email); registrar como prospect com `canal: "outro"` e `fonte_url` da vaga.
+1. **Quem está pedindo editor agora**, que é a chance mais alta:
+   - Workana e 99Freelas: projetos de "editor de vídeo" para lançamento, Reels, criativos e VSL. A resposta vai pela própria plataforma: registrar com `canal: "outro"` e `fonte_url` da vaga;
+   - LinkedIn: posts "procuro editor de vídeo" de experts, agências e lançadores;
+   - Instagram e X: posts e stories pedindo indicação de editor.
+2. **Agências e coprodutores de lançamento**: um contrato vira vários experts. Procure no Google "agência de lançamento", "coprodução de infoprodutos" e "estrategista de lançamento", e nos cases citados por experts. O contato costuma estar no site (comercial@, contato@).
+3. **Biblioteca de Anúncios da Meta**, priorizando quem tem **5 ou mais anúncios em vídeo ativos** e o mesmo vídeo repetido em vários anúncios (precisa de variações).
+   - Termos: "aula gratuita", "imersão", "masterclass", "lista de espera", "semana", "jornada", "desafio", "inscreva-se", "mentoria".
+   - Filtre pelo tamanho ideal: 20 mil a 300 mil seguidores.
+4. **Hotmart, Kiwify e Eduzz**: produtos em destaque, depois o produtor, depois o Instagram e o site (de onde vem o email comercial).
+5. **Google**: páginas de captação e de vendas, com buscas como `"lista de espera" "aula" site:.com.br` ou `site:pay.hotmart.com` mais o nicho.
 
-**Contato:** usar só contato profissional público (email de "contato", "parcerias", "comercial" na bio, no site ou na página de vendas). Nunca adivinhar email.
+Prompt pronto para o Claude do Chrome fazer a busca na Biblioteca de Anúncios: [`PROMPT-CHROME-BUSCA.md`](PROMPT-CHROME-BUSCA.md).
+
+**Contato:** use só contato profissional público, como os emails de "contato", "parcerias" ou "comercial" na bio, no site ou na página de vendas. Nunca adivinhe email.
+
+**Cadastro:** as mensagens entram **sempre como rascunho** (sem `status`, ou `status: "rascunho"`). A equipe aprova, edita ou reprova na aba **Prospecção → Para aprovar**, e só depois o email entra na fila.
 
 ---
 
@@ -136,7 +174,7 @@ Prospecção B2B com base em legítimo interesse: apenas contatos profissionais 
 Base: `https://hagav.com.br/api/automacao` · Header: `Authorization: Bearer <AUTOMATION_TOKEN>`
 
 1. `POST /prospects/check` com os candidatos (email/instagram/site) → pesquisar a fundo só os `novo: true`.
-2. `POST /prospects` com até 200 prospects, cada um já com `mensagens` (etapas 1–3 e `agendado_para` de cada uma).
+2. `POST /prospects` com até 200 prospects, cada um já com `mensagens` (etapas 1–3 e `agendado_para` de cada uma). Elas chegam como **rascunho**; ao aprovar no painel, a 1ª sai na próxima rodada e os follow-ups mantêm a distância (padrão D+3 e D+8). A fila só libera um follow-up 2 dias depois da etapa anterior enviada.
 3. `POST /execucoes` no início e `PATCH /execucoes/:id` no fim, com resumo do dia (aparece em **Atividade** no painel).
 4. Respostas classificadas: `PATCH /mensagens/:id` com `classificacao` (o painel muda o status e avisa a equipe).
 

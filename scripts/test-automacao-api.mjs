@@ -171,11 +171,11 @@ r = await call('POST', 'prospects', {
   prospects: [
     { nome: 'Ana Expert', email: 'Ana@Expert.com', instagram: 'https://instagram.com/ana.expert/', score: 82, fonte: 'meta_ads',
       mensagens: [
-        { etapa: 1, assunto: 'Vídeos do seu lançamento', corpo: 'Oi Ana,\n\nVi seu anúncio...', agendado_para: passado },
-        { etapa: 2, assunto: 'Re: Vídeos', corpo: 'Retomando...', agendado_para: new Date(Date.now() + 3 * 864e5).toISOString() },
+        { etapa: 1, status: 'agendado', assunto: 'Vídeos do seu lançamento', corpo: 'Oi Ana,\n\nVi seu anúncio...', agendado_para: passado },
+        { etapa: 2, status: 'agendado', assunto: 'Re: Vídeos', corpo: 'Retomando...', agendado_para: new Date(Date.now() + 3 * 864e5).toISOString() },
       ] },
-    { nome: 'Bruno Coprodutor', email: 'bruno@copro.com', score: 70, mensagens: [{ etapa: 1, corpo: 'Oi Bruno', agendado_para: passado }] },
-    { nome: 'Carla', email: 'carla@x.com', mensagens: [{ etapa: 1, corpo: 'Oi Carla', agendado_para: passado }] },
+    { nome: 'Bruno Coprodutor', email: 'bruno@copro.com', score: 70, mensagens: [{ etapa: 1, status: 'agendado', corpo: 'Oi Bruno', agendado_para: passado }] },
+    { nome: 'Carla', email: 'carla@x.com', mensagens: [{ etapa: 1, status: 'agendado', corpo: 'Oi Carla', agendado_para: passado }] },
     { nome: 'Duplicada', email: 'ana@expert.com' },
     { nome: 'Saiu', email: 'saiu@lista.com' },
     { nome: 'Nao quer', instagram: '@naoquer' },
@@ -320,5 +320,27 @@ r = await call('PATCH', `financeiro/lancamentos/${aberto.id}`, { status: 'invent
 assert.equal(r.status, 400);
 r = await call('GET', 'financeiro/lancamentos?abertos=1&tipo=receber&de=2026-10-01&ate=2026-10-31');
 assert.equal(r.data.lancamentos.length, 0);
+
+// 20b. Mensagem sem status chega como rascunho (so sai depois de aprovada no painel)
+r = await call('POST', 'prospects', { prospects: [{ nome: 'Eva Rascunho', email: 'eva@expert.com', mensagens: [{ etapa: 1, corpo: 'Oi Eva', agendado_para: passado }] }] });
+assert.equal(r.status, 200, JSON.stringify(r.data));
+const eva = db.prospects.find((p) => p.email === 'eva@expert.com');
+assert.equal(db.prospect_messages.find((m) => m.prospect_id === eva.id).status, 'rascunho');
+
+// 21. Follow-up so sai 2 dias depois da etapa anterior enviada
+const ontem = new Date(Date.now() - 864e5).toISOString();
+db.prospect_messages.filter((m) => m.status === 'enviado').forEach((m) => { m.enviado_em = new Date(Date.now() - 3 * 864e5).toISOString(); });
+const dani = { id: randomUUID(), nome: 'Dani', email: 'dani@expert.com', status: 'em_sequencia', tentativas: 1, canal: 'email' };
+db.prospects.push(dani);
+db.prospect_messages.push(
+  { id: randomUUID(), prospect_id: dani.id, direcao: 'saida', canal: 'email', etapa: 1, status: 'enviado', enviado_em: ontem, corpo: 'Oi Dani', agendado_para: ontem },
+  { id: randomUUID(), prospect_id: dani.id, direcao: 'saida', canal: 'email', etapa: 2, status: 'agendado', corpo: 'Retomando', agendado_para: ontem },
+);
+r = await call('GET', 'mensagens/fila?canal=email&limit=10');
+assert.equal(r.status, 200, JSON.stringify(r.data));
+assert.ok(!r.data.mensagens.some((m) => m.prospect_id === dani.id), 'follow-up saiu antes de 2 dias');
+db.prospect_messages.find((m) => m.prospect_id === dani.id && m.etapa === 1).enviado_em = new Date(Date.now() - 2.5 * 864e5).toISOString();
+r = await call('GET', 'mensagens/fila?canal=email&limit=10');
+assert.ok(r.data.mensagens.some((m) => m.prospect_id === dani.id && m.etapa === 2), 'follow-up liberado nao saiu');
 
 console.log(`OK - ${requests.length} chamadas ao banco simulado, todos os cenarios passaram`);

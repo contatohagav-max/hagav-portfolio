@@ -15,6 +15,7 @@ import { applyRateLimit, rateLimitResponse } from '../../_utils/rate-limit.js';
 const MAX_BATCH = 200;
 const DEFAULT_DAILY_CAP = 30;
 const DAY_MS = 24 * 60 * 60 * 1000;
+const FOLLOW_UP_MIN_DIAS = 2;
 
 const PROSPECT_STATUS = [
   'novo', 'em_sequencia', 'respondeu', 'quer_conversar', 'em_conversa', 'convertido',
@@ -341,7 +342,8 @@ function normalizeOutboundMessage(raw = {}, prospect) {
     etapa: toInt(raw.etapa, { min: 1, max: 20 }) ?? 1,
     assunto: nullableText(raw.assunto, 200),
     corpo,
-    status: pickEnum(raw.status, ['rascunho', 'agendado'], 'agendado'),
+    // Sem status explicito a mensagem chega como rascunho e so sai depois de aprovada no painel
+    status: pickEnum(raw.status, ['rascunho', 'agendado'], 'rascunho'),
     agendado_para: toIso(raw.agendado_para) || new Date().toISOString(),
   };
 }
@@ -718,7 +720,7 @@ async function handleMessagesQueue(config, env, url) {
     `prospect_messages?select=*,prospect:prospects(id,nome,email,instagram,whatsapp,status,canal)`
       + `&direcao=eq.saida&status=eq.agendado&canal=eq.${canal}`
       + `&agendado_para=lte.${encodeURIComponent(new Date().toISOString())}`
-      + `&order=agendado_para.asc&limit=${Math.min(remaining, requested) * 3}`,
+      + `&order=agendado_para.asc&limit=${Math.min(remaining, requested) * 6}`,
   ) || [];
 
   const suppressed = await fetchSuppressed(config, rows.flatMap((m) => {
@@ -726,11 +728,34 @@ async function handleMessagesQueue(config, env, url) {
     return [email, email ? email.split('@')[1] : '', m.prospect?.instagram ? `@${m.prospect.instagram}` : ''];
   }));
 
+  // Follow-up so sai depois que a etapa anterior foi enviada ha pelo menos 2 dias
+  const followUps = rows.filter((m) => Number(m.etapa || 1) > 1);
+  const ultimaEnviada = new Map();
+  if (followUps.length) {
+    const enviados = await sb(
+      config,
+      `prospect_messages?select=prospect_id,etapa,enviado_em&direcao=eq.saida&status=eq.enviado`
+        + `&prospect_id=in.${encodeURIComponent(pgList([...new Set(followUps.map((m) => m.prospect_id))]))}`,
+    ) || [];
+    enviados.forEach((e) => {
+      const atual = ultimaEnviada.get(e.prospect_id);
+      if (!atual || Number(e.etapa) > atual.etapa) ultimaEnviada.set(e.prospect_id, { etapa: Number(e.etapa), em: e.enviado_em });
+    });
+  }
+  const followUpLiberado = (m) => {
+    const etapa = Number(m.etapa || 1);
+    if (etapa <= 1) return true;
+    const anterior = ultimaEnviada.get(m.prospect_id);
+    return Boolean(anterior && anterior.etapa >= etapa - 1 && anterior.em
+      && Date.now() - new Date(anterior.em).getTime() >= FOLLOW_UP_MIN_DIAS * DAY_MS);
+  };
+
   const ready = [];
   const toCancel = [];
   const seenProspects = new Set();
   rows.forEach((m) => {
     const p = m.prospect;
+    if (!followUpLiberado(m)) return;
     const email = normEmail(p?.email);
     const blocked = !p
       || !SENDABLE_PROSPECT_STATUS.has(p.status)

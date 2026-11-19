@@ -10,6 +10,7 @@ import {
   Bell,
   CheckCheck,
   ExternalLink,
+  GitBranch,
   Handshake,
   Inbox,
   Instagram,
@@ -19,11 +20,17 @@ import {
   RefreshCw,
   Search,
   Send,
+  ThumbsUp,
   UserCheck,
   XCircle,
 } from 'lucide-react';
 import Modal from '@/components/ui/Modal';
 import EmptyState from '@/components/ui/EmptyState';
+import AprovacaoView from '@/components/prospeccao/AprovacaoView';
+import EncanamentoView from '@/components/prospeccao/EncanamentoView';
+import RadarView from '@/components/prospeccao/RadarView';
+import { ChanceBadge, FatoresChance, QuadranteTag } from '@/components/prospeccao/ChanceBadge';
+import { calcularChance, ordenarPorChance } from '@/lib/prospeccao-chance';
 import { useAuth } from '@/context/AuthContext';
 import { classNames, fmtDateTime, fmtRelative } from '@/lib/utils';
 import {
@@ -34,6 +41,7 @@ import {
   PROSPECT_TABS,
   convertProspectToLead,
   fetchAutomationRuns,
+  fetchDrafts,
   fetchNotifications,
   fetchProspectById,
   fetchProspectMessages,
@@ -82,14 +90,6 @@ function StatusPill({ status }) {
   );
 }
 
-function ScoreBadge({ score }) {
-  const value = Number(score || 0);
-  const tone = value >= 75 ? 'text-emerald-300 border-emerald-500/30 bg-emerald-500/10'
-    : value >= 50 ? 'text-amber-300 border-amber-500/30 bg-amber-500/10'
-      : 'text-zinc-300 border-zinc-500/30 bg-zinc-500/10';
-  return <span className={classNames('inline-flex px-2 py-0.5 rounded-md border text-xs font-semibold', tone)}>{value}</span>;
-}
-
 function Kpi({ icon: Icon, label, value, hint, highlight = false }) {
   return (
     <div className={classNames('hcard p-4', highlight && 'border-hagav-gold/40')}>
@@ -128,7 +128,7 @@ function ProspectsTable({ prospects, onSelect }) {
           <tr>
             <th>Prospect</th>
             <th>Contato</th>
-            <th>Score</th>
+            <th>Chance</th>
             <th>Momento</th>
             <th>Status</th>
             <th>Último contato</th>
@@ -145,7 +145,7 @@ function ProspectsTable({ prospects, onSelect }) {
                 </p>
               </td>
               <td className="text-xs">{contactLine(prospect)}</td>
-              <td><ScoreBadge score={prospect.score} /></td>
+              <td><ChanceBadge info={calcularChance(prospect)} /></td>
               <td className="text-xs">{MOMENTO_LABELS[prospect.momento] || prospect.momento || '—'}</td>
               <td><StatusPill status={prospect.status} /></td>
               <td className="text-xs">{prospect.ultimo_contato_em ? fmtRelative(prospect.ultimo_contato_em) : '—'}</td>
@@ -259,6 +259,7 @@ function ProspectDrawer({ prospect, canManage, actorEmail, onClose, onUpdated })
   };
 
   const sinais = prospect.sinais && typeof prospect.sinais === 'object' ? Object.entries(prospect.sinais) : [];
+  const chanceInfo = useMemo(() => calcularChance(prospect), [prospect]);
   const closed = ['convertido', 'descadastrado', 'descartado'].includes(prospect.status);
 
   return (
@@ -266,7 +267,8 @@ function ProspectDrawer({ prospect, canManage, actorEmail, onClose, onUpdated })
       <div className="space-y-5">
         <div className="flex flex-wrap items-center gap-2">
           <StatusPill status={prospect.status} />
-          <ScoreBadge score={prospect.score} />
+          <ChanceBadge info={chanceInfo} />
+          <QuadranteTag info={chanceInfo} />
           {prospect.momento && (
             <span className="text-[11px] px-2 py-0.5 rounded-full border border-hagav-border text-hagav-light">
               {MOMENTO_LABELS[prospect.momento] || prospect.momento}
@@ -292,7 +294,7 @@ function ProspectDrawer({ prospect, canManage, actorEmail, onClose, onUpdated })
           <div className="space-y-2">
             <p className="text-[11px] uppercase tracking-wider text-hagav-gray">Por que é um bom cliente</p>
             <p className="text-sm text-hagav-light whitespace-pre-wrap">{prospect.resumo || '—'}</p>
-            {prospect.score_motivos && <p className="text-xs text-hagav-gray whitespace-pre-wrap">{prospect.score_motivos}</p>}
+            <FatoresChance info={chanceInfo} />
           </div>
           <div className="space-y-2 text-sm">
             <p className="text-[11px] uppercase tracking-wider text-hagav-gray">Contato</p>
@@ -485,6 +487,9 @@ export default function ProspeccaoPage() {
   const canManage = can('manageProspeccao');
 
   const [tab, setTab] = useState('quer_conversar');
+  const [view, setView] = useState('lista');
+  const [drafts, setDrafts] = useState([]);
+  const [allProspects, setAllProspects] = useState([]);
   const [search, setSearch] = useState('');
   const [prospects, setProspects] = useState([]);
   const [counts, setCounts] = useState({});
@@ -500,23 +505,28 @@ export default function ProspeccaoPage() {
   const activeTab = PROSPECT_TABS.find((t) => t.key === tab);
 
   const loadSummary = useCallback(async () => {
-    const [countsData, metricsData, notificationsData, runsData] = await Promise.all([
+    const [countsData, metricsData, notificationsData, runsData, draftsData, allData] = await Promise.all([
       fetchProspectStatusCounts(),
       fetchProspectMetrics(),
       fetchNotifications(),
       fetchAutomationRuns(),
+      fetchDrafts(),
+      fetchProspects({ limit: 2000 }),
     ]);
+    setDrafts(draftsData || []);
+    setAllProspects(allData || []);
     setCounts(countsData || {});
     setMetrics(metricsData);
     setNotifications(notificationsData || []);
     setRuns(runsData || []);
-    return countsData || {};
+    return { counts: countsData || {}, rascunhos: (draftsData || []).length };
   }, []);
 
   const loadList = useCallback(async () => {
     if (!activeTab) return;
     const rows = await fetchProspects({ statuses: activeTab.statuses, search: search || undefined });
-    setProspects(rows);
+    // Listas de quem ainda nao respondeu ficam na ordem da chance de fechar
+    setProspects(['fila', 'em_sequencia', 'encerrados'].includes(activeTab.key) ? ordenarPorChance(rows) : rows);
   }, [activeTab, search]);
 
   const loadAll = useCallback(async () => {
@@ -524,13 +534,14 @@ export default function ProspeccaoPage() {
     setLoading(true);
     setLoadError('');
     try {
-      const countsData = await loadSummary();
+      const { counts: countsData, rascunhos } = await loadSummary();
       if (!initialTabSet) {
         setInitialTabSet(true);
         const firstWithItems = PROSPECT_TABS.find((t) => t.statuses.some((s) => countsData[s] > 0));
-        if (firstWithItems && firstWithItems.key !== tab) {
-          setTab(firstWithItems.key);
-          return;
+        const inicial = (countsData.quer_conversar || 0) > 0 ? 'quer_conversar' : (rascunhos > 0 ? 'aprovar' : firstWithItems?.key);
+        if (inicial && inicial !== tab) {
+          setTab(inicial);
+          if (inicial !== 'aprovar') return;
         }
       }
       await loadList();
@@ -554,7 +565,28 @@ export default function ProspeccaoPage() {
     fetchProspectById(id).then((row) => row && setSelected(row)).catch(() => null);
   }, [searchParams, canRead]);
 
-  const tabCount = useCallback((t) => t.statuses.reduce((sum, s) => sum + (counts[s] || 0), 0), [counts]);
+  const idsComRascunho = useMemo(() => new Set(drafts.map((d) => d.prospect.id)), [drafts]);
+  // "Na fila" mostra so quem ja foi aprovado; quem tem rascunho fica em "Para aprovar"
+  const tabCount = useCallback((t) => {
+    const total = t.statuses.reduce((sum, s) => sum + (counts[s] || 0), 0);
+    return t.key === 'fila' ? Math.max(0, total - drafts.filter((d) => d.prospect.status === 'novo').length) : total;
+  }, [counts, drafts]);
+
+  const visiveis = useMemo(
+    () => (tab === 'fila' ? prospects.filter((p) => !idsComRascunho.has(p.id)) : prospects),
+    [tab, prospects, idsComRascunho],
+  );
+
+  function abrirAba(aba) {
+    setView('lista');
+    setTab(aba);
+  }
+
+  function handleDraftsChanged(message) {
+    setFeedback(message || 'Salvo.');
+    setTimeout(() => setFeedback(''), 4500);
+    loadSummary().catch(() => null);
+  }
   const unreadCount = useMemo(() => notifications.filter((n) => !n.lida_em).length, [notifications]);
 
   async function openProspect(id) {
@@ -591,20 +623,45 @@ export default function ProspeccaoPage() {
 
   return (
     <div className="space-y-5 animate-fade-in">
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="page-title">Prospecção</h1>
           <p className="page-subtitle">O que a automação encontrou, enviou e quem respondeu</p>
         </div>
-        <button onClick={loadAll} disabled={loading} className="btn-ghost btn-sm">
-          <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
-          Atualizar
-        </button>
+        <div className="flex w-full sm:w-auto items-center gap-2">
+          <div className="flex flex-1 sm:flex-none rounded-xl border border-hagav-border bg-hagav-surface p-0.5" role="tablist" aria-label="Forma de ver">
+            {[
+              { key: 'lista', label: 'Lista', curto: 'Lista', icon: Inbox },
+              { key: 'encanamento', label: 'Encanamento', curto: 'Encanamento', icon: GitBranch },
+              { key: 'radar', label: 'Radar de chances', curto: 'Radar', icon: Radar },
+            ].map((v) => (
+              <button
+                key={v.key}
+                type="button"
+                role="tab"
+                aria-selected={view === v.key}
+                onClick={() => setView(v.key)}
+                className={classNames(
+                  'flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-[10px] text-xs whitespace-nowrap transition-colors',
+                  view === v.key ? 'bg-hagav-gold/15 text-hagav-gold' : 'text-hagav-light hover:text-hagav-white',
+                )}
+              >
+                <v.icon size={13} />
+                <span className="sm:hidden">{v.curto}</span>
+                <span className="hidden sm:inline">{v.label}</span>
+              </button>
+            ))}
+          </div>
+          <button onClick={loadAll} disabled={loading} className="btn-ghost btn-sm" aria-label="Atualizar">
+            <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
+            <span className="hidden sm:inline">Atualizar</span>
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <Kpi icon={Handshake} label="Querem conversar" value={counts.quer_conversar || 0} hint="Esperando a equipe" highlight={(counts.quer_conversar || 0) > 0} />
-        <Kpi icon={Radar} label="Encontrados hoje" value={metrics?.encontradosHoje ?? '—'} hint={`${counts.novo || 0} na fila de envio`} />
+        <Kpi icon={Radar} label="Encontrados hoje" value={metrics?.encontradosHoje ?? '—'} hint={drafts.length ? `${drafts.length} esperando sua aprovação` : `${counts.novo || 0} na fila de envio`} highlight={drafts.length > 0 && !(counts.quer_conversar > 0)} />
         <Kpi icon={Send} label="Enviados hoje" value={metrics?.enviadosHoje ?? '—'} hint={`${counts.em_sequencia || 0} em sequência`} />
         <Kpi
           icon={Inbox}
@@ -617,7 +674,28 @@ export default function ProspeccaoPage() {
       {loadError && <p className="text-xs text-red-300 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{loadError}</p>}
       {feedback && <p className="text-xs text-emerald-300 bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-3 py-2">{feedback}</p>}
 
+      {view === 'encanamento' && (
+        <EncanamentoView prospects={allProspects} idsComRascunho={idsComRascunho} onAbrirAba={abrirAba} />
+      )}
+      {view === 'radar' && (
+        <RadarView prospects={allProspects} idsComRascunho={idsComRascunho} onAbrirProspect={setSelected} />
+      )}
+
+      {view === 'lista' && (
+      <>
       <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={() => setTab('aprovar')}
+          className={classNames(
+            'btn-ghost btn-sm',
+            tab === 'aprovar' && 'border-hagav-gold/40 text-hagav-gold',
+            drafts.length > 0 && tab !== 'aprovar' && 'border-hagav-gold/30',
+          )}
+        >
+          <ThumbsUp size={12} /> Para aprovar
+          <span className={classNames('text-[11px]', drafts.length > 0 ? 'text-hagav-gold' : 'text-hagav-gray')}>{drafts.length}</span>
+        </button>
         {PROSPECT_TABS.map((t) => {
           const count = tabCount(t);
           const active = tab === t.key;
@@ -647,7 +725,9 @@ export default function ProspeccaoPage() {
         </button>
       </div>
 
-      {tab === 'atividade' ? (
+      {tab === 'aprovar' ? (
+        <AprovacaoView drafts={drafts} canManage={canManage} onChanged={handleDraftsChanged} />
+      ) : tab === 'atividade' ? (
         <ActivityPanel
           notifications={notifications}
           runs={runs}
@@ -672,7 +752,7 @@ export default function ProspeccaoPage() {
             <div className="flex items-center justify-center py-20">
               <RefreshCw size={20} className="animate-spin text-hagav-gold" />
             </div>
-          ) : prospects.length === 0 ? (
+          ) : visiveis.length === 0 ? (
             <EmptyState
               icon={tab === 'quer_conversar' ? Handshake : Radar}
               title={tab === 'quer_conversar' ? 'Ninguém esperando conversa agora' : 'Nada por aqui'}
@@ -681,9 +761,11 @@ export default function ProspeccaoPage() {
                 : 'A automação preenche esta lista conforme encontra e aborda novos contatos.'}
             />
           ) : (
-            <ProspectsTable prospects={prospects} onSelect={setSelected} />
+            <ProspectsTable prospects={visiveis} onSelect={setSelected} />
           )}
         </>
+      )}
+      </>
       )}
 
       {selected && (

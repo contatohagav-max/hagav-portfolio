@@ -992,6 +992,7 @@ async function handleFinancialPatch(config, id, body) {
   }
   if ('valor_pago' in body) patch.valor_pago = toMoney(body.valor_pago) ?? 0;
   if ('pago_em' in body) patch.pago_em = toIso(body.pago_em);
+  if ('vencimento' in body) patch.vencimento = toDateOnly(body.vencimento);
   if ('forma_pagamento' in body) patch.forma_pagamento = nullableText(body.forma_pagamento, 60);
   if ('categoria' in body) patch.categoria = cleanText(body.categoria, 80) || current.categoria;
   if ('revisar' in body) patch.revisar = Boolean(body.revisar);

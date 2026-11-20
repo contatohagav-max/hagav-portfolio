@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ArrowDownCircle,
   ArrowUpCircle,
+  BarChart3,
   Building2,
   CalendarClock,
   CircleDollarSign,
@@ -15,6 +16,7 @@ import {
 } from 'lucide-react';
 import Modal from '@/components/ui/Modal';
 import EmptyState from '@/components/ui/EmptyState';
+import GastosPanel from '@/components/financeiro/GastosPanel';
 import {
   createFinancialEntry,
   deleteFinancialEntry,
@@ -484,7 +486,7 @@ function dedupeEntriesForMetrics(entries) {
   return [...looseEntries, ...selectedEntries];
 }
 
-function FinancialEditor({ entry, createMode, onClose, onSaved, onDeleted }) {
+function FinancialEditor({ entry, createMode, onClose, onSaved, onDeleted, existentes = [] }) {
   const [form, setForm] = useState(emptyForm());
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -551,11 +553,28 @@ function FinancialEditor({ entry, createMode, onClose, onSaved, onDeleted }) {
       setError('Valor pago não pode ser maior ou igual ao valor total. Use status Pago.');
       return;
     }
-    if (form.vencimento) {
-      const ano = Number(String(form.vencimento).slice(0, 4));
-      if (!Number.isFinite(ano) || ano < 2000 || ano > 2100) {
-        setError('Data de vencimento inválida. Confira o ano.');
-        return;
+    // Sem data o lancamento some do mes certo e acaba sendo cadastrado de novo: a data passa a ser obrigatoria.
+    if (!form.vencimento) {
+      setError(form.status === 'pago' ? 'Informe a data (dia do vencimento ou do pagamento).' : 'Informe a data de vencimento.');
+      return;
+    }
+    const ano = Number(String(form.vencimento).slice(0, 4));
+    if (!Number.isFinite(ano) || ano < 2000 || ano > 2100) {
+      setError('Data de vencimento inválida. Confira o ano.');
+      return;
+    }
+    if (createMode) {
+      // Evita cadastrar duas vezes a mesma conta (mesmo tipo, nome e valor, mesma data ou sem data)
+      const nome = normalizeFinancialMetricKey(form.descricao);
+      const repetido = existentes.find((e) => !isCancelled(e)
+        && e.tipo === form.tipo
+        && normalizeFinancialMetricKey(e.descricao) === nome
+        && Math.abs(Number(e.valor || 0) - valor) < 0.01
+        && (!e.vencimento || String(e.vencimento).slice(0, 10) === form.vencimento));
+      if (repetido) {
+        const quando = repetido.vencimento ? `com vencimento em ${fmtDate(repetido.vencimento)}` : 'sem data';
+        const seguir = window.confirm(`Já existe "${repetido.descricao}" de ${fmtBRL(repetido.valor)} ${quando}. Cadastrar outro mesmo assim?`);
+        if (!seguir) return;
       }
     }
     const formaPagamento = form.forma_pagamento === 'Outro'
@@ -715,7 +734,7 @@ function FinancialEditor({ entry, createMode, onClose, onSaved, onDeleted }) {
             </div>
           )}
           <label className="text-xs text-hagav-gray">
-            Vencimento/Data
+            Data (vencimento ou pagamento) *
             <input type="date" value={form.vencimento} onChange={(e) => field('vencimento', e.target.value)} className="hinput w-full mt-1.5" />
           </label>
           <label className="text-xs text-hagav-gray">
@@ -784,6 +803,29 @@ export default function FinanceiroPage() {
   const [status, setStatus] = useState('');
   const [naturezaFilter, setNaturezaFilter] = useState('');
   const [revisarOnly, setRevisarOnly] = useState(false);
+  const [todosMeses, setTodosMeses] = useState(false);
+  const [mostrarGastos, setMostrarGastos] = useState(false);
+
+  // Lembra se o painel de gastos estava ligado (so neste navegador)
+  useEffect(() => {
+    try {
+      setMostrarGastos(window.localStorage.getItem('hagav-financeiro-gastos') === '1');
+    } catch {
+      // sem armazenamento local: comeca desligado
+    }
+  }, []);
+
+  function alternarGastos() {
+    setMostrarGastos((atual) => {
+      const proximo = !atual;
+      try {
+        window.localStorage.setItem('hagav-financeiro-gastos', proximo ? '1' : '0');
+      } catch {
+        // ignora
+      }
+      return proximo;
+    });
+  }
   const [selectedMonth, setSelectedMonth] = useState(() => startOfMonth(new Date()));
   const [selected, setSelected] = useState(null);
   const [creating, setCreating] = useState(false);
@@ -1132,12 +1174,37 @@ export default function FinanceiroPage() {
       // Sem data valida: aparece no mes atual para nao ficar invisivel.
       const semData = viewingCurrentMonth && !monthDate && (!dueDate || dueDate.getFullYear() > 2100 || dueDate.getFullYear() < 2000);
       // O filtro "Revisar" mostra tudo que precisa de conferencia, de qualquer mes.
-      if (!revisarOnly && !isSameMonth(monthDate, selectedMonth) && !carried && !semData) return false;
+      if (!revisarOnly && !todosMeses && !isSameMonth(monthDate, selectedMonth) && !carried && !semData) return false;
       if (naturezaFilter && getEntryMeta(entry).natureza !== naturezaFilter) return false;
       if (revisarOnly && !entry.revisar) return false;
       return true;
     }).sort(compareFinancialEntries)
-  ), [entries, naturezaFilter, revisarOnly, selectedMonth]);
+  ), [entries, naturezaFilter, revisarOnly, selectedMonth, todosMeses]);
+
+  // Soma do que esta na lista (respeita busca, filtros e periodo)
+  const somaLista = useMemo(() => {
+    const soma = { qtd: 0, entradas: 0, entradasRecebidas: 0, saidas: 0, saidasPagas: 0 };
+    visibleEntries.forEach((entry) => {
+      if (isCancelled(entry)) return;
+      soma.qtd += 1;
+      const realizado = getValidPaidAmount(entry);
+      const total = realizado + getOpenAmount(entry);
+      if (isReceber(entry)) {
+        soma.entradas += total;
+        soma.entradasRecebidas += realizado;
+      } else {
+        soma.saidas += total;
+        soma.saidasPagas += realizado;
+      }
+    });
+    return soma;
+  }, [visibleEntries]);
+
+  const saidasVisiveis = useMemo(() => visibleEntries.filter((e) => isPagar(e) && !isCancelled(e)), [visibleEntries]);
+  const historicoSaidas = useMemo(
+    () => entries.filter((e) => isPagar(e) && !isCancelled(e) && (!naturezaFilter || getEntryMeta(e).natureza === naturezaFilter)),
+    [entries, naturezaFilter],
+  );
 
   const revisarCount = useMemo(() => entries.filter((entry) => entry.revisar).length, [entries]);
 
@@ -1231,6 +1298,74 @@ export default function FinanceiroPage() {
 
       {loadError && <p className="text-xs text-red-300 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{loadError}</p>}
       {feedback && <p className="text-xs text-emerald-300 bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-3 py-2">{feedback}</p>}
+
+      {(
+        <div className="hcard p-3 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-baseline gap-x-5 gap-y-1.5 text-sm">
+            <span className="text-hagav-light">
+              <span className="text-hagav-white font-semibold">{somaLista.qtd}</span> {somaLista.qtd === 1 ? 'lançamento' : 'lançamentos'}
+              {search ? <> com “<span className="text-hagav-white">{search}</span>”</> : null}
+              <span className="text-hagav-gray"> · {todosMeses ? 'todos os meses' : selectedMonthLabel}</span>
+            </span>
+            {somaLista.saidas > 0 && (
+              <span className="text-hagav-light" title={`Pago: ${fmtBRL(somaLista.saidasPagas)} · A pagar: ${fmtBRL(somaLista.saidas - somaLista.saidasPagas)}`}>
+                Saídas <span className="text-red-300 font-semibold">{fmtBRL(somaLista.saidas)}</span>
+                {somaLista.saidas - somaLista.saidasPagas > 0.005 && (
+                  <span className="text-hagav-gray text-xs"> ({fmtBRL(somaLista.saidas - somaLista.saidasPagas)} a pagar)</span>
+                )}
+              </span>
+            )}
+            {somaLista.entradas > 0 && (
+              <span className="text-hagav-light" title={`Recebido: ${fmtBRL(somaLista.entradasRecebidas)} · A receber: ${fmtBRL(somaLista.entradas - somaLista.entradasRecebidas)}`}>
+                Entradas <span className="text-emerald-300 font-semibold">{fmtBRL(somaLista.entradas)}</span>
+                {somaLista.entradas - somaLista.entradasRecebidas > 0.005 && (
+                  <span className="text-hagav-gray text-xs"> ({fmtBRL(somaLista.entradas - somaLista.entradasRecebidas)} a receber)</span>
+                )}
+              </span>
+            )}
+            {somaLista.saidas > 0 && somaLista.entradas > 0 && (
+              <span className="text-hagav-light">
+                Saldo <span className={classNames('font-semibold', somaLista.entradas - somaLista.saidas >= 0 ? 'text-emerald-300' : 'text-red-300')}>{fmtBRL(somaLista.entradas - somaLista.saidas)}</span>
+              </span>
+            )}
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="inline-flex rounded-xl border border-hagav-border bg-hagav-surface p-0.5" role="tablist" aria-label="Período da lista">
+              {[[false, 'Este mês'], [true, 'Todos os meses']].map(([valor, label]) => (
+                <button
+                  key={label}
+                  type="button"
+                  role="tab"
+                  aria-selected={todosMeses === valor}
+                  onClick={() => setTodosMeses(valor)}
+                  className={classNames('px-3 py-1.5 rounded-[10px] text-xs whitespace-nowrap', todosMeses === valor ? 'bg-hagav-gold/15 text-hagav-gold' : 'text-hagav-light hover:text-hagav-white')}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={alternarGastos}
+              aria-pressed={mostrarGastos}
+              className={classNames('btn-ghost btn-sm', mostrarGastos && 'border-hagav-gold/40 text-hagav-gold')}
+            >
+              <BarChart3 size={13} /> {mostrarGastos ? 'Esconder gastos' : 'Ver gastos'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {mostrarGastos && (
+        <GastosPanel
+          saidas={saidasVisiveis}
+          historico={historicoSaidas}
+          mesRef={todosMeses ? null : selectedMonth}
+          valorDe={getCostAmount}
+          dataDe={getMonthDate}
+          onEscolher={(rotulo) => setSearch(rotulo)}
+        />
+      )}
 
       {loading ? (
         <div className="py-20 flex justify-center"><RefreshCw className="animate-spin text-hagav-gold" /></div>
@@ -1351,6 +1486,7 @@ export default function FinanceiroPage() {
       <FinancialEditor
         entry={selected}
         createMode={creating}
+        existentes={entries}
         onClose={() => { setSelected(null); setCreating(false); }}
         onSaved={saveLocal}
         onDeleted={deleteLocal}

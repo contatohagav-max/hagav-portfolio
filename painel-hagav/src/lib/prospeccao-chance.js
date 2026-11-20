@@ -84,6 +84,15 @@ export function calcularChance(prospect = {}) {
   const edicao = semAcento(sinais.edicao);
   if (/fraca|inconsistente|ruim|amadora/.test(edicao)) add('momento', 5, 'Edição atual fraca');
 
+  const perfilTexto = semAcento(`${prospect.perfil} ${prospect.empresa} ${sinais.tipo || ''}`);
+  const ehAgencia = /agencia|coprodu|lancador|estrategista|assessoria/.test(perfilTexto) || verdadeiro(sinais.coprodutor);
+  const clientesAtivos = numero(sinais.clientes_ativos ?? sinais.experts_atendidos);
+  if (ehAgencia) {
+    // Agencia de lancamento lanca para clientes o ano todo: a demanda de video e continua
+    if (clientesAtivos !== null && clientesAtivos >= 3) add('momento', 14, `Atende ${clientesAtivos} experts agora`);
+    else add('momento', 10, 'Lança para clientes o ano todo');
+  }
+
   // ---------- Perfil (0-50) ----------
   const seguidores = numero(prospect.seguidores ?? sinais.seguidores);
   if (seguidores !== null) {
@@ -97,11 +106,10 @@ export function calcularChance(prospect = {}) {
     add('perfil', pts, label);
   }
 
-  const perfil = semAcento(`${prospect.perfil} ${prospect.empresa} ${sinais.tipo || ''}`);
-  const ehAgencia = /agencia|coprodu|lancador|estrategista|assessoria/.test(perfil) || verdadeiro(sinais.coprodutor);
-  if (ehAgencia) add('perfil', 14, 'Agência ou coprodutor (vários clientes)');
-  else if (/expert|infoprodutor|mentor|curso|escola|empresa/.test(perfil)) add('perfil', 9, 'Expert com produto à venda');
-  else if (/criador|influenc/.test(perfil)) add('perfil', 4, 'Criador de conteúdo');
+  // Agencia: um contrato vira video de varios experts (o tamanho do perfil dela pesa menos)
+  if (ehAgencia) add('perfil', 20, 'Agência ou coprodutor: um contrato, vários experts');
+  else if (/expert|infoprodutor|mentor|curso|escola|empresa/.test(perfilTexto)) add('perfil', 9, 'Expert com produto à venda');
+  else if (/criador|influenc/.test(perfilTexto)) add('perfil', 4, 'Criador de conteúdo');
 
   const ticket = numero(sinais.ticket_max) ?? maiorPreco(`${sinais.produto || ''} ${sinais.ticket || ''} ${prospect.resumo || ''} ${prospect.score_motivos || ''}`);
   if ((ticket !== null && ticket >= 997) || /mentoria|high ticket/.test(textoLivre)) add('perfil', 8, 'Ticket alto');

@@ -39,6 +39,7 @@ import {
   PROSPECT_STATUS_COLORS,
   PROSPECT_STATUS_LABELS,
   PROSPECT_TABS,
+  CLASSIFICACOES_RESPOSTA,
   convertProspectToLead,
   fetchAutomationRuns,
   fetchDrafts,
@@ -49,6 +50,7 @@ import {
   fetchProspectStatusCounts,
   fetchProspects,
   markNotificationsRead,
+  registerReply,
   suppressProspect,
   updateProspect,
 } from '@/lib/prospeccao-repository';
@@ -206,6 +208,9 @@ function ProspectDrawer({ prospect, canManage, actorEmail, onClose, onUpdated })
   const [servico, setServico] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [registrando, setRegistrando] = useState(false);
+  const [resposta, setResposta] = useState('');
+  const [canalResposta, setCanalResposta] = useState(prospect.canal === 'email' ? 'email' : 'instagram');
 
   useEffect(() => {
     let active = true;
@@ -242,6 +247,13 @@ function ProspectDrawer({ prospect, canManage, actorEmail, onClose, onUpdated })
     run(() => suppressProspect(prospect), 'Contato bloqueado para sempre.');
   };
   const salvarNotas = () => run(() => updateProspect(prospect.id, { notas: notas.trim() || null }), 'Notas salvas.');
+  const registrar = (classificacao) => run(
+    () => registerReply(prospect, { texto: resposta, classificacao, canal: canalResposta }),
+    classificacao === 'interessado'
+      ? 'Resposta registrada: foi para "Querem conversar". Os follow-ups automáticos pararam.'
+      : 'Resposta registrada. Os follow-ups automáticos pararam.',
+  );
+  const podeRegistrarResposta = ['novo', 'em_sequencia', 'nao_agora', 'sem_resposta', 'respondeu'].includes(prospect.status);
   const converter = () => {
     const digits = whatsapp.replace(/\D/g, '');
     if (digits.length < 10) {
@@ -364,6 +376,53 @@ function ProspectDrawer({ prospect, canManage, actorEmail, onClose, onUpdated })
             <button type="button" className="btn-ghost btn-sm mt-2" onClick={salvarNotas} disabled={busy}>Salvar notas</button>
           )}
         </div>
+
+        {canManage && podeRegistrarResposta && (
+          <div className="rounded-xl border border-hagav-border bg-hagav-surface p-3">
+            {!registrando ? (
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-xs text-hagav-light">Respondeu por DM, WhatsApp ou email fora da automação? Registre aqui.</p>
+                <button type="button" className="btn-gold btn-sm" onClick={() => setRegistrando(true)}>
+                  <MessageCircle size={13} /> Registrar resposta
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-2.5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-[11px] uppercase tracking-wider text-hagav-gray">Registrar resposta</p>
+                  <select value={canalResposta} onChange={(e) => setCanalResposta(e.target.value)} className="hselect text-xs py-1" aria-label="Canal da resposta">
+                    <option value="instagram">Instagram</option>
+                    <option value="email">Email</option>
+                    <option value="whatsapp">WhatsApp</option>
+                    <option value="outro">Outro</option>
+                  </select>
+                </div>
+                <textarea
+                  value={resposta}
+                  onChange={(e) => setResposta(e.target.value)}
+                  rows={4}
+                  className="hinput w-full text-sm"
+                  placeholder="Cole aqui o que a pessoa respondeu..."
+                />
+                <p className="text-xs text-hagav-light">O que a pessoa quer?</p>
+                <div className="flex flex-wrap gap-2">
+                  {CLASSIFICACOES_RESPOSTA.map((c) => (
+                    <button
+                      key={c.key}
+                      type="button"
+                      className={c.key === 'interessado' ? 'btn-gold btn-sm' : 'btn-ghost btn-sm'}
+                      onClick={() => registrar(c.key)}
+                      disabled={busy || !resposta.trim()}
+                    >
+                      {c.label}
+                    </button>
+                  ))}
+                  <button type="button" className="btn-ghost btn-sm text-hagav-gray" onClick={() => setRegistrando(false)} disabled={busy}>Cancelar</button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {error && <p className="text-xs text-red-300 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{error}</p>}
 

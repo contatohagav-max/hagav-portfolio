@@ -256,7 +256,11 @@ export function montarContabilidade({ entries = [], goals = [], contributions = 
   const hoje = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate());
   const intervalo = intervaloPeriodo(periodo, agora);
   const validos = entries.filter((e) => !cancelado(e));
-  const comData = validos.map((e) => ({ e, data: dataValida(e.vencimento) }));
+  // Pago conta no dia em que o dinheiro entrou/saiu (bate com o extrato); em aberto, no vencimento.
+  const comData = validos.map((e) => ({
+    e,
+    data: (String(e.status || '').toLowerCase() === 'pago' && dataValida(e.pago_em)) || dataValida(e.vencimento),
+  }));
   const semData = comData.filter((x) => !x.data).map((x) => x.e);
 
   // ---------------- Realizado no periodo ----------------

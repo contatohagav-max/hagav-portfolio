@@ -285,6 +285,40 @@ function getDueDate(entry) {
   return parseDateSafe(entry?.vencimento);
 }
 
+// Mes em que o lancamento conta: o que ja foi pago entra no mes em que o dinheiro caiu/saiu (igual ao extrato do banco);
+// o que esta em aberto fica no mes do vencimento.
+function getMonthDate(entry) {
+  if (isPaid(entry)) {
+    const pago = parseDateSafe(entry?.pago_em);
+    if (pago && pago.getFullYear() >= 2000 && pago.getFullYear() <= 2100) return pago;
+  }
+  return getDueDate(entry);
+}
+
+// Pago: mostra o dia em que o dinheiro entrou/saiu (o vencimento fica embaixo, se for diferente).
+function textoDataLancamento(entry) {
+  const vencimento = getDueDate(entry);
+  const pago = isPaid(entry) ? parseDateSafe(entry?.pago_em) : null;
+  if (pago) return `Pago em ${fmtDate(entry.pago_em)}`;
+  return vencimento ? fmtDate(entry.vencimento) : 'Sem data';
+}
+
+function DataLancamento({ entry }) {
+  const vencimento = getDueDate(entry);
+  const vencimentoValido = vencimento && vencimento.getFullYear() >= 2000 && vencimento.getFullYear() <= 2100;
+  const pago = isPaid(entry) ? parseDateSafe(entry?.pago_em) : null;
+  if (pago) {
+    const mesmoDia = vencimentoValido && fmtDate(entry.vencimento) === fmtDate(entry.pago_em);
+    return (
+      <>
+        <span className="block">{fmtDate(entry.pago_em)}</span>
+        {!mesmoDia && <span className="block text-[11px] text-hagav-gray">{vencimentoValido ? `venc. ${fmtDate(entry.vencimento)}` : 'pago (sem vencimento)'}</span>}
+      </>
+    );
+  }
+  return vencimentoValido ? fmtDate(entry.vencimento) : <span className="text-amber-300">Sem data</span>;
+}
+
 function getNatureza(entry) {
   return getEntryMeta(entry).natureza;
 }
@@ -807,11 +841,14 @@ export default function FinanceiroPage() {
       if (isCancelled(entry)) return;
 
       const dueDate = getDueDate(entry);
+      const paidDate = parseDateSafe(entry?.pago_em);
+      const monthDate = getMonthDate(entry);
       const openAmount = getOpenAmount(entry);
       const receivedAmount = getReceivedAmount(entry);
 
       if (isReceber(entry)) {
-        if (receivedAmount > 0 && isSameMonth(dueDate, referenceDate)) {
+        // Recebido conta no mes em que o dinheiro entrou (bate com o extrato)
+        if (receivedAmount > 0 && isSameMonth(paidDate || dueDate, referenceDate)) {
           received += receivedAmount;
         }
         if (!isPaid(entry) && isSameMonth(dueDate, referenceDate)) {
@@ -831,7 +868,7 @@ export default function FinanceiroPage() {
         overduePayables += openAmount;
       }
 
-      if (isPagar(entry) && isSameMonth(dueDate, referenceDate)) {
+      if (isPagar(entry) && isSameMonth(monthDate, referenceDate)) {
         if (isEmpresa(entry)) costsHagav += getCostAmount(entry);
         if (isPessoal(entry)) personalCosts += getCostAmount(entry);
       }
@@ -1089,12 +1126,13 @@ export default function FinanceiroPage() {
   const visibleEntries = useMemo(() => (
     entries.filter((entry) => {
       const dueDate = getDueDate(entry);
+      const monthDate = getMonthDate(entry);
       const viewingCurrentMonth = isSameMonth(new Date(), selectedMonth);
       const carried = viewingCurrentMonth && isCarriedOverdue(entry, selectedMonth);
       // Sem data valida: aparece no mes atual para nao ficar invisivel.
-      const semData = viewingCurrentMonth && (!dueDate || dueDate.getFullYear() > 2100 || dueDate.getFullYear() < 2000);
+      const semData = viewingCurrentMonth && !monthDate && (!dueDate || dueDate.getFullYear() > 2100 || dueDate.getFullYear() < 2000);
       // O filtro "Revisar" mostra tudo que precisa de conferencia, de qualquer mes.
-      if (!revisarOnly && !isSameMonth(dueDate, selectedMonth) && !carried && !semData) return false;
+      if (!revisarOnly && !isSameMonth(monthDate, selectedMonth) && !carried && !semData) return false;
       if (naturezaFilter && getEntryMeta(entry).natureza !== naturezaFilter) return false;
       if (revisarOnly && !entry.revisar) return false;
       return true;
@@ -1205,7 +1243,7 @@ export default function FinanceiroPage() {
             {visibleEntries.map((entry) => {
               const effective = effectiveFinancialStatus(entry);
               const meta = getEntryMeta(entry);
-              const semData = !entry.vencimento || Number(String(entry.vencimento).slice(0, 4)) > 2100;
+              const semData = !getMonthDate(entry) || getMonthDate(entry).getFullYear() > 2100;
               return (
                 <li key={entry.id}>
                   <button type="button" onClick={() => setSelected(entry)} className="w-full text-left px-3 py-3 active:bg-hagav-muted/20">
@@ -1217,7 +1255,7 @@ export default function FinanceiroPage() {
                     </div>
                     <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11px] text-hagav-gray">
                       <span className={classNames('badge', STATUS_COLORS[effective] || STATUS_COLORS.pendente)}>{FINANCIAL_STATUS_LABELS[effective] || effective}</span>
-                      <span className={semData ? 'text-amber-300' : ''}>{semData ? 'Sem data' : fmtDate(entry.vencimento)}</span>
+                      <span className={semData ? 'text-amber-300' : ''}>{semData ? 'Sem data' : textoDataLancamento(entry)}</span>
                       {entry.categoria && <span>· {entry.categoria}</span>}
                       {meta.natureza === 'Pessoal' && <span>· Pessoal</span>}
                       {meta.recorrente_mensal && <span>· Mensal</span>}
@@ -1235,7 +1273,7 @@ export default function FinanceiroPage() {
                   <th className="px-4 py-3">Tipo</th>
                   <th className="px-4 py-3">Nome do lançamento</th>
                   <th className="px-4 py-3">Categoria</th>
-                  <th className="px-4 py-3">Vencimento/Data</th>
+                  <th className="px-4 py-3">Data</th>
                   <th className="px-4 py-3">Valor</th>
                   <th className="px-4 py-3">Pago</th>
                   <th className="px-4 py-3">Status</th>
@@ -1288,9 +1326,7 @@ export default function FinanceiroPage() {
                     </td>
                     <td className="px-4 py-3 text-hagav-light">{entry.categoria || '-'}</td>
                     <td className="px-4 py-3 text-hagav-light">
-                      {entry.vencimento && Number(String(entry.vencimento).slice(0, 4)) <= 2100
-                        ? fmtDate(entry.vencimento)
-                        : <span className="text-amber-300">Sem data</span>}
+                      <DataLancamento entry={entry} />
                     </td>
                     <td className={classNames('px-4 py-3 font-semibold', entry.tipo === 'receber' ? 'text-emerald-300' : 'text-red-300')}>{fmtBRL(entry.valor)}</td>
                     <td className="px-4 py-3 text-hagav-light">{displayPaid}</td>

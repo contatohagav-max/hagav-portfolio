@@ -395,3 +395,53 @@ export async function rejectProspect(prospect, motivo) {
     notas: [prospect.notas, nota].filter(Boolean).join('\n'),
   });
 }
+
+// ---------------- Resposta registrada pela equipe (ex.: DM do Instagram) ----------------
+
+export const CLASSIFICACOES_RESPOSTA = [
+  { key: 'interessado', label: 'Quer conversar', status: 'quer_conversar' },
+  { key: 'duvida', label: 'Tem dúvida', status: 'respondeu' },
+  { key: 'nao_agora', label: 'Agora não', status: 'nao_agora' },
+  { key: 'sem_interesse', label: 'Sem interesse', status: 'sem_interesse' },
+  { key: 'descadastro', label: 'Pediu para não receber', status: 'descadastrado' },
+];
+
+// Registra a resposta, para os follow-ups e move o prospect para a etapa certa.
+export async function registerReply(prospect, { texto, classificacao, canal } = {}) {
+  const client = requireClient();
+  const corpo = String(texto || '').trim();
+  if (!corpo) throw new Error('Cole o que a pessoa respondeu.');
+  const tipo = CLASSIFICACOES_RESPOSTA.find((c) => c.key === classificacao);
+  if (!tipo) throw new Error('Escolha o tipo de resposta.');
+  const agora = new Date().toISOString();
+
+  const { error } = await client.from('prospect_messages').insert({
+    prospect_id: prospect.id,
+    canal: canal || prospect.canal || 'instagram',
+    direcao: 'entrada',
+    etapa: 0,
+    corpo: corpo.slice(0, 8000),
+    classificacao: tipo.key,
+    status: 'recebido',
+    recebido_em: agora,
+    resumo: `${tipo.label} (registrado pela equipe)`,
+  });
+  if (error) throw error;
+
+  // Qualquer resposta encerra os follow-ups automaticos
+  await cancelPendingMessages(prospect.id);
+
+  if (tipo.key === 'descadastro') {
+    await client.from('prospects').update({ respondeu_em: agora, ultima_resposta: corpo.slice(0, 4000) }).eq('id', prospect.id);
+    return suppressProspect(prospect);
+  }
+
+  const patch = {
+    status: tipo.status,
+    respondeu_em: agora,
+    ultima_resposta: corpo.slice(0, 4000),
+    resumo_resposta: tipo.label,
+  };
+  if (tipo.key === 'nao_agora') patch.proximo_contato_em = new Date(Date.now() + 60 * DIA_MS).toISOString();
+  return updateProspect(prospect.id, patch);
+}

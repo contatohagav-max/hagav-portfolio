@@ -59,7 +59,8 @@ Devolva APENAS um JSON neste formato (uma linha por prospect, sem comentários):
       "coprodutor": false,
       "clientes_ativos": 0,
       "vaga_editor": false,
-      "tem_time_video": false
+      "tem_time_video": false,
+      "linkedin": "link do LinkedIn da empresa ou da pessoa (se houver)"
     },
     "detalhe_para_mensagem": "algo concreto e específico para citar na 1ª frase (o nome da aula, o gancho do anúncio, um Reel)"
   }

@@ -30,6 +30,7 @@ import AprovacaoView from '@/components/prospeccao/AprovacaoView';
 import EncanamentoView from '@/components/prospeccao/EncanamentoView';
 import RadarView from '@/components/prospeccao/RadarView';
 import { ChanceBadge, FatoresChance, QuadranteTag } from '@/components/prospeccao/ChanceBadge';
+import PerfilPreview from '@/components/prospeccao/PerfilPreview';
 import { calcularChance, ordenarPorChance } from '@/lib/prospeccao-chance';
 import { useAuth } from '@/context/AuthContext';
 import { classNames, fmtDateTime, fmtPercent, fmtRelative } from '@/lib/utils';
@@ -335,6 +336,11 @@ function ProspectDrawer({ prospect, canManage, actorEmail, onClose, onUpdated })
               <p className="text-xs text-hagav-gray">{[prospect.perfil, prospect.nicho, prospect.empresa].filter(Boolean).join(' · ')}</p>
             )}
           </div>
+        </div>
+
+        <div>
+          <p className="text-[11px] uppercase tracking-wider text-hagav-gray mb-2">Ver perfil</p>
+          <PerfilPreview prospect={prospect} />
         </div>
 
         {sinais.length > 0 && (

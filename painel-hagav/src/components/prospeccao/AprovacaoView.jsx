@@ -1,9 +1,10 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Check, Copy, ExternalLink, Instagram, Mail, Send, ThumbsDown, ThumbsUp } from 'lucide-react';
+import { Check, Copy, ExternalLink, Eye, Instagram, Mail, Send, ThumbsDown, ThumbsUp } from 'lucide-react';
 import EmptyState from '@/components/ui/EmptyState';
 import { ChanceBadge, FatoresChance, QuadranteTag } from '@/components/prospeccao/ChanceBadge';
+import PerfilPreview from '@/components/prospeccao/PerfilPreview';
 import { calcularChance } from '@/lib/prospeccao-chance';
 import {
   MOMENTO_LABELS,
@@ -38,6 +39,7 @@ function CartaoAprovacao({ item, canManage, onDone }) {
   const [erro, setErro] = useState('');
   const [reprovando, setReprovando] = useState(false);
   const [copiado, setCopiado] = useState('');
+  const [verPerfil, setVerPerfil] = useState(false);
 
   const emails = mensagens.filter((m) => m.canal === 'email');
   const manuais = mensagens.filter((m) => m.canal !== 'email');
@@ -117,7 +119,12 @@ function CartaoAprovacao({ item, canManage, onDone }) {
             Ver onde achei <ExternalLink size={11} />
           </a>
         )}
+        <button type="button" className={verPerfil ? 'btn-ghost btn-sm border-hagav-gold/40 text-hagav-gold' : 'btn-ghost btn-sm'} onClick={() => setVerPerfil((v) => !v)}>
+          <Eye size={13} /> {verPerfil ? 'Esconder perfil' : 'Ver perfil aqui'}
+        </button>
       </div>
+
+      {verPerfil && <PerfilPreview prospect={prospect} />}
 
       {emails.length > 0 && (
         <div className="space-y-3">
